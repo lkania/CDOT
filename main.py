@@ -7,12 +7,12 @@ config.update("jax_enable_x64", True)
 
 import jax.numpy as np
 import jax.random as random
-
 #######################################################
 
 from src.load import load
 from src.dotdic import DotDic
-from experiments.evaluate import run
+from experiments.evaluate import _evaluate
+from src.transform import transform
 
 # nnls optimizers
 from src.opt.scipy import nnls as lawson_scipy_nnls
@@ -22,7 +22,7 @@ from src.opt.scipy import nnls as lawson_scipy_nnls
 # from src.opt.cvx import nnls as conic_cvx_nnls
 
 # methods
-from src.background.unbin import mom
+# from src.background.unbin import mom
 # from src.background.bin import chi2 as bin_chi2
 from src.background.bin import mle as bin_mle
 from src.background.bin import mom as bin_mom
@@ -34,28 +34,76 @@ params.seed = 0
 params.key = random.PRNGKey(seed=params.seed)
 params.k = 30  # high impact on jacobian computation for non-bin methods
 params.bins = 44  # high impact on jacobian computation for bin methods
-params.data_id = 'real'
+params.data_id = 1
 params.data = './data/{0}/m_muamu.txt'.format(params.data_id)
 params.folds = 200
 
 params.std_signal_region = 3  # amount of contamination
-params.no_signal = True  # if simulation is run without signal
+params.no_signal = False  # if simulation is run without signal
 
 # fake signal parameters
 params.mu_star = 450
 params.sigma_star = 20
 params.lambda_star = 0.01
 
+params.lower = params.mu_star - params.std_signal_region * params.sigma_star
+params.upper = params.mu_star + params.std_signal_region * params.sigma_star
+
 # allow 64 bits
 params.dtype = np.float64
 
+# numerical methods
+params.tol = 1e-6
+params.maxiter = 5000
+
+# id
+params.name = 'test'
+
+# %%
 #######################################################
 # load background data
 #######################################################
-X__ = load(params.data)
+params.X = load(params.data)
 
+# %%
+# numerics
+
+trans, tilt_density = transform(params.X)
+from src.background.bin.preprocess import preprocess
+from src.opt.jaxopt import normalized_nnls_with_linear_constraint, nnls_with_linear_constraint
+
+info = preprocess(X=trans(params.X),
+                  lower=trans(params.lower),
+                  upper=trans(params.upper),
+                  params=params)
+
+x1 = nnls_with_linear_constraint(b=info.props,
+                                 A=info.M,
+                                 c=info.int_omega,
+                                 maxiter=params.maxiter,
+                                 tol=params.tol,
+                                 dtype=params.dtype)
+
+x2 = normalized_nnls_with_linear_constraint(b=info.props / np.sum(info.props.reshape(-1)),
+                                            A=info.M,
+                                            c=info.int_omega,
+                                            maxiter=params.maxiter,
+                                            tol=params.tol,
+                                            dtype=params.dtype)
+
+# %%
+
+params.estimator = bin_mom
+model = _evaluate(X=params.X, params=params)
+
+# %%
+
+
+#
+
+# for real data
 # remove entries less than zero
-X_ = X__[np.logical_and(X__ <= 90, X__ > 20)]
+# X_ = X__[np.logical_and(X__ <= 90, X__ > 20)]
 
 # idx = random.choice(params.key, a=X__.shape[0], shape=(250000,))
 # X_ = X__[idx]
@@ -63,24 +111,22 @@ X_ = X__[np.logical_and(X__ <= 90, X__ > 20)]
 # %%
 
 # transform data
-from src.transform import transform
+# from src.transform import transform
 
 #
-trans, tilt_density = transform(X_, c=0.03)
-tX = trans(X_)
-
-# %%
+# trans, tilt_density = transform(X_, c=0.03)
+# tX = trans(X_)
 
 
 # %%
 
 # plot background data
-from importlib import reload
-import src.plot as plot
+# from importlib import reload
+# import src.plot as plot
 
-reload(plot)
+# reload(plot)
 
-plot.uniform_histogram(tX, step=0.005)
+# plot.uniform_histogram(tX, step=0.005)
 
 # %%
 models = []

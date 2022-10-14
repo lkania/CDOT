@@ -33,6 +33,7 @@ def evaluate(k, X):
     return den
 
 
+# integrates the basis vector from a to b
 @partial(jit, static_argnames=['k'])
 def integrate(k, a, b):
     r = np.arange(0, k + 1).reshape(1, -1)
@@ -49,7 +50,7 @@ def outer_integrate(k, a, b):
     return (1 / (k + 1)) - integrate(k=k, a=a, b=b)
 
 
-# inner product from 0 to 1
+# integrates inner product matrix from 0 to 1
 @partial(jit, static_argnames=['k'])
 def integrated_inner_product(k):
     r = np.arange(0, k + 1)
@@ -65,7 +66,7 @@ def integrated_inner_product(k):
     return int_ * c
 
 
-# inner product from [0,a] and [b,1]
+# integrates inner product matrix from [0,a] and [b,1]
 @partial(jit, static_argnames=['k'])
 def outer_inner_product(k, a, b):
     r = np.arange(0, k + 1)
@@ -73,9 +74,9 @@ def outer_inner_product(k, a, b):
     lower = pbeta(x=a, a=sums + 1, b=2 * k - sums + 1)
     upper = pbeta(x=b, a=sums + 1, b=2 * k - sums + 1)
     int_ = 1 - (upper - lower)
-    int_ = int_ * pbeta(x=1, a=sums + 1, b=2 * k - sums + 1)
+    int_ = int_ * pbeta(x=1, a=sums + 1, b=2 * k - sums + 1)  # we cancel the normalization of pbeta
 
-    # normalization
+    # we introduce the normalization for the inner product
     c = comb(k, r)
     c = np.outer(c, c)
     c /= comb(2 * k, sums)

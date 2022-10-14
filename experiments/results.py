@@ -80,7 +80,7 @@ def load(id, name, X, props_back):
     m.signal_error = file['signal_error']
 
     # l2 error computation
-    M = basis.integrated_inner_product(m.k)
+    M = basis.integrated_inner_product(m.k)  # TODO: check
 
     m.alt_chi2_background = np.zeros(m.gamma.shape[0])
     m.chi2_background = np.zeros(m.gamma.shape[0])
@@ -116,7 +116,7 @@ def load(id, name, X, props_back):
 
         # residuals and chi2 for background
         preds_back = (basis_ @ gamma.reshape(-1, 1)).reshape(-1)
-        errors_back = (props_back - preds_back)
+        errors_back = (preds_back - props_back)
         chi2_back = np.sum(np.square(errors_back) / preds_back)
         alt_chi2_back = np.sum(np.square(errors_back) / props_back)
 
@@ -133,7 +133,7 @@ def load(id, name, X, props_back):
         # m.residual_backsig[i, :] = errors_back
         # m.preds_backsig[i, :] = preds_back
 
-    print('{0} loaded'.format(m.name))
+    # print('{0} loaded'.format(m.name))
     return m
 
 
@@ -168,41 +168,24 @@ props_back_and_sig = proportions(X=tX_with_signal, from_=from_, to_=to_)
 print("Data loaded")
 
 # %%
-#
-
-colors = {'bin_mle_5_3_False_50_200': 'red',  # increasing parameters
-          'bin_mle_10_3_False_50_200': 'yellow',
-          'bin_mle_20_3_False_50_200': 'orange',
-          'bin_mle_30_3_False_50_200': 'blue',
-          'bin_mle_50_3_False_50_200': 'green',
-
-          'bin_mle_30_3_True_50_200': 'red',  # no signal
-
-          'bin_mle_30_2_False_50_200': 'red',  # increasing contamination
-          'bin_mle_30_1_False_50_200': 'green',
-
-          'bin_mle_30_3_False_1_200': 'red',  # for sample size experiment
-          'bin_mle_30_3_False_5_200': 'green',
-
-          'bin_mom_lawson_scipy_20_3_False_50_200': 'red'  # compare models
-          }
-
-# %%
 
 estimators = []
-increasing_parameters_1 = [
+increasing_parameters_bin_mle = [
     'bin_mle_5_3_False_50_200',
     'bin_mle_10_3_False_50_200',
     'bin_mle_20_3_False_50_200',
     'bin_mle_30_3_False_50_200',
-    'bin_mle_50_3_False_50_200']
-estimators += increasing_parameters_1
-increasing_parameters_2 = [
-    'bin_mle_5_3_False_50_200',
-    'bin_mle_10_3_False_50_200',
-    'bin_mle_20_3_False_50_200',
-    'bin_mle_30_3_False_50_200']
-estimators += increasing_parameters_2
+    'bin_mle_40_3_False_50_200'
+]
+estimators += increasing_parameters_bin_mle
+increasing_parameters_bin_mom = [
+    'bin_mom_5_3_False_50_200',
+    'bin_mom_10_3_False_50_200',
+    # 'bin_mom_20_3_False_50_200',
+    'bin_mom_30_3_False_50_200',
+    'bin_mom_40_3_False_50_200'
+]
+estimators += increasing_parameters_bin_mom
 increasing_contamination_1 = [
     'bin_mle_30_3_False_50_200',
     'bin_mle_30_2_False_50_200',
@@ -225,7 +208,7 @@ estimators = list(set(estimators))
 print('Using {0} estimators'.format(len(estimators)))
 
 # %%
-id_source = '2'
+id_source = '3'
 
 # load data
 ms = []
@@ -237,27 +220,34 @@ print('Models loaded')
 
 
 # %%
-
-
+# selects models in the given order
 def select(names, ms):
     ms_ = []
-    for m in ms:
-        if m.name in names:
-            ms_.append(m)
+    for name in names:
+        run = True
+        k = 0
+        while (run):
+            if ms[k].name == name:
+                ms_.append(ms[k])
+                run = False
+            k += 1
     return ms_
 
 
-increasing_parameters = select(ms=ms, names=increasing_parameters_1)
-# increasing_parameters = [select(ms=ms, names=increasing_parameters_1),
-#                          select(ms=ms, names=increasing_parameters_2)]
+# increasing_parameters = select(ms=ms, names=increasing_parameters_1)
+increasing_parameters = [select(ms=ms, names=increasing_parameters_bin_mle),
+                         select(ms=ms, names=increasing_parameters_bin_mom)]
 
-increasing_contamination = select(ms=ms,
-                                  names=increasing_contamination_1)  # [select(ms=ms, names=increasing_contamination_1)]
 
-increasing_sample = select(ms=ms, names=increasing_sample_1)  # [select(ms=ms, names=increasing_sample_1),
-# select(ms=ms, names=increasing_sample_2)]
-
-no_signal = select(ms=ms, names=no_signal_1)  # [select(ms=ms, names=no_signal_1)]
+# %%
+#
+# increasing_contamination = select(ms=ms,
+#                                   names=increasing_contamination_1)  # [select(ms=ms, names=increasing_contamination_1)]
+#
+# increasing_sample = select(ms=ms, names=increasing_sample_1)  # [select(ms=ms, names=increasing_sample_1),
+# # select(ms=ms, names=increasing_sample_2)]
+#
+# no_signal = select(ms=ms, names=no_signal_1)  # [select(ms=ms, names=no_signal_1)]
 
 
 # %%
@@ -274,24 +264,22 @@ def save_fig(fig, name, id_dest):
 # %%
 
 
-def plot_background(ms, id_dest, from_, to_, props):
+def _plot_background(ax, ms, id_dest, from_, to_, props, colors, labels, alpha=0.05):
     x = (from_ + to_) / 2
 
-    fig = plt.figure(figsize=(7, 5))
-    ax = fig.add_subplot(111)
-
-    ax.hist(from_, to_, weights=props, density=False, color='magenta', alpha=0.2)
+    ax.hist(from_, to_, weights=props, density=False, color='magenta', alpha=0.05)
 
     for i in np.arange(len(ms)):
         m = ms[i]
         # for j in np.arange(m.residual_background.shape[0]):
         #     ax.plot(x, m.preds_background[j, :], color=colors[m.name], alpha=0.03)
         # plot mean error
-        mean = np.mean(m.preds_background, axis=0)
-        std = np.std(m.preds_background, axis=0)
-        ax.plot(x, mean, color=colors[m.name], alpha=1, label=m.name)
-        ax.plot(x, mean + std, color=colors[m.name], alpha=0.3, linestyle='dashed')
-        ax.plot(x, mean - std, color=colors[m.name], alpha=0.3, linestyle='dashed')
+
+        ax.plot(x, np.mean(m.preds_background, axis=0), color=colors[i], alpha=1, label=labels[i])
+        ax.plot(x, np.quantile(m.preds_background, q=1 - alpha / 2, axis=0),
+                color=colors[i], alpha=0.3, linestyle='dashed')
+        ax.plot(x, np.quantile(m.preds_background, q=alpha / 2, axis=0),
+                color=colors[i], alpha=0.3, linestyle='dashed')
 
         # plot signal region
         lower, upper = m.signal_region[0]
@@ -303,34 +291,24 @@ def plot_background(ms, id_dest, from_, to_, props):
     ax.legend()
     # plt.show(block=True)
     # ax.set_xlim(left=lower, right=upper)
-    save_fig(fig=fig, id_dest=id_dest, name='background')
+    # save_fig(fig=fig, id_dest=id_dest, name='background')
+    # print('Finish plotting background')
 
 
-plot_background(ms=increasing_parameters, id_dest='4/parameters', from_=from_, to_=to_, props=props_back)
-plot_background(ms=increasing_contamination, id_dest='4/contamination', from_=from_, to_=to_, props=props_back)
-plot_background(ms=increasing_sample, id_dest='4/sample', from_=from_, to_=to_, props=props_back)
-plot_background(ms=no_signal, id_dest='4/signal', from_=from_, to_=to_, props=props_back)
-
-
-# %%
-
-def plot_background_error(ms, id_dest, from_, to_):
+def _plot_background_error(ax, ms, id_dest, from_, to_, colors, labels, alpha=0.05):
     x = (from_ + to_) / 2
-
-    fig = plt.figure(figsize=(7, 5))
-    ax = fig.add_subplot(111)
 
     for i in np.arange(len(ms)):
         m = ms[i]
         # for j in np.arange(m.residual_background.shape[0]):
         #     ax.plot(x, m.residual_background[j, :], color=m.color, alpha=0.01)
         # plot mean error
-        mean = np.mean(m.residual_background, axis=0)
-        std = np.std(m.residual_background, axis=0)
-        ax.plot(x, mean, color=colors[m.name], label=m.name, alpha=1)
-        ax.plot(x, mean + std, color=colors[m.name], alpha=0.2, linestyle='dashed')
-        ax.plot(x, mean - std, color=colors[m.name], alpha=0.2, linestyle='dashed')
 
+        ax.plot(x, np.mean(m.residual_background, axis=0), color=colors[i], label=labels[i], alpha=1)
+        ax.plot(x, np.quantile(m.residual_background, q=1 - alpha / 2, axis=0),
+                color=colors[i], alpha=0.3, linestyle='dashed')
+        ax.plot(x, np.quantile(m.residual_background, q=alpha / 2, axis=0),
+                color=colors[i], alpha=0.3, linestyle='dashed')
         # plot signal region
         lower, upper = m.signal_region[0]
         lower = trans(lower)
@@ -339,8 +317,9 @@ def plot_background_error(ms, id_dest, from_, to_):
         ax.axvline(x=upper, color='magenta', linestyle='--')
 
     ax.legend()
-    # plt.show(block=True)
-    save_fig(fig=fig, id_dest=id_dest, name='background_error')
+
+    # save_fig(fig=fig, id_dest=id_dest, name='background_error')
+    # print('Finish plotting background error')
 
     # fig = plt.figure(figsize=(7, 5))
     # ax = fig.add_subplot(111)
@@ -352,18 +331,7 @@ def plot_background_error(ms, id_dest, from_, to_):
     # plt.show(block=True)
 
 
-plot_background_error(ms=increasing_parameters, id_dest='4/parameters', from_=from_, to_=to_)
-plot_background_error(ms=increasing_contamination, id_dest='4/contamination', from_=from_, to_=to_)
-plot_background_error(ms=increasing_sample, id_dest='4/sample', from_=from_, to_=to_)
-plot_background_error(ms=no_signal, id_dest='4/signal', from_=from_, to_=to_)
-
-
-# %%
-
-def plot_signal(ms, id_dest):
-    fig = plt.figure(figsize=(7, 5))
-    ax = fig.add_subplot(111)
-
+def _plot_signal(ax, ms, id_dest, colors, labels, alpha=0.05):
     mu_star = ms[0].mu_star
     sigma_star = ms[0].sigma_star
     lambda_star = ms[0].lambda_star
@@ -373,31 +341,87 @@ def plot_signal(ms, id_dest):
 
     for i in np.arange(len(ms)):
         m = ms[i]
-        color = colors[m.name]
+        color = colors[i]
         densities = np.zeros((m.est.shape[0], n_pos))
         for j in np.arange(m.est.shape[0]):
             densities[j, :] = m.est[j, 1] * norm.pdf(x, loc=m.est[j, 2], scale=np.sqrt(m.est[j, 3]))
             # ax.plot(x, densities[j, :], color=color, alpha=0.01)
         # plot mean
-        mean = np.mean(densities, axis=0)
-        std = np.std(densities, axis=0)
-        ax.plot(x, mean, color=color, alpha=1, label=m.name)
-        ax.plot(x, mean + std, color=color, alpha=0.2, linestyle='dashed')
-        ax.plot(x, np.maximum(mean - std, 0), color=color, alpha=0.2, linestyle='dashed')
+        ax.plot(x, np.mean(densities, axis=0), color=color, alpha=1, label=labels[i])
+        ax.plot(x, np.quantile(densities, q=1 - alpha / 2, axis=0), color=color, alpha=0.2,
+                linestyle='dashed')
+        ax.plot(x, np.quantile(densities, q=alpha / 2, axis=0), color=color, alpha=0.2,
+                linestyle='dashed')
         # plot signal region
         lower, upper = m.signal_region[0]
         ax.axvline(x=lower, color='magenta', linestyle='--')
         ax.axvline(x=upper, color='magenta', linestyle='--')
 
     ax.legend()
-    # plt.show(block=True)
-    save_fig(fig=fig, id_dest=id_dest, name='signal')
+    # save_fig(fig=fig, id_dest=id_dest, name='signal')
+    # print('Finish plotting signal')
 
 
-plot_signal(ms=increasing_parameters, id_dest='4/parameters')
-plot_signal(ms=increasing_contamination, id_dest='4/contamination')
-plot_signal(ms=increasing_sample, id_dest='4/sample')
-plot_signal(ms=no_signal, id_dest='4/signal')
+def _plot_signal_error(ax, ms, id_dest, colors, labels, alpha=0.05):
+    mu_star = ms[0].mu_star
+    sigma_star = ms[0].sigma_star
+    lambda_star = ms[0].lambda_star
+    n_pos = 100
+    x = np.linspace(mu_star - 3.5 * sigma_star, mu_star + 3.5 * sigma_star, n_pos)
+    true_density = lambda_star * norm.pdf(x, loc=mu_star, scale=sigma_star)
+    ax.axhline(y=0, color='black', linestyle='--')
+
+    for i in np.arange(len(ms)):
+        m = ms[i]
+        color = colors[i]
+        densities = np.zeros((m.est.shape[0], n_pos))
+        for j in np.arange(m.est.shape[0]):
+            densities[j, :] = m.est[j, 1] * norm.pdf(x, loc=m.est[j, 2], scale=np.sqrt(m.est[j, 3])) - true_density
+            # ax.plot(x, densities[j, :], color=color, alpha=0.01)
+        # plot mean
+        ax.plot(x, np.mean(densities, axis=0), color=color, alpha=1, label=labels[i])
+        ax.plot(x, np.quantile(densities, q=1 - alpha / 2, axis=0), color=color, alpha=0.2,
+                linestyle='dashed')
+        ax.plot(x, np.quantile(densities, q=alpha / 2, axis=0), color=color, alpha=0.2,
+                linestyle='dashed')
+        # plot signal region
+        lower, upper = m.signal_region[0]
+        ax.axvline(x=lower, color='magenta', linestyle='--')
+        ax.axvline(x=upper, color='magenta', linestyle='--')
+
+    ax.legend()
+
+    print('Finish plotting signal error')
+
+
+def plot_background(ms, id_dest, from_, to_, props, colors, labels, alpha=0.05):
+    fig, axs = plt.subplots(2, 2, sharex='none', sharey='none', figsize=(15, 15))
+    _plot_background(axs[0, 0], ms, id_dest, from_, to_, labels=labels, props=props, colors=colors, alpha=alpha)
+    _plot_background_error(axs[0, 1], ms, id_dest, from_, to_, labels=labels, colors=colors, alpha=alpha)
+    _plot_signal(axs[1, 0], ms, id_dest, labels=labels, colors=colors, alpha=alpha)
+    _plot_signal_error(axs[1, 1], ms, id_dest, labels=labels, colors=colors, alpha=alpha)
+    save_fig(fig=fig, id_dest=id_dest, name='error')
+
+
+plot_background(ms=select(ms=ms, names=increasing_parameters_bin_mle),
+                id_dest='5/parameters/bin_mle', from_=from_, to_=to_,
+                props=props_back, colors=['red', 'orange', 'pink', 'blue', 'green'],
+                labels=[5, 10, 20, 30, 40])
+
+
+# plot_background(ms=select(ms=ms, names=increasing_parameters_bin_mom),
+#                 id_dest='5/parameters/bin_mom', from_=from_, to_=to_,
+#                 props=props_back, colors=['red', 'orange', 'blue', 'green'],
+#                 labels=[5, 10, 30, 40])
+# plot_background(ms=select(ms=ms, names=[increasing_parameters_bin_mle[-1], increasing_parameters_bin_mom[-1]]),
+#                 id_dest='5/parameters/compare', from_=from_, to_=to_,
+#                 props=props_back, colors=['red', 'blue'],
+#                 labels=['MLE', 'MOM'])
+#
+
+# plot_background(ms=increasing_contamination, id_dest='4/contamination', from_=from_, to_=to_, props=props_back)
+# plot_background(ms=increasing_sample, id_dest='4/sample', from_=from_, to_=to_, props=props_back)
+# plot_background(ms=no_signal, id_dest='4/signal', from_=from_, to_=to_, props=props_back)
 
 
 # %%
@@ -448,12 +472,38 @@ def save_figs(id, estimators, plots, prefix, hspace, wspace):
         plot.save(fig, path=path.format(id, prefix, estimator))
 
 
-def plot_series_with_uncertainty(ax, x, mean, uncertainty, title):
+def plot_series_with_uncertainty(ax, x, mean, lower, upper, title):
     ax.set_title(title)
-    ax.errorbar(x=x, y=mean, yerr=uncertainty, color='black', capsize=3)
+    ax.errorbar(x=x, y=mean,
+                yerr=np.vstack((mean - lower, upper - mean)).reshape(2, -1),
+                color='black',
+                capsize=3)
 
 
-def process_data(ms, x_axis, id_dest):
+def create_entry(dotdic, n_rows, n_cols):
+    shape = (n_rows, n_cols)
+    dotdic.mean = np.zeros(shape, dtype=np.float64)
+    dotdic.upper = np.zeros(shape, dtype=np.float64)
+    dotdic.lower = np.zeros(shape, dtype=np.float64)
+
+
+def assing_entry(dotdic, index, mean, lower, upper):
+    dotdic.mean[index, :] = mean
+    dotdic.lower[index, :] = lower
+    dotdic.upper[index, :] = upper
+
+
+def assing_quantiles(dotdic, index, series, alpha):
+    assing_entry(dotdic=dotdic,
+                 index=index,
+                 mean=np.mean(series, axis=0),
+                 lower=np.quantile(series, q=alpha / 2, axis=0),
+                 upper=np.quantile(series, q=1 - alpha / 2, axis=0))
+
+
+def process_data(ms, x_axis, id_dest, alpha=0.05):
+    # TODO: the plots of bias / cov / l2 do not respect the order in which the the models are provided
+
     bias_parameters = ['lambda_star', 'lambda_star', 'mu_star', 'sigma2_star']
     cov_parameters = ['lambda_star', 'lambda_star', 'mu_star', 'sigma2_star']
     errors = ['gamma_error', 'signal_error']
@@ -478,10 +528,36 @@ def process_data(ms, x_axis, id_dest):
     cov_plots = create_figs(cov_entries, n_rows, n_cols, width, height)
     error_plots = create_figs(errors, n_rows, n_cols, width, height)
 
+    data = DotDic()
+    create_entry(data.bias, n_rows=len(ms), n_cols=len(bias_entries))
+    create_entry(data.cov, n_rows=len(ms), n_cols=len(cov_entries))
+    create_entry(data.width, n_rows=len(ms), n_cols=len(cov_entries))
+
     for i in np.arange(len(ms)):
         m = ms[i]
         name = m.name
+        true_parameters = np.array([m.lambda_star, m.lambda_star, m.mu_star, m.sigma2_star], dtype=np.float64)
 
+        # for plots
+
+        # normalized bias
+        assing_quantiles(data.bias,
+                         series=m.bias.reshape(-1, 4) / true_parameters.reshape(1, 4),
+                         index=i,
+                         alpha=alpha)
+
+        # coverage
+        cp = clopper_pearson(m.cov)
+        assing_entry(data.cov, index=i, mean=np.mean(m.cov, axis=0), lower=cp[:, 0], upper=cp[:, 1])
+
+        # ci width
+        assing_quantiles(data.width,
+                         series=m.width.reshape(-1, 4) / true_parameters.reshape(1, 4),
+                         index=i,
+                         alpha=alpha)
+
+        # TODO: update or remove
+        # for dataframe/table creation
         # l2 data
         l2 = append(l2, name, l2_entries, [np.std(m.l2_background, axis=0), np.std(m.l2_signal, axis=0), 0],
                     'std')
@@ -497,41 +573,12 @@ def process_data(ms, x_axis, id_dest):
         cov = append(cov, name, cov_entries, np.std(m.cov, axis=0), 'std')
         cov = append(cov, name, cov_entries, np.mean(m.cov, axis=0), 'mean')
 
-        cp = clopper_pearson(m.cov)
         cov = append(cov, name, cov_entries, cp[:, 1], 'CP_up')
         cov = append(cov, name, cov_entries, cp[:, 0], 'CP_low')
 
         # wil = wilson(m.cov)
         # cov = append(cov, m.name, cov_entries, wil[:, 1], 'Wil_up')
         # cov = append(cov, m.name, cov_entries, wil[:, 0], 'Wil_low')
-
-        # bias plots
-        for j in np.arange(len(bias_parameters)):
-            est = m.est[:, j]
-
-            true_parameter = m[bias_parameters[j]]
-            std_around_true_parameter = np.sqrt(
-                np.sum(np.square(est - true_parameter)) / (est.shape[0] - 1))
-
-            ax = bias_plots[j][1][i]
-            ax.set_title(name)
-            # if bias_limits[j] is not None:
-            #     ax.set_xlim(bias_limits[j])
-            # plot.title(ax,
-            #            '{0}\nbias {1:.3f} std {2:.3f}'.format(
-            #                m.name, bias_.mean[j], bias_.std[j]))
-
-            # plot histogram
-            ax.hist(est, bins=bins, density=True)
-
-            # plot pdf around true parameter
-            xmin = np.min(est)
-            xmax = np.max(est)
-            x = np.linspace(xmin, xmax, 100)
-            p = norm.pdf(x, true_parameter, std_around_true_parameter)
-            ax.plot(x, p, 'k', linewidth=2)
-
-            ax.axvline(x=true_parameter, color='red', linestyle='--')
 
         # prob plots
         for j in np.arange(len(bias_parameters)):
@@ -582,50 +629,94 @@ def process_data(ms, x_axis, id_dest):
 
     print("Finish processing data")
 
-    fig, axs = plt.subplots(1, 4, sharex='all', figsize=(20, 5))
+    # bias plots
+    fig, axs = plt.subplots(len(ms), len(bias_entries), sharex='col', sharey='col', figsize=(20, 15))
+    # bias plots
+    for j in np.arange(len(bias_parameters)):
+        est = m.est[:, j]
+
+        true_parameter = m[bias_parameters[j]]
+        std_around_true_parameter = np.sqrt(
+            np.sum(np.square(est - true_parameter)) / (est.shape[0] - 1))
+
+        ax = bias_plots[j][1][i]
+        ax.set_title(name)
+        # if bias_limits[j] is not None:
+        #     ax.set_xlim(bias_limits[j])
+        # plot.title(ax,
+        #            '{0}\nbias {1:.3f} std {2:.3f}'.format(
+        #                m.name, bias_.mean[j], bias_.std[j]))
+
+        # plot histogram
+        ax.hist(est, bins=bins, density=True)
+
+        # plot pdf around true parameter
+        xmin = np.min(est)
+        xmax = np.max(est)
+        x = np.linspace(xmin, xmax, 100)
+        p = norm.pdf(x, true_parameter, std_around_true_parameter)
+        ax.plot(x, p, 'k', linewidth=2)
+
+        ax.axvline(x=true_parameter, color='red', linestyle='--')
+
+    # bias, coverage, width plot for delta method confidence interval
+    fig, axs = plt.subplots(3, len(bias_entries),
+                            sharex='col', sharey='row', figsize=(20, 15))
     for i in np.arange(len(bias_entries)):
         bias_entry = bias_entries[i]
-        axs[i].axhline(y=0, color='red', linestyle='--')
+        axs[0, i].axhline(y=0, color='red', linestyle='--')
         plot_series_with_uncertainty(
-            ax=axs[i],
+            ax=axs[0, i],
             title=bias_entry,
             x=x_axis,
-            mean=bias[(bias_entry, 'mean')].values,
-            uncertainty=bias[(bias_entry, 'std')].values)
-    save_fig(fig=fig, id_dest=id_dest, name='bias')
+            mean=data.bias.mean[:, i],
+            lower=data.bias.lower[:, i],
+            upper=data.bias.upper[:, i])
 
-    print("Finish plotting bias")
-
-    fig, axs = plt.subplots(1, 4, sharex='all', sharey='all', figsize=(20, 5))
     for i in np.arange(len(cov_entries)):
         cov_entry = cov_entries[i]
-        mean = cov[(cov_entry, 'mean')].values
-        axs[i].axhline(y=0.95, color='red', linestyle='--')
+        axs[1, i].axhline(y=0.95, color='red', linestyle='--')
         plot_series_with_uncertainty(
-            ax=axs[i],
+            ax=axs[1, i],
             title=cov_entry,
             x=x_axis,
-            mean=mean,
-            uncertainty=np.vstack((mean - cov[(cov_entry, 'CP_low')].values,
-                                   cov[(cov_entry, 'CP_up')].values - mean)))
-    save_fig(fig=fig, id_dest=id_dest, name='cov')
-    print("Finish plotting covariance")
+            mean=data.cov.mean[:, i],
+            lower=data.cov.lower[:, i],
+            upper=data.cov.upper[:, i])
 
-    fig, axs = plt.subplots(1, 2, sharex='all', figsize=(20, 5))
-    for i in np.arange(len(l2_entries)):
-        l2_entry = l2_entries[i]
+    for i in np.arange(len(cov_entries)):
+        cov_entry = cov_entries[i]
         plot_series_with_uncertainty(
-            ax=axs[i],
-            title=l2_entry,
+            ax=axs[2, i],
+            title=cov_entry,
             x=x_axis,
-            mean=l2[(l2_entry, 'mean')].values,
-            uncertainty=l2[(l2_entry, 'std')].values)
-    save_fig(fig=fig, id_dest=id_dest, name='l2')
-    print("Finish plotting l2")
-    plt.close('all')  # close all previous figures
+            mean=data.width.mean[:, i],
+            lower=data.width.lower[:, i],
+            upper=data.width.upper[:, i])
+
+    save_fig(fig=fig, id_dest=id_dest, name='bias-cov')
+    print("Finish plotting bias and cov")
+
+    # fig, axs = plt.subplots(1, len(l2_entries), sharex='all', figsize=(20, 5))
+    # for i in np.arange(len(l2_entries)):
+    #     l2_entry = l2_entries[i]
+    #     plot_series_with_uncertainty(
+    #         ax=axs[i],
+    #         title=l2_entry,
+    #         x=x_axis,
+    #         mean=l2[(l2_entry, 'mean')].values,
+    #         uncertainty=l2[(l2_entry, 'std')].values)
+    # save_fig(fig=fig, id_dest=id_dest, name='l2')
+    # print("Finish plotting l2")
+    # plt.close('all')  # close all previous figures
 
 
-process_data(ms=increasing_parameters, id_dest='4/parameters', x_axis=[5, 10, 20, 30, 50])
-process_data(ms=increasing_contamination, id_dest='4/contamination', x_axis=[1, 5, 32])
-process_data(ms=increasing_sample, id_dest='4/sample', x_axis=[5000, 25000])
-process_data(ms=no_signal, id_dest='4/no_signal', x_axis=['MLE', 'MOM'])
+process_data(ms=select(ms=ms, names=increasing_parameters_bin_mle),
+             id_dest='5/parameters/bin_mle',
+             x_axis=[5, 10, 20, 30, 40])
+# process_data(ms=select(ms=ms, names=increasing_parameters_bin_mom),
+#              id_dest='5/parameters/bin_mom',
+#              x_axis=[5, 10, 30, 40])
+# process_data(ms=increasing_contamination, id_dest='4/contamination', x_axis=[1, 5, 32])
+# process_data(ms=increasing_sample, id_dest='4/sample', x_axis=[5000, 25000])
+# process_data(ms=no_signal, id_dest='4/no_signal', x_axis=['MLE', 'MOM'])

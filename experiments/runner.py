@@ -11,11 +11,11 @@ from src.dotdic import DotDic
 from argparse import ArgumentParser
 
 # nnls optimizers
-from src.opt.scipy import nnls as lawson_scipy_nnls
-from src.opt.lawsonhanson import nnls as lawson_jax_nnls
-from src.opt.jaxopt import nnls as pg_jaxopt_nnls
-from src.opt.pgd import nnls as pg_jax_nnls
-from src.opt.cvx import nnls as conic_cvx_nnls
+# from src.opt.scipy import nnls as lawson_scipy_nnls
+# from src.opt.lawsonhanson import nnls as lawson_jax_nnls
+# from src.opt.jaxopt import nnls as pg_jaxopt_nnls
+# from src.opt.pgd import nnls as pg_jax_nnls
+# from src.opt.cvx import nnls as conic_cvx_nnls
 
 # methods
 from src.background.unbin import mom
@@ -53,7 +53,7 @@ params = DotDic()
 params.seed = 0
 params.key = random.PRNGKey(seed=params.seed)
 params.k = args.k  # high impact on jacobian computation for non-bin methods
-params.bins = 44  # high impact on jacobian computation for bin methods
+params.bins = 100  # high impact on jacobian computation for bin methods
 params.data_id = args.data_id
 params.data = '../data/{0}/m_muamu.txt'.format(params.data_id)
 params.folds = 200
@@ -69,6 +69,10 @@ params.lambda_star = 0.01
 # allow 64 bits
 params.dtype = np.float64
 
+# numerical methods
+params.tol = 1e-6
+params.maxiter = 10000
+
 match args.method:
     case 'bin_mle':
         params.estimator = bin_mle
@@ -79,17 +83,17 @@ match args.method:
     case 'mom':
         params.estimator = mom
 
-match args.nnls:
-    case 'conic_cvx':
-        params.nnls = conic_cvx_nnls
-    case 'pg_jaxopt':
-        params.nnls = pg_jaxopt_nnls
-    case 'pg_jax':
-        params.nnls = pg_jax_nnls
-    case 'lawson_scipy':
-        params.nnls = lawson_scipy_nnls
-    case 'lawson_jax':
-        params.nnls = lawson_jax_nnls
+# match args.nnls:
+#     case 'conic_cvx':
+#         params.nnls = conic_cvx_nnls
+#     case 'pg_jaxopt':
+#         params.nnls = pg_jaxopt_nnls
+#     case 'pg_jax':
+#         params.nnls = pg_jax_nnls
+#     case 'lawson_scipy':
+#         params.nnls = lawson_scipy_nnls
+#     case 'lawson_jax':
+#         params.nnls = lawson_jax_nnls
 
 # the name should contain the following information
 # - optimizer
@@ -109,6 +113,9 @@ params.name = '_'.join(
      str(params.no_signal),
      str(params.data_id),
      str(params.folds)])
+
+# sanity checks
+assert (params.bins > params.k + 1)
 
 print('Name of the method: {0}'.format(params.name))
 run_and_save(params=params)

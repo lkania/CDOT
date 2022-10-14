@@ -1,18 +1,19 @@
 import jax.numpy as np
 from src.dotdic import DotDic
-from src.normalize import normalize
 from src.basis import bernstein as basis
 from src.background.preprocess import int_omega
 from src.background.unbin.delta import compute_sd
 from src.background.unbin.lambda_hat import compute_lambda_hat
-from src.opt.error import ls_error
+from src.opt.jaxopt import normalized_nnls_with_linear_constraint
+
+
+# from src.opt.error import ls_error
 
 
 def fit(X, lower, upper, params):
     info = DotDic()
     info.k = params.k
 
-    # TODO: check that M computation is correct
     info.M = basis.outer_inner_product(k=params.k, a=lower, b=upper)
     info.int_omega = int_omega(params.k)
     info.int_control = basis.outer_integrate(k=params.k, a=lower, b=upper)
@@ -27,7 +28,14 @@ def fit(X, lower, upper, params):
 
     info.data_delta = (info.pc, info.mu)
 
-    compute_gamma = lambda mu: params.nnls(b=mu, A=info.M, c=info.int_omega)
+    compute_gamma = lambda mu: normalized_nnls_with_linear_constraint(
+        b=mu,
+        A=info.M,
+        c=info.int_omega,
+
+        maxiter=params.maxiter,
+        tol=params.tol,
+        dtype=params.dtype)
 
     info.compute_lambda_hat = lambda data: compute_lambda_hat(
         pc=data[0],
@@ -46,6 +54,6 @@ def fit(X, lower, upper, params):
         n=info.n,
         mu2=info.mu2)
 
-    info.errors = lambda gamma: ls_error(b=info.mu, A=info.M, x=gamma)
+    # info.errors = lambda gamma: ls_error(b=info.mu, A=info.M, x=gamma)
 
     return info
