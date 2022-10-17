@@ -11,7 +11,7 @@ def fit(X, lower, upper, params):
     info.compute_gamma = lambda props: normalized_nnls_with_linear_constraint(b=props / np.sum(props),
                                                                               A=info.M,
                                                                               c=info.int_omega,
-                                                                              
+
                                                                               maxiter=params.maxiter,
                                                                               tol=params.tol,
                                                                               dtype=params.dtype)
@@ -20,7 +20,5 @@ def fit(X, lower, upper, params):
         props=data,
         compute_gamma=info.compute_gamma,
         int_control=info.int_control)
-
-    # info.errors = lambda gamma: ls_error(b=info.props_back, A=info.M, x=gamma)
 
     return info

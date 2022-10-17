@@ -29,17 +29,14 @@ def bin(X, lower, upper, sections):
 
 
 @jit
-def counts(X, from_, to_):
-    counts_ = np.logical_and(X >= np.expand_dims(from_, 1),
-                             X < np.expand_dims(to_, 1))
-    counts_ = np.sum(counts_, 1)
-
-    return counts_
-
-
-@jit
 def proportions(X, from_, to_):
-    return counts(X, from_, to_) / len(X)
+    X = X.reshape(-1)
+    n_obs = X.shape[0]
+    # indicators has n_bins x n_obs
+    indicators = np.logical_and(X >= np.expand_dims(from_, 1), X < np.expand_dims(to_, 1))
+    indicators = np.array(indicators, dtype=np.int32)  # shape: n_probs x n_obs
+    empirical_probabilities = np.sum(indicators, axis=1).reshape(-1) / n_obs
+    return empirical_probabilities, indicators
 
 
 # TODO: allow for arbirary range and give number of bins as param

@@ -45,6 +45,10 @@ def integrate(k, a, b):
     return int_
 
 
+def int_omega(k):
+    return integrate(k, np.array([0]), np.array([1]))
+
+
 @partial(jit, static_argnames=['k'])
 def outer_integrate(k, a, b):
     return (1 / (k + 1)) - integrate(k=k, a=a, b=b)
@@ -83,3 +87,9 @@ def outer_inner_product(k, a, b):
     c /= 2 * k + 1
 
     return int_ * c
+
+
+def predict(gamma, k, from_, to_):
+    gamma = gamma.reshape(-1, 1)
+    basis_ = integrate(k=k, a=from_, b=to_)
+    return basis_ @ gamma

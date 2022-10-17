@@ -1,7 +1,6 @@
 import numpy as np
 
-from scipy.stats._binomtest import _binom_exact_conf_int as _clopper_pearson, \
-    _binom_wilson_conf_int as _wilson
+from scipy.stats._binomtest import _binom_exact_conf_int as _clopper_pearson, _binom_wilson_conf_int as _wilson
 
 
 def vectorize(obs, f):

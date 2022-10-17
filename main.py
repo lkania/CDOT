@@ -1,100 +1,31 @@
-#######################################################
-# allow 64 bits
-#######################################################
-from jax.config import config
-
-config.update("jax_enable_x64", True)
-
-import jax.numpy as np
-import jax.random as random
-#######################################################
-
 from src.load import load
 from src.dotdic import DotDic
 from experiments.evaluate import _evaluate
-from src.transform import transform
-
-# nnls optimizers
-from src.opt.scipy import nnls as lawson_scipy_nnls
-# from src.opt.lawsonhanson import nnls as lawson_jax_nnls
-# from src.opt.jaxopt import nnls as pg_jaxopt_nnls
-# from src.opt.pgd import nnls as pg_jax_nnls
-# from src.opt.cvx import nnls as conic_cvx_nnls
-
-# methods
-# from src.background.unbin import mom
-# from src.background.bin import chi2 as bin_chi2
-from src.background.bin import mle as bin_mle
-from src.background.bin import mom as bin_mom
+from experiments.parameters import build_parameters
 
 # %%
+#######################################################
+# method arguments
+#######################################################
 
-params = DotDic()
-params.seed = 0
-params.key = random.PRNGKey(seed=params.seed)
-params.k = 30  # high impact on jacobian computation for non-bin methods
-params.bins = 44  # high impact on jacobian computation for bin methods
-params.data_id = 1
-params.data = './data/{0}/m_muamu.txt'.format(params.data_id)
-params.folds = 200
-
-params.std_signal_region = 3  # amount of contamination
-params.no_signal = False  # if simulation is run without signal
-
-# fake signal parameters
-params.mu_star = 450
-params.sigma_star = 20
-params.lambda_star = 0.01
-
-params.lower = params.mu_star - params.std_signal_region * params.sigma_star
-params.upper = params.mu_star + params.std_signal_region * params.sigma_star
-
-# allow 64 bits
-params.dtype = np.float64
-
-# numerical methods
-params.tol = 1e-6
-params.maxiter = 5000
-
-# id
-params.name = 'test'
+args = DotDic()
+args.method = 'bin_mle'
+args.k = 20
+args.std_signal_region = 3
+args.no_signal = False
+args.nnls = 'None'
+args.data_id = 0
+args.cwd = '.'
+params = build_parameters(args)
 
 # %%
 #######################################################
 # load background data
 #######################################################
-params.X = load(params.data)
-
-# %%
-# numerics
-
-trans, tilt_density = transform(params.X)
-from src.background.bin.preprocess import preprocess
-from src.opt.jaxopt import normalized_nnls_with_linear_constraint, nnls_with_linear_constraint
-
-info = preprocess(X=trans(params.X),
-                  lower=trans(params.lower),
-                  upper=trans(params.upper),
-                  params=params)
-
-x1 = nnls_with_linear_constraint(b=info.props,
-                                 A=info.M,
-                                 c=info.int_omega,
-                                 maxiter=params.maxiter,
-                                 tol=params.tol,
-                                 dtype=params.dtype)
-
-x2 = normalized_nnls_with_linear_constraint(b=info.props / np.sum(info.props.reshape(-1)),
-                                            A=info.M,
-                                            c=info.int_omega,
-                                            maxiter=params.maxiter,
-                                            tol=params.tol,
-                                            dtype=params.dtype)
-
+X = load(params.data)
 # %%
 
-params.estimator = bin_mom
-model = _evaluate(X=params.X, params=params)
+model = _evaluate(X=X, params=params)
 
 # %%
 
@@ -128,13 +59,6 @@ model = _evaluate(X=params.X, params=params)
 
 # plot.uniform_histogram(tX, step=0.005)
 
-# %%
-models = []
-for estimator in [bin_mle]:  # [bin_mle, bin_mom, mom]:
-    params.estimator = estimator
-    model = run(params=params)
-    models.append(model)
-print('Finished fitting')
 
 # %%
 # names = ['bin_mle', 'bin_mom', 'nob_mom']

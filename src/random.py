@@ -2,20 +2,14 @@ import jax.random as random
 import jax.numpy as np
 
 
-def add_signal(X, params):
-    lambda_ = params.lambda_star
-    mu = params.mu_star
-    sigma = params.sigma_star
-    key = params.key
-
+def add_signal(X, params, method):
+    X = X.reshape(-1)
     if params.no_signal:
-        params.X = X
+        method.X = X
     else:
         n = X.shape[0]
-        n_signal = np.int32(n * lambda_)
-        signal = mu + sigma * random.normal(key, shape=(n_signal,))
+        n_signal = np.int32(n * params.lambda_star)
+        signal = params.mu_star + params.sigma_star * random.normal(params.key, shape=(n_signal,))
+        signal = signal.reshape(-1)
         X_with_signal = np.concatenate((X, signal))
-        params.X = X_with_signal
-
-    params.lower = mu - params.std_signal_region * sigma
-    params.upper = mu + params.std_signal_region * sigma
+        method.X = X_with_signal

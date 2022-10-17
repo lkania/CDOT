@@ -1,34 +1,31 @@
 from src.load import load
-from src.transform import transform
 from src.random import add_signal
 import jax.random as random
 import jax.numpy as np
 import numpy as onp
 from tqdm import tqdm
 from src.dotdic import DotDic
-from src.ci.delta import compute_cis
+from src.ci.delta import delta_cis
 
 
 def _evaluate(X, params):
-    add_signal(X=X, params=params)
+    method = DotDic()
+    method.name = params.name
+    method.k = params.k
 
-    trans, tilt_density = transform(params.X)
+    add_signal(X=X, params=params, method=method)
 
-    estimand = params.estimator.fit(X=trans(params.X),
-                                    lower=trans(params.lower),
-                                    upper=trans(params.upper),
-                                    params=params)
+    params.background.fit(params=params, method=method)
 
-    params.trans = trans
-    params.tilt_density = tilt_density
+    params.signal.fit(params=params, method=method)
 
-    compute_cis(params=params, model=estimand)
+    delta_cis(params=params, method=method)
 
-    return estimand
+    return method
 
 
 def evaluate(X, params):
-    estimand = _evaluate(X, params)
+    method = _evaluate(X, params=params)
 
     #######################################################
     # save results
@@ -39,21 +36,21 @@ def evaluate(X, params):
     save.coverage = onp.zeros((len(params.cis),), dtype=onp.bool_)
     save.width = onp.zeros((len(params.cis),), dtype=params.dtype)
     save.cis = onp.zeros((len(params.cis), 2), dtype=params.dtype)
-    save.gamma = estimand.gamma
-    save.gamma_error = estimand.gamma_error
-    save.signal_error = estimand.signal_error
+    save.gamma = method.gamma
+    save.gamma_error = method.gamma_error
+    save.signal_error = method.signal_error
     save.signal_region = (params.lower, params.upper)
 
     # bias
     for i in np.arange(len(params.parameters)):
-        estimated_parameter = estimand[params.parameters[i]]
+        estimated_parameter = method[params.parameters[i]]
         save.bias[i] = estimated_parameter - params.true_parameters[i]
         save.estimates[i] = estimated_parameter
 
     # coverage
     for i in np.arange(len(params.cis)):
         parameter = params.ci_parameters[i]
-        ci = estimand[params.cis[i]]
+        ci = method[params.cis[i]]
         save.coverage[i] = (ci[0] <= parameter) and (parameter <= ci[1])
         save.width[i] = ci[1] - ci[0]
         save.cis[i, :] = ci
@@ -84,23 +81,6 @@ def run(params):
     print('Data source: {0}'.format(params.data))
     print('Using {0} datasets'.format(params.folds))
     print('Datasets have {0} examples'.format(X_[idxs[0, :]].shape[0]))
-
-    #######################################################
-    # quantities of interest during simulation
-    #######################################################
-    params.true_parameters = [params.lambda_star,
-                              params.lambda_star,
-                              params.mu_star,
-                              np.square(params.sigma_star)]
-    params.parameters = ['lambda_hat0',
-                         'lambda_hat',
-                         'mu_hat',
-                         'sigma2_hat']
-    params.ci_parameters = params.true_parameters
-    params.cis = ['lambda_hat0_delta',
-                  'lambda_hat_delta',
-                  'mu_hat_delta',
-                  'sigma2_hat_delta']
 
     save = DotDic()
     save.bias = onp.zeros((params.folds, len(params.parameters)),

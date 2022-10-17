@@ -1,28 +1,27 @@
 import jax.numpy as np
 from jax import jit
 
-
-@jit
-def compute_sd(pc, mu, jac_pc, jac_mu, n, mu2):
-    mu = mu.reshape(-1)
-    mu2 = mu2.reshape(-1)
-    pc_c = 1 - pc  # complement
-
-    var_prop = np.square(jac_pc) * pc * pc_c
-
-    D_mu_hat = - np.outer(mu, mu)
-    mask = 1 - np.eye(D_mu_hat.shape[0])
-    D_mu_hat = D_mu_hat * mask + np.diag(mu2 - np.square(mu))
-    var_mu = np.sum((jac_mu @ D_mu_hat) * jac_mu, axis=1)
-
-    D_mu_prop_hat = (mu * pc_c).reshape(-1, 1)
-    var_mu_prop = (jac_mu @ D_mu_prop_hat).reshape(-1) * jac_pc
-
-    var = var_prop + var_mu + 2 * var_mu_prop
-    var /= n
-    sd = np.sqrt(var)
-
-    return sd
+# @jit
+# def compute_sd(pc, mu, jac_pc, jac_mu, n, mu2):
+#     mu = mu.reshape(-1)
+#     mu2 = mu2.reshape(-1)
+#     pc_c = 1 - pc  # complement
+#
+#     var_prop = np.square(jac_pc) * pc * pc_c
+#
+#     D_mu_hat = - np.outer(mu, mu)
+#     mask = 1 - np.eye(D_mu_hat.shape[0])
+#     D_mu_hat = D_mu_hat * mask + np.diag(mu2 - np.square(mu))
+#     var_mu = np.sum((jac_mu @ D_mu_hat) * jac_mu, axis=1)
+#
+#     D_mu_prop_hat = (mu * pc_c).reshape(-1, 1)
+#     var_mu_prop = (jac_mu @ D_mu_prop_hat).reshape(-1) * jac_pc
+#
+#     var = var_prop + var_mu + 2 * var_mu_prop
+#     var /= n
+#     sd = np.sqrt(var)
+#
+#     return sd
 
 #
 #
