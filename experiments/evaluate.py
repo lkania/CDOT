@@ -31,15 +31,16 @@ def evaluate(X, params):
     # save results
     #######################################################
     save = DotDic()
+
     save.bias = onp.zeros((len(params.parameters),), dtype=params.dtype)
     save.estimates = onp.zeros((len(params.parameters),), dtype=params.dtype)
     save.coverage = onp.zeros((len(params.cis),), dtype=onp.bool_)
     save.width = onp.zeros((len(params.cis),), dtype=params.dtype)
     save.cis = onp.zeros((len(params.cis), 2), dtype=params.dtype)
+
     save.gamma = method.gamma
     save.gamma_error = method.gamma_error
     save.signal_error = method.signal_error
-    save.signal_region = (params.lower, params.upper)
 
     # bias
     for i in np.arange(len(params.parameters)):
@@ -93,7 +94,6 @@ def run(params):
     save.gamma = onp.zeros((params.folds, params.k + 1), dtype=params.dtype)
     save.gamma_error = onp.zeros((params.folds,), dtype=params.dtype)
     save.signal_error = onp.zeros((params.folds,), dtype=params.dtype)
-    save.signal_region = onp.zeros((params.folds, 2), dtype=params.dtype)
 
     for i in tqdm(range(params.folds), dynamic_ncols=True):
         save_ = evaluate(X=X_[idxs[i, :]], params=params)
@@ -105,7 +105,6 @@ def run(params):
         save.gamma[i, :] = save_.gamma.reshape(-1)
         save.gamma_error[i] = save_.gamma_error
         save.signal_error[i] = save_.signal_error
-        save.signal_region[i, :] = save_.signal_region
 
     return save
 
@@ -127,11 +126,13 @@ def run_and_save(params):
               # parameters
               k=params.k,
               bins=params.bins,
-              signal_region=save.signal_region,
+              lower=params.lower,
+              upper=params.upper,
 
               # ground truth
               mu_star=params.mu_star,
               sigma_star=params.sigma_star,
+              sigma2_star=params.sigma2_star,
               lambda_star=params.lambda_star,
 
               # estimator

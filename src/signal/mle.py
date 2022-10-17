@@ -5,7 +5,7 @@ from functools import partial
 from src.signal.delta import influence
 
 
-# TODO: The following _delta method assumes that the signal density is gaussian/normal
+# TODO: The following method assumes that the signal density is gaussian/normal
 # It can be generalized to any signal by replacing the iteration for a numerical optimization
 @partial(jit, static_argnames=['signal'])
 def _delta(data0, background_hat, X, lower, upper, signal):

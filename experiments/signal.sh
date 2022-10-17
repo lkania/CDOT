@@ -2,7 +2,6 @@
 
 # load functions
 . distribute.sh
-# TODO: currently failling
 # hydra 7 and 8 are 126G
 send hydra7 bin_mle None 30 3 True 50
 
