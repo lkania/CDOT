@@ -1,4 +1,13 @@
 #######################################################
+# Constants
+#######################################################
+
+PARAMETERS = ['lambda_star', 'lambda_star', 'mu_star', 'sigma2_star']
+CIS_DELTA = ['lambda_hat0_delta', 'lambda_hat_delta', 'mu_hat_delta', 'sigma2_hat_delta']
+ESTIMATORS = ['lambda_hat0', 'lambda_hat', 'mu_hat', 'sigma2_hat']
+ERRORS = ['gamma_error', 'signal_error']
+
+#######################################################
 # allow 64 bits
 #######################################################
 from jax.config import config
@@ -114,9 +123,9 @@ def build_parameters(args):
     # quantities of interest during simulation
     #######################################################
     params.true_parameters = [params.lambda_star, params.lambda_star, params.mu_star, params.sigma2_star]
-    params.parameters = ['lambda_hat0', 'lambda_hat', 'mu_hat', 'sigma2_hat']
+    params.parameters = PARAMETERS
     params.ci_parameters = params.true_parameters
-    params.cis = ['lambda_hat0_delta', 'lambda_hat_delta', 'mu_hat_delta', 'sigma2_hat_delta']
+    params.cis = CIS_DELTA
 
     #######################################################
     # Background method

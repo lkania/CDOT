@@ -13,7 +13,8 @@ def vectorize(obs, f):
 
 def clopper_pearson(obs,
                     alternative='two-sided',
-                    confidence_level=0.95):
+                    alpha=0.05):
+    confidence_level = 1 - alpha
     return vectorize(obs, f=lambda o: _clopper_pearson(
         k=np.sum(o),  # number of successes
         n=o.shape[0],  # number of trials

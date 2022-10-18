@@ -23,7 +23,7 @@ def preprocess(params, method):
 
     # TODO: We ignore the dependency of tilt_density on min(X),
     #  it can be easily fixed by choosing a reasonable constant
-    trans, tilt_density = transform(base=np.min(method.X), c=params.c)
+    trans, tilt_density, _ = transform(base=np.min(method.X), c=params.c)
     tX = trans(method.X)
     tlower = trans(params.lower)
     tupper = trans(params.upper)

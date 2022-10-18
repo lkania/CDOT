@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 plt.rcParams['figure.dpi'] = 600
 from src.bin import proportions, uniform_bin
 import jax.numpy as np
-from src.predict import predict
 
 
 def histogram(X, from_, to_):
