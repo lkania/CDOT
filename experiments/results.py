@@ -1,16 +1,20 @@
-# %%
+# TODO: create plots for the predictions of each model
+# TODO: plot metrics of diff model classes (mle vs bin_mom) in the same plot (e.g. cov and bias)
 
-import numpy as np
-import pandas as pd
+######################################################################
+# Configure matplolib
+######################################################################
 import matplotlib
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 plt.rcParams['figure.dpi'] = 600
+######################################################################
+import numpy as np
+import pandas as pd
 from experiments.parameters import PARAMETERS, CIS_DELTA, ESTIMATORS, ERRORS
-import jax.random as random
-from scipy.stats import norm, probplot
+from scipy.stats import probplot
 from src.stat.binom import clopper_pearson
 from src.dotdic import DotDic
 from experiments.parameters import normal
@@ -18,21 +22,11 @@ import src.basis.bernstein as basis
 from src.transform import transform
 from pathlib import Path
 from src.bin import proportions, uniform_bin
-# import os
 from tqdm import tqdm
 from functools import partial
 
 
-# os.chdir('./experiments/')  # when working locally
-
-
-# %%
-
-# TODO: create plots for the predictions of each model
-# TODO: plot metrics of diff model classes (mle vs bin_mom) in the same plot (e.g. cov and bias)
-
-
-# %%
+######################################################################
 
 
 def load(id, name, data):
@@ -159,17 +153,11 @@ def load(id, name, data):
     return m
 
 
-def create_hierarchy(df):
-    df = df.set_index(['method', 'type']).unstack()
-    df.columns = pd.MultiIndex.from_product(df.columns.levels)
-    return df
-
-
 # %%
 
 # load background data and fake signal
 data = DotDic()
-data.background.X = np.array(np.loadtxt('./data/1/m_muamu.txt'))
+data.background.X = np.array(np.loadtxt('./data/5/m_muamu.txt'))
 trans, tilt_density, inv_trans = transform(base=np.min(data.background.X), c=0.003)
 data.trans = trans
 from_, to_ = uniform_bin(step=0.01)
@@ -183,7 +171,9 @@ data.background.from_ = from_
 data.background.to_ = to_
 data.background.x_axis = (from_ + to_) / 2
 
-data.background.empirical_probabilities, _ = proportions(X=trans(data.background.X), from_=from_, to_=to_)
+data.background.empirical_probabilities, _ = proportions(X=trans(data.background.X),
+                                                         from_=from_,
+                                                         to_=to_)
 
 # seed = 0
 # sigma_star = 20
@@ -203,13 +193,13 @@ print("Data loaded")
 
 estimators = []
 increasing_parameters_bin_mle = [
-    # 'bin_mle_2_3_False_50_200',
-    # 'bin_mle_3_3_False_50_200',
-    'bin_mle_4_3_False_50_200',
-    'bin_mle_5_3_False_50_200',
-    'bin_mle_10_3_False_50_200',
-    'bin_mle_20_3_False_50_200',
-    'bin_mle_30_3_False_50_200'
+    # 'bin_mle_2_3_False_50_500',
+    # 'bin_mle_3_3_False_50_500',
+    'bin_mle_4_3_False_50_500',
+    'bin_mle_5_3_False_50_500',
+    'bin_mle_10_3_False_50_500',
+    'bin_mle_20_3_False_50_500',
+    'bin_mle_30_3_False_50_500'
 ]
 estimators += increasing_parameters_bin_mle
 # increasing_parameters_bin_mom = [
@@ -242,8 +232,8 @@ estimators = list(set(estimators))
 print('Using {0} estimators'.format(len(estimators)))
 
 # %%
-id_source = '6'
-id_dest = '6'
+id_source = '7'
+id_dest = '7'
 # load data
 ms = []
 for i in tqdm(np.arange(len(estimators)), dynamic_ncols=True):
@@ -268,25 +258,6 @@ def select(names, ms):
     return ms_
 
 
-# increasing_parameters = select(ms=ms, names=increasing_parameters_1)
-# increasing_parameters = [select(ms=ms, names=increasing_parameters_bin_mle),
-#                          select(ms=ms, names=increasing_parameters_bin_mom)]
-
-
-# %%
-#
-# increasing_contamination = select(ms=ms,
-#                                   names=increasing_contamination_1)  # [select(ms=ms, names=increasing_contamination_1)]
-#
-# increasing_sample = select(ms=ms, names=increasing_sample_1)  # [select(ms=ms, names=increasing_sample_1),
-# # select(ms=ms, names=increasing_sample_2)]
-#
-# no_signal = select(ms=ms, names=no_signal_1)  # [select(ms=ms, names=no_signal_1)]
-
-
-# %%
-
-
 def _save(fig, path):
     fig.savefig(fname=path, bbox_inches='tight')
     plt.close(fig)
@@ -307,9 +278,6 @@ def saves(path, names, plots, prefix, hspace, wspace):
         fig = plots[i][0]
         fig.subplots_adjust(hspace=hspace, wspace=wspace)
         _save(fig, path=path_.format(path, prefix, name))
-
-
-# %%
 
 
 def _plot_mean_plus_quantile(ax, x, y, color, label, alpha):
@@ -375,6 +343,12 @@ def plot_background(ms, path, colors, labels, alpha=0.05):
     save(fig=fig, path=path, name='signal')
 
 
+def create_hierarchy(df):
+    df = df.set_index(['method', 'type']).unstack()
+    df.columns = pd.MultiIndex.from_product(df.columns.levels)
+    return df
+
+
 def concat(df, dic_):
     return pd.concat([df, pd.DataFrame(dic_, index=[0])],
                      ignore_index=True)
@@ -412,13 +386,10 @@ def html(id, df, name, digits, col_space=100):
 def create_figs(names, n_rows, n_cols, width, height):
     plots = []
     for name in names:
-        fig, ax = plt.subplots(n_rows, n_cols,
-                               sharey='all',
-                               sharex='all',
-                               figsize=(width, height))
+        fig, axs = plt.subplots(n_rows, n_cols, sharey='row', sharex='row', figsize=(width, height))
         fig.suptitle(name)
         fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-        plots.append((fig, ax.reshape(-1)))
+        plots.append((fig, axs))
     return plots
 
 
@@ -460,18 +431,18 @@ def process_data(ms, labels, path, alpha=0.05):
     # l2 = pd.DataFrame(columns=l2_entries + ['method', 'type'])
     bias_table = pd.DataFrame(columns=ESTIMATORS + ['method', 'type'])
     cov_table = pd.DataFrame(columns=CIS_DELTA + ['method', 'type'])
+    width_table = pd.DataFrame(columns=CIS_DELTA + ['method', 'type'])
 
-    n_rows = 1
     n_cols = len(ms)
     hspace = 0.4
     wspace = 0.2
     width = 20
     height = 5
     bins = 35
-    bias_plots = create_figs(ESTIMATORS, n_rows, n_cols, width, height)
-    prob_plots = create_figs(CIS_DELTA, n_rows, n_cols, width, height)
-    cov_plots = create_figs(CIS_DELTA, n_rows, n_cols, width, height)
-    error_plots = create_figs(ERRORS, n_rows, n_cols, width, height)
+
+    bias_plots = create_figs(ESTIMATORS, 2, n_cols, width, height * 2)
+    cov_plots = create_figs(CIS_DELTA, 1, n_cols, width, height)
+    error_plots = create_figs(ERRORS, 1, n_cols, width, height)
 
     data = DotDic()
     create_entry(data.bias, n_rows=len(ms), n_cols=len(ESTIMATORS))
@@ -482,16 +453,15 @@ def process_data(ms, labels, path, alpha=0.05):
         m = ms[i]
         label = labels[i]
 
-        # for plots and table creation
-
-        # normalized bias
-        assing_quantiles(data.bias,
-                         series=m.bias / m.parameters_star.reshape(1, 4),
-                         index=i,
-                         alpha=alpha)
+        # bias
+        assing_quantiles(dotdic=data.bias, series=m.bias, index=i, alpha=alpha)
         bias_table = append(bias_table, label, ESTIMATORS, data.bias.lower[i, :], 'lower')
         bias_table = append(bias_table, label, ESTIMATORS, data.bias.upper[i, :], 'upper')
         bias_table = append(bias_table, label, ESTIMATORS, data.bias.mean[i, :], 'mean')
+        shape = data.bias.mean[i, :].shape
+        data.bias.mean[i, :] /= m.parameters_star.reshape(shape)
+        data.bias.lower[i, :] /= m.parameters_star.reshape(shape)
+        data.bias.upper[i, :] /= m.parameters_star.reshape(shape)
 
         # coverage
         cp = clopper_pearson(m.cov, alpha=alpha)
@@ -503,10 +473,14 @@ def process_data(ms, labels, path, alpha=0.05):
         cov_table = append(cov_table, label, CIS_DELTA, data.cov.mean[i, :], 'mean')
 
         # ci width
-        assing_quantiles(data.width,
-                         series=m.width.reshape(-1, 4) / m.parameters_star.reshape(1, 4),
-                         index=i,
-                         alpha=alpha)
+        assing_quantiles(data.width, series=m.width, index=i, alpha=alpha)
+        width_table = append(width_table, label, CIS_DELTA, data.width.lower[i, :], 'lower')
+        width_table = append(width_table, label, CIS_DELTA, data.width.upper[i, :], 'upper')
+        width_table = append(width_table, label, CIS_DELTA, data.width.mean[i, :], 'mean')
+        shape = data.width.mean[i, :].shape
+        data.width.mean[i, :] /= m.parameters_star.reshape(shape)
+        data.width.lower[i, :] /= m.parameters_star.reshape(shape)
+        data.width.upper[i, :] /= m.parameters_star.reshape(shape)
 
         # for dataframe/table creation
         # l2 data
@@ -517,20 +491,14 @@ def process_data(ms, labels, path, alpha=0.05):
         #
         #     # bias data
 
-        # estimate/bias plot
+        # estimate plot
         for j in np.arange(len(PARAMETERS)):
             est = m.est[:, j]
+            mean_hat = np.mean(est)
+            sigma2_hat = np.sum(np.square(est.reshape(-1) - mean_hat)) / (est.shape[0] - 1)
 
-            true_parameter = m[PARAMETERS[j]]
-            std_around_true_parameter = np.sqrt(np.sum(np.square(est - true_parameter)) / (est.shape[0] - 1))
-
-            ax = bias_plots[j][1][i]
+            ax = bias_plots[j][1][0, i]
             ax.set_title(label)
-            # if bias_limits[j] is not None:
-            #     ax.set_xlim(bias_limits[j])
-            # plot.title(ax,
-            #            '{0}\nbias {1:.3f} std {2:.3f}'.format(
-            #                m.name, bias_.mean[j], bias_.std[j]))
 
             # plot histogram
             ax.hist(est, bins=bins, density=True)
@@ -539,18 +507,13 @@ def process_data(ms, labels, path, alpha=0.05):
             xmin = np.min(est)
             xmax = np.max(est)
             x = np.linspace(xmin, xmax, 100)
-            p = norm.pdf(x, true_parameter, std_around_true_parameter)
+            p = normal(X=x, mu=mean_hat, sigma2=sigma2_hat)
             ax.plot(x, p, 'k', linewidth=2)
+            true_parameter = m[PARAMETERS[j]]
             ax.axvline(x=true_parameter, color='red', linestyle='--')
 
-        # prob plots
-        for j in np.arange(len(PARAMETERS)):
-            est = m.est[:, j]
-            ax = prob_plots[j][1][i]
+            ax = bias_plots[j][1][1, i]
             probplot(x=est, dist="norm", plot=ax)
-            ax.set_title(label)
-            # plot.title(ax, '{0}\nbias {1:.3f} std {2:.3f}'.format(
-            #     m.name, bias_.mean[j], bias_.std[j]))
 
         # coverage plots
         for j in np.arange(len(PARAMETERS)):
@@ -573,30 +536,25 @@ def process_data(ms, labels, path, alpha=0.05):
             series = m[ERRORS[j]]
             ax.plot(np.arange(series.shape[0]) + 1, series, color='blue')
 
-    saves(path, ESTIMATORS, prob_plots, 'prob', hspace, wspace)
     saves(path, ESTIMATORS, bias_plots, 'bias', hspace, wspace)
     saves(path, CIS_DELTA, cov_plots, 'cov', hspace, wspace)
     saves(path, ERRORS, error_plots, None, hspace, wspace)
 
     # create hierarchical structure
     bias_table = create_hierarchy(bias_table)
-    # l2 = create_hierarchy(l2)
+    width_table = create_hierarchy(width_table)
     cov_table = create_hierarchy(cov_table)
 
     # save statistics
-    html(path, bias_table, 'bias', digits=6)
+    html(path, bias_table, 'bias', digits=5)
     html(path, cov_table, 'cov', digits=2, col_space=60)
-    # html(id_dest, l2, 'l2', digits=5, col_space=60)
-
-    # print("Finish processing data")
-
-    # bias plots
-    # fig, axs = plt.subplots(len(ms), len(bias_entries), sharex='col', sharey='col', figsize=(20, 15))
-    # bias plots
+    html(path, width_table, 'width', digits=3, col_space=60)
 
     # bias, coverage, width plot for delta method confidence interval
     fig, axs = plt.subplots(3, len(ESTIMATORS),
                             sharex='col', sharey='row', figsize=(20, 15))
+    # axs[0, 0].set_ylabel(r'$\frac{E[\hat{\theta}]-\theta}{\theta}$')
+    axs[0, 0].set_ylabel(r'Normalized empirical bias')
     for i in np.arange(len(ESTIMATORS)):
         bias_entry = ESTIMATORS[i]
         axs[0, i].axhline(y=0, color='red', linestyle='--')
@@ -608,22 +566,26 @@ def process_data(ms, labels, path, alpha=0.05):
             lower=data.bias.lower[:, i],
             upper=data.bias.upper[:, i])
 
+    # axs[1, 0].set_ylabel(r'$\theta \in C_{95\%}(\hat{\theta})$')
+    axs[1, 0].set_ylabel('Empirical coverage')
     for i in np.arange(len(CIS_DELTA)):
         cov_entry = CIS_DELTA[i]
         axs[1, i].axhline(y=0.95, color='red', linestyle='--')
         plot_series_with_uncertainty(
             ax=axs[1, i],
-            title=cov_entry,
+            title='',
             x=labels,
             mean=data.cov.mean[:, i],
             lower=data.cov.lower[:, i],
             upper=data.cov.upper[:, i])
 
+    # axs[2, 0].set_ylabel(r'$\frac{WIDTH(C_{95\%}(\hat{\theta}))}{\theta}$')
+    axs[2, 0].set_ylabel('Normalized empirical width')
     for i in np.arange(len(CIS_DELTA)):
         cov_entry = CIS_DELTA[i]
         plot_series_with_uncertainty(
             ax=axs[2, i],
-            title=cov_entry,
+            title='',
             x=labels,
             mean=data.width.mean[:, i],
             lower=data.width.lower[:, i],
@@ -651,28 +613,9 @@ def _plots(ms, path, colors, labels):
     process_data(ms=ms, path=path, labels=labels)
 
 
+# %%
+
 _plots(ms=select(ms=ms, names=increasing_parameters_bin_mle),
        path='{0}/parameters/bin_mle'.format(id_dest),
        colors=['red', 'brown', 'orange', 'blue', 'green', 'pink', 'yellow'],
-       labels=[4, 5, 10, 20, 30])
-
-# plot_background(ms=select(ms=ms, names=increasing_parameters_bin_mom),
-#                 id_dest='5/parameters/bin_mom', from_=from_, to_=to_,
-#                 props=props_back, colors=['red', 'orange', 'blue', 'green'],
-#                 labels=[5, 10, 30, 40])
-# plot_background(ms=select(ms=ms, names=[increasing_parameters_bin_mle[-1], increasing_parameters_bin_mom[-1]]),
-#                 id_dest='5/parameters/compare', from_=from_, to_=to_,
-#                 props=props_back, colors=['red', 'blue'],
-#                 labels=['MLE', 'MOM'])
-#
-
-
-# %%
-
-
-# process_data(ms=select(ms=ms, names=increasing_parameters_bin_mom),
-#              id_dest='5/parameters/bin_mom',
-#              x_axis=[5, 10, 30, 40])
-# process_data(ms=increasing_contamination, id_dest='4/contamination', x_axis=[1, 5, 32])
-# process_data(ms=increasing_sample, id_dest='4/sample', x_axis=[5000, 25000])
-# process_data(ms=no_signal, id_dest='4/no_signal', x_axis=['MLE', 'MOM'])
+       labels=np.array([4, 5, 10, 20, 30]) + 1)

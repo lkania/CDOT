@@ -62,7 +62,7 @@ def build_parameters(args):
     #######################################################
     params.data_id = args.data_id
     params.data = '{0}/data/{1}/m_muamu.txt'.format(args.cwd, params.data_id)
-    params.folds = 200
+    params.folds = 500
 
     #######################################################
     # Background parameters
@@ -111,7 +111,7 @@ def build_parameters(args):
     # numerical methods
     #######################################################
     params.tol = 1e-6  # convergence criterion of iterative methods
-    params.maxiter = 10000
+    params.maxiter = 20000
     # params.rcond = 1e-6  # thresholding for singular values
 
     #######################################################
@@ -123,7 +123,7 @@ def build_parameters(args):
     # quantities of interest during simulation
     #######################################################
     params.true_parameters = [params.lambda_star, params.lambda_star, params.mu_star, params.sigma2_star]
-    params.parameters = PARAMETERS
+    params.estimators = ESTIMATORS
     params.ci_parameters = params.true_parameters
     params.cis = CIS_DELTA
 

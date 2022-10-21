@@ -24,9 +24,9 @@ def preprocess(params, method):
     # TODO: We ignore the dependency of tilt_density on min(X),
     #  it can be easily fixed by choosing a reasonable constant
     trans, tilt_density, _ = transform(base=np.min(method.X), c=params.c)
-    tX = trans(method.X)
-    tlower = trans(params.lower)
-    tupper = trans(params.upper)
+    tX = trans(X=method.X)
+    tlower = trans(X=params.lower)
+    tupper = trans(X=params.upper)
 
     # TODO: We ignore the randomness of the equal-counts binning,
     #  it can be fixed by using a fixed binning

@@ -32,8 +32,8 @@ def evaluate(X, params):
     #######################################################
     save = DotDic()
 
-    save.bias = onp.zeros((len(params.parameters),), dtype=params.dtype)
-    save.estimates = onp.zeros((len(params.parameters),), dtype=params.dtype)
+    save.bias = onp.zeros((len(params.estimators),), dtype=params.dtype)
+    save.estimates = onp.zeros((len(params.estimators),), dtype=params.dtype)
     save.coverage = onp.zeros((len(params.cis),), dtype=onp.bool_)
     save.width = onp.zeros((len(params.cis),), dtype=params.dtype)
     save.cis = onp.zeros((len(params.cis), 2), dtype=params.dtype)
@@ -43,8 +43,8 @@ def evaluate(X, params):
     save.signal_error = method.signal_error
 
     # bias
-    for i in np.arange(len(params.parameters)):
-        estimated_parameter = method[params.parameters[i]]
+    for i in np.arange(len(params.estimators)):
+        estimated_parameter = method[params.estimators[i]]
         save.bias[i] = estimated_parameter - params.true_parameters[i]
         save.estimates[i] = estimated_parameter
 
@@ -84,12 +84,10 @@ def run(params):
     print('Datasets have {0} examples'.format(X_[idxs[0, :]].shape[0]))
 
     save = DotDic()
-    save.bias = onp.zeros((params.folds, len(params.parameters)),
-                          dtype=params.dtype)
+    save.bias = onp.zeros((params.folds, len(params.estimators)), dtype=params.dtype)
     save.coverage = onp.zeros((params.folds, len(params.cis)), dtype=onp.bool_)
     save.width = onp.zeros((params.folds, len(params.cis)), dtype=params.dtype)
-    save.estimates = onp.zeros((params.folds, len(params.parameters)),
-                               dtype=params.dtype)
+    save.estimates = onp.zeros((params.folds, len(params.estimators)), dtype=params.dtype)
     save.cis = onp.zeros((params.folds, len(params.cis), 2), dtype=params.dtype)
     save.gamma = onp.zeros((params.folds, params.k + 1), dtype=params.dtype)
     save.gamma_error = onp.zeros((params.folds,), dtype=params.dtype)
