@@ -5,7 +5,6 @@
 PARAMETERS = ['lambda_star', 'lambda_star', 'mu_star', 'sigma2_star']
 CIS_DELTA = ['lambda_hat0_delta', 'lambda_hat_delta', 'mu_hat_delta', 'sigma2_hat_delta']
 ESTIMATORS = ['lambda_hat0', 'lambda_hat', 'mu_hat', 'sigma2_hat']
-ERRORS = ['gamma_error', 'signal_error']
 
 #######################################################
 # allow 64 bits
@@ -73,7 +72,9 @@ def build_parameters(args):
     #######################################################
     # parameters for background transformation
     #######################################################
-    params.c = 0.003
+    params.rate = args.rate
+    params.a = args.a
+    params.b = None if (args.b < 1e-6) else args.b
 
     #######################################################
     # Basis
@@ -83,17 +84,14 @@ def build_parameters(args):
     #######################################################
     # Fake signal parameters
     #######################################################
-    params.mu_star = 450
-    params.sigma_star = 20
+    params.mu_star = args.mu_star
+    params.sigma_star = args.sigma_star
     params.sigma2_star = np.square(params.sigma_star)
-    params.lambda_star = 0.01
+    params.lambda_star = args.lambda_star
 
-    # if simulation is run without signal
-    params.no_signal = args.no_signal
-    if params.no_signal is True:
-        params.lambda_star = 0
-        # we don't modify sigma_star and mu_star so that the signal_region stays the same
-        # regardless of lambda
+    params.no_signal = (args.lambda_star < 1e-6)  # i.e. if lambda_star == 0
+    # we don't modify sigma_star and mu_star so that
+    # the signal_region stays the same regardless of lambda
 
     #######################################################
     # amount of contamination
@@ -168,16 +166,16 @@ def build_parameters(args):
     # - dataset id
     # - std for signal region
     # - presence of signal
-    if args.nnls == 'None':
-        params.name = args.method
-    else:
-        params.name = '_'.join([args.method, args.nnls])
+    # if args.nnls == 'None':
+    params.name = args.method
+    # else:
+    #     params.name = '_'.join([args.method, args.nnls])
 
     params.name = '_'.join(
         [params.name,
          str(params.k),
          str(params.std_signal_region),
-         str(params.no_signal),
+         str(params.lambda_star),
          str(params.data_id),
          str(params.folds)])
 

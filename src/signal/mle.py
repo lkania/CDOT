@@ -2,7 +2,7 @@ import jax.numpy as np
 from jax import jit
 from jaxopt import FixedPointIteration
 from functools import partial
-from src.signal.delta import influence
+from src.signal.delta import influence, objective
 
 
 # TODO: The following method assumes that the signal density is gaussian/normal
@@ -70,9 +70,12 @@ def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control, signal
         background_hat.reshape(-1))  # auxiliary parameters are differentiable
 
     nu_hat = sol[0]  # where mu_hat = data[0], sigma2_hat = data[1] and lambda_hat = data[2]
-    signal_error = (sol[1])[1]
 
-    return nu_hat, signal_error
+    signal_error = (sol[1])[1]
+    signal_fit = objective(X=X, nu=nu_hat, signal=signal, background_hat=background_hat)
+    signal_aux = (signal_error, signal_fit)
+    
+    return nu_hat, signal_aux
 
 
 def estimate_nu(lambda_hat0, background_hat, params, method):

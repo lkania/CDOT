@@ -5,15 +5,14 @@ from src.bin import proportions, uniform_bin
 import jax.numpy as np
 
 
-def histogram(X, from_, to_):
+def histogram(ax, X, from_, to_):
     props = proportions(X=X, from_=from_, to_=to_)
-    plt.hist(from_, to_, weights=props, density=False)
-    plt.show(block=True)
+    ax.hist(from_, to_, weights=props, density=False)
 
 
-def uniform_histogram(X, step=0.005):
-    from_, to_ = uniform_bin(step=step)
-    histogram(X, from_, to_)
+def uniform_histogram(ax, X, from_=0, to_=1, step=0.005):
+    from_, to_ = uniform_bin(step=step, from_=from_, to_=to_)
+    histogram(ax, X, from_, to_)
 
 
 def density(X, lower, upper, methods, step=None):
@@ -102,14 +101,6 @@ def matrix(m, colLabels, rowLabels):
     fig.tight_layout()
     plt.show(block=True)
     return fig
-
-
-def title(ax, str):
-    ax.set_title(str)
-
-
-def remove_y_axis(ax):
-    ax.get_yaxis().set_visible(False)
 
 
 def save(fig, path):

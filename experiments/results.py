@@ -1,5 +1,16 @@
-# TODO: create plots for the predictions of each model
 # TODO: plot metrics of diff model classes (mle vs bin_mom) in the same plot (e.g. cov and bias)
+
+######################################################################
+# parse arguments
+######################################################################
+
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+
+parser.add_argument('--data_id', type=str, default='50')
+args, _ = parser.parse_known_args()
+data_id = args.data_id
 
 ######################################################################
 # Configure matplolib
@@ -8,12 +19,27 @@ import matplotlib
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter, \
+    StrMethodFormatter, \
+    NullFormatter, \
+    LogFormatterMathtext, \
+    ScalarFormatter, \
+    FuncFormatter
 
 plt.rcParams['figure.dpi'] = 600
+#######################################################
+# allow 64 bits
+#######################################################
+from jax.config import config
+
+config.update("jax_enable_x64", True)
+
+from jax import numpy as np, random
+import numpy as onp
 ######################################################################
-import numpy as np
+from src.load import load as load_data
 import pandas as pd
-from experiments.parameters import PARAMETERS, CIS_DELTA, ESTIMATORS, ERRORS
+from experiments.parameters import PARAMETERS, CIS_DELTA, ESTIMATORS
 from scipy.stats import probplot
 from src.stat.binom import clopper_pearson
 from src.dotdic import DotDic
@@ -24,13 +50,63 @@ from pathlib import Path
 from src.bin import proportions, uniform_bin
 from tqdm import tqdm
 from functools import partial
-
+from src.background.density import background, density as projected_density
 
 ######################################################################
 
+# %%
+# Define estimators of interest
+
+estimators = []
+INCREASING_CONTAMINATION = np.array([3.0, 2.5, 2.0, 1.5, 1.0, 0.5])
+increasing_contamination = ['bin_mle_5_{0}_0.01_{1}_500'.format(l, data_id) for l in INCREASING_CONTAMINATION]
+estimators += increasing_contamination
+INCREASING_PARAMETERS = np.array([2, 3, 4, 5, 10, 15, 20, 25, 30], dtype=np.int32)
+increasing_parameters = ['bin_mle_{0}_3.0_0.01_{1}_500'.format(l, data_id) for l in INCREASING_PARAMETERS]
+estimators += increasing_parameters
+REDUCED_PARAMETERS = np.array([4, 5, 10], dtype=np.int32)
+reduced_parameters = ['bin_mle_{0}_3.0_0.01_{1}_500'.format(l, data_id) for l in REDUCED_PARAMETERS]
+DIMINISHING_SIGNAL = np.array([0.0, 0.0001, 0.0005, 0.001, 0.005, 0.01])
+diminishing_signal = ['bin_mle_5_3.0_{0}_{1}_500'.format(l, data_id) for l in DIMINISHING_SIGNAL]
+estimators += diminishing_signal
+
+if data_id != 'real':
+    INCREASING_SAMPLE = ['half', '5', '50', '100']
+    increasing_sample = ['bin_mle_5_3.0_0.01_{0}_500'.format(l) for l in INCREASING_SAMPLE]
+    estimators += increasing_sample
+
+estimators = list(set(estimators))
+print('Using {0} estimators'.format(len(estimators)))
+
+
+# %%
+
+def squared_integral(func, from_, to_):
+    X = np.linspace(from_, to_, 2)
+    return np.trapz(y=np.square(func(X=X)), x=X)
+
+
+def l2(func, X, from_=None, to_=None):
+    if from_ is None:
+        from_ = np.min(X)
+    if to_ is None:
+        to_ = np.max(X)
+    return squared_integral(func, from_=from_, to_=to_) - 2 * np.mean(func(X=X))
+
+
+def l2_sideband(func, X, from_, to_):
+    return squared_integral(func, from_=np.min(X), to_=from_) + \
+           squared_integral(func, from_=to_, to_=np.max(X)) - \
+           2 * np.mean(func(X=X))
+
 
 def load(id, name, data):
-    file = np.load('./experiments/results/{0}/{1}.npz'.format(id, name))
+    if id is not None:
+        path = './experiments/results/{0}/{1}.npz'.format(id, name)
+    else:
+        path = './experiments/results/{0}.npz'.format(name)
+
+    file = onp.load(path)
     m = DotDic()
     m.name = name
 
@@ -59,181 +135,171 @@ def load(id, name, data):
     m.parameters_star = np.array(
         [m.lambda_star, m.lambda_star, m.mu_star, m.sigma2_star], dtype=np.float64)
 
-    m.gamma_error = file['gamma_error']
-    m.signal_error = file['signal_error']
+    m.gamma_aux = file['gamma_aux']
+    m.gamma_error = m.gamma_aux[:, 0]
+    m.gamma_fit = m.gamma_aux[:, 1]
 
-    ##################################################################################################
-    # compute:
-    # - signal densities
-    # - background predictions and residuals
-    ##################################################################################################
+    m.signal_aux = file['signal_aux']
+    m.signal_error = m.signal_aux[:, 0]
+    m.signal_fit = m.signal_aux[:, 1]
+
+    # data splitting
+    idx_sideband = np.array((data.background.X <= m.lower) + (data.background.X >= m.upper), dtype=np.bool_)
+    idx_signal_region = np.logical_not(idx_sideband)
+    data.background.sideband.X = data.background.X[idx_sideband].reshape(-1)
+    data.background.signal_region.X = data.background.X[idx_signal_region].reshape(-1)
+    data.background.trans.sideband.X = data.trans(data.background.sideband.X)
+    data.background.trans.signal_region.X = data.trans(data.background.signal_region.X)
 
     # signal density
     n_pos = 100
     m.signal.x_axis = np.linspace(m.mu_star - 3.5 * m.sigma_star, m.mu_star + 3.5 * m.sigma_star, n_pos)
     m.signal.star = m.lambda_star * normal(m.signal.x_axis, mu=m.mu_star, sigma2=m.sigma2_star)
-    m.signal.predictions = np.zeros((m.est.shape[0], n_pos))
-    m.signal.residuals = np.zeros((m.est.shape[0], n_pos))
+    m.signal.predictions = onp.zeros((m.est.shape[0], n_pos))
+    m.signal.residuals = onp.zeros((m.est.shape[0], n_pos))
 
     # background
     m.background.x_axis = data.background.x_axis.reshape(-1)
+    m.background.trans.x_axis = data.background.trans.x_axis.reshape(-1)
     m.background.star = data.background.empirical_probabilities.reshape(-1)
     m.background.from_ = data.background.from_.reshape(-1)
     m.background.to_ = data.background.to_.reshape(-1)
-    m.background.residuals = np.zeros((m.gamma.shape[0], m.background.star.shape[0]))
-    m.background.predictions = np.zeros((m.gamma.shape[0], m.background.star.shape[0]))
-    basis_ = basis.integrate(k=m.k, a=data.background.from_, b=data.background.to_)
+    m.background.trans.from_ = data.background.trans.from_.reshape(-1)
+    m.background.trans.to_ = data.background.trans.to_.reshape(-1)
+
+    m.background.trans.pearson_chi2 = onp.zeros((m.gamma.shape[0],))
+    m.background.trans.neyman_chi2 = onp.zeros((m.gamma.shape[0],))
+    m.background.trans.residuals = onp.zeros((m.gamma.shape[0], m.background.star.shape[0]))
+    m.background.trans.predictions = onp.zeros((m.gamma.shape[0], m.background.star.shape[0]))
+    basis_ = basis.integrate(k=m.k, a=data.background.trans.from_, b=data.background.trans.to_)
+
+    # l2 error for background
+    m.background.l2.all = onp.zeros((m.gamma.shape[0],))
+    m.background.l2.sideband = onp.zeros((m.gamma.shape[0],))
+    m.background.l2.signal_region = onp.zeros((m.gamma.shape[0],))
+    m.background.trans.l2.all = onp.zeros((m.gamma.shape[0],))
+    m.background.trans.l2.sideband = onp.zeros((m.gamma.shape[0],))
+    m.background.trans.l2.signal_region = onp.zeros((m.gamma.shape[0],))
+
+    # l2 error for signal
+    m.signal.l2 = onp.zeros((m.gamma.shape[0],))
+
+    # l2 error for mixture
+    m.mixture.l2 = onp.zeros((m.gamma.shape[0],))
 
     for i in np.arange(m.est.shape[0]):
         gamma = m.gamma[i, :]
         lambda_ = m.est[i, 1]
         mu = m.est[i, 2]
         sigma2 = m.est[i, 3]
+        sigma = np.sqrt(sigma2)
 
         # estimated density
-        m.signal.predictions[i, :] = lambda_ * normal(X=m.signal.x_axis, mu=mu, sigma2=sigma2)
+        m.signal.predictions[i, :] = lambda_ * data.signal.density(X=m.signal.x_axis, mu=mu, sigma2=sigma2)
         m.signal.residuals[i, :] = m.signal.predictions[i, :] - m.signal.star
 
-        # bin background predictions
-        m.background.predictions[i, :] = (basis_ @ gamma.reshape(-1, 1)).reshape(-1)
-        m.background.residuals[i, :] = m.background.predictions[i, :] - m.background.star
+        # bin background predictions on transformed scale
+        m.background.trans.predictions[i, :] = (basis_ @ gamma.reshape(-1, 1)).reshape(-1)
+        m.background.trans.residuals[i, :] = m.background.trans.predictions[i, :] - m.background.star
 
-    # l2 error computation
-    # M = basis.integrated_inner_product(m.k)  # TODO: check
-    #
-    # m.alt_chi2_background = np.zeros(m.gamma.shape[0])
-    # m.chi2_background = np.zeros(m.gamma.shape[0])
+        # background chi2 computations
+        # squared_residuals = np.square(m.background.trans.residuals[i, :]).reshape(-1)
+        # m.background.trans.pearson_chi2 = np.sum(squared_residuals / m.background.trans.predictions[i, :])
+        # m.background.trans.neyman_chi2 = np.sum(squared_residuals / m.background.star)
 
-    # m.l2_background = np.zeros(m.gamma.shape[0])
-    #
-    # m.l2_signal = np.zeros(m.gamma.shape[0])
+        # l2 error in background in projected scale
+        # background_density = partial(data.background.trans.density, gamma=gamma, k=m.k)
+        # m.background.trans.l2.all[i] = l2(func=background_density, X=data.background.trans.X)
+        # m.background.trans.l2.sideband[i] = l2_sideband(func=background_density, from_=m.tlower, to_=m.tupper,
+        #                                                 X=data.background.trans.sideband.X)
+        # m.background.trans.l2.signal_region[i] = l2(func=background_density, from_=m.tlower, to_=m.tupper,
+        #                                             X=data.background.trans.signal_region.X)
 
-    # error and chi2 computation
-    # props_back = props_back.reshape(-1)
-    # basis_ = basis.integrate(k=m.k, a=from_, b=to_)
-    # #
-    # for i in np.arange(m.gamma.shape[0]):
-    #     gamma = m.gamma[i, :]
-    #     lambda_ = m.est[i, 1]
-    #     mu = m.est[i, 2]
-    #     sigma = m.est[i, 3]
-    #
-    #     #     # TODO: compute l2 error for the mixture
-    #     #     # TODO: compute the l2 error in the original scale of the data
-    #     #     # l2 error in background
-    #     #     avg = np.mean((basis.evaluate(k=m.k, X=X) @ gamma.reshape(-1, 1)).reshape(-1))
-    #     #     m.l2_background[i] = gamma.reshape((1, -1)) @ M @ gamma.reshape((-1, 1)) - 2 * avg
-    #     #
-    #     #     # l2 error in signal (gaussian)
-    #     #     sigma2_tilde = np.square(sigma) + np.square(m.sigma_star)
-    #     #     m.l2_signal[i] = 1 / (2 * np.sqrt(np.pi)) \
-    #     #                      * (1 / sigma + 1 / m.sigma_star) \
-    #     #                      - 2 * normal(X=mu, mu=m.mu_star, sigma2=sigma2_tilde)
-    #     #
-    #     #     # residuals and chi2 for background
-    #     preds_back = (basis_ @ gamma.reshape(-1, 1)).reshape(-1)
-    #     errors_back = (preds_back - props_back)
-    #     # chi2_back = np.sum(np.square(errors_back) / preds_back)
-    #     #     alt_chi2_back = np.sum(np.square(errors_back) / props_back)
-    #     #
-    #     #     m.chi2_background[i] = chi2_back
-    #     #     m.alt_chi2_background[i] = alt_chi2_back
-    #     m.residual_background[i, :] = errors_back
-    #     m.preds_background[i, :] = preds_back
-    #
-    #     # residuals and chi2 for background and signal
-    #
-    #     # preds_backsig = (1-lambda_) *  (basis_ @ gamma.reshape(-1, 1)).reshape(-1) + lambda_ *
-    #     # errors_backsig = (props_backsig - preds_backsig)
-    #     #
-    #     # m.residual_backsig[i, :] = errors_back
-    #     # m.preds_backsig[i, :] = preds_back
-    #
-    # # print('{0} loaded'.format(m.name))
+        # l2 error in background in original scaled
+        # background_density = partial(data.background.density, gamma=gamma, k=m.k)
+        # m.background.l2.all[i] = l2(func=background_density, X=data.background.X)
+        # m.background.l2.sideband[i] = l2_sideband(func=background_density, from_=m.lower, to_=m.upper,
+        #                                           X=data.background.sideband.X)
+        # m.background.l2.signal_region[i] = l2(func=background_density, from_=m.lower, to_=m.upper,
+        #                                       X=data.background.signal_region.X)
+
+        # l2 error in signal, i.e. l2 distance between two normal/gaussian densities
+        # sigma2_tilde = sigma2 + m.sigma2_star
+        # m.signal.l2[i] = 1 / (2 * np.sqrt(np.pi)) \
+        #                  * (1 / sigma + 1 / m.sigma_star) \
+        #                  - 2 * normal(X=mu, mu=m.mu_star, sigma2=sigma2_tilde)
+
+        # l2 error of mixture background
+        # m.mixture.l2[i] = l2(
+        #     func=partial(data.density, gamma=gamma, mu=mu, sigma2=sigma2, lambda_=lambda_, k=m.k),
+        #     X=data.X)
+
     return m
 
 
 # %%
 
-# load background data and fake signal
+# load background data
 data = DotDic()
-data.background.X = np.array(np.loadtxt('./data/5/m_muamu.txt'))
-trans, tilt_density, inv_trans = transform(base=np.min(data.background.X), c=0.003)
-data.trans = trans
-from_, to_ = uniform_bin(step=0.01)
-
-# axis in original scale
-# data.background.from_ = inv_trans(from_)
-# data.background.to_ = np.array(inv_trans(to_).reshape(-1), dtype=np.float64)
-# data.background.to_[-1] = np.max(data.background.X)  # change infinity for maximum value
-# data.background.x_axis = inv_trans((from_ + to_) / 2)
-data.background.from_ = from_
-data.background.to_ = to_
-data.background.x_axis = (from_ + to_) / 2
-
-data.background.empirical_probabilities, _ = proportions(X=trans(data.background.X),
-                                                         from_=from_,
-                                                         to_=to_)
-
-# seed = 0
-# sigma_star = 20
-# mu_star = 450
-# lambda_star = 0.01
-# n = X.shape[0]
-# n_signal = np.int32(n * lambda_star)
-# key = random.PRNGKey(seed=seed)
-# signal = mu_star + sigma_star * random.normal(key, shape=(n_signal,))
-# X_with_signal = np.concatenate((X, signal))
-# tX_with_signal = trans(X_with_signal)
-# props_back_and_sig = proportions(X=tX_with_signal, from_=from_, to_=to_)
-
+data.background.X = load_data('./data/{0}/m_muamu.txt'.format('30' if data_id != 'real' else 'real'))
 print("Data loaded")
 
 # %%
 
-estimators = []
-increasing_parameters_bin_mle = [
-    # 'bin_mle_2_3_False_50_500',
-    # 'bin_mle_3_3_False_50_500',
-    'bin_mle_4_3_False_50_500',
-    'bin_mle_5_3_False_50_500',
-    'bin_mle_10_3_False_50_500',
-    'bin_mle_20_3_False_50_500',
-    'bin_mle_30_3_False_50_500'
-]
-estimators += increasing_parameters_bin_mle
-# increasing_parameters_bin_mom = [
-#     'bin_mom_5_3_False_50_200',
-#     'bin_mom_10_3_False_50_200',
-#     # 'bin_mom_20_3_False_50_200',
-#     'bin_mom_30_3_False_50_200',
-#     'bin_mom_40_3_False_50_200'
-# ]
-# estimators += increasing_parameters_bin_mom
-# increasing_contamination_1 = [
-#     'bin_mle_30_3_False_50_200',
-#     'bin_mle_30_2_False_50_200',
-#     'bin_mle_30_1_False_50_200']
-# estimators += increasing_contamination_1
-# increasing_sample_1 = [
-#     'bin_mle_30_3_False_5_200',
-#     'bin_mle_30_3_False_50_200']
-# estimators += increasing_sample_1
-# increasing_sample_2 = [
-#     'bin_mom_lawson_scipy_30_3_False_5_200',
-#     'bin_mom_lawson_scipy_30_3_False_50_200']
-# estimators += increasing_sample_2
-# no_signal_1 = [
-#     'bin_mle_30_3_False_50_200',
-#     'bin_mle_30_3_True_50_200']
-# estimators += no_signal_1
+data.background.n = data.background.X.shape[0]
+trans, tilt_density, inv_trans = transform(
+    a=250 if data_id != 'real' else 30,
+    b=None if data_id != 'real' else 60,
+    rate=0.003 if data_id != 'real' else 0.01)
 
-estimators = list(set(estimators))
-print('Using {0} estimators'.format(len(estimators)))
+# background in transformed scale
+data.trans = trans
+from_, to_ = uniform_bin(num=200)
+data.background.trans.from_ = from_
+data.background.trans.to_ = to_
+data.background.trans.x_axis = (from_ + to_) / 2
+data.background.trans.X = trans(data.background.X)
+data.background.empirical_probabilities, _ = proportions(
+    X=data.background.trans.X,
+    from_=from_,
+    to_=to_)
+
+# axis in original scale
+data.background.from_ = inv_trans(from_)
+data.background.to_ = onp.array(inv_trans(to_).reshape(-1), dtype=np.float64)
+data.background.to_[-1] = np.max(data.background.X)  # change infinity for maximum value
+data.background.to_ = np.array(data.background.to_)
+data.background.x_axis = (data.background.from_ + data.background.to_) / 2
+
+# add fake signal
+sigma_star = 20 if data_id != 'real' else 2
+sigma2_star = np.square(sigma_star)
+mu_star = 450 if data_id != 'real' else 45
+lambda_star = 0.01
+key = random.PRNGKey(seed=0)
+
+data.signal.n = np.int32(data.background.n * lambda_star)
+data.signal.X = mu_star + sigma_star * random.normal(key, shape=(data.signal.n,))
+data.X = np.concatenate((data.background.X, data.signal.X))
+data.empirical_probabilities = proportions(X=trans(data.X), from_=from_, to_=to_)
+
+# densities
+data.background.trans.density = partial(projected_density, basis=basis)
+data.background.density = partial(background, tilt_density=tilt_density, basis=basis)
+data.signal.density = normal
+
+
+def mixture_density(X, k, gamma, lambda_, mu, sigma2):
+    scaled_background = (1 - lambda_) * data.background.density(X=X, gamma=gamma, k=k)
+    scaled_signal = lambda_ * data.signal.density(X=X, mu=mu, sigma2=sigma2)
+    return scaled_background + scaled_signal
+
+
+data.density = mixture_density
+print('Data processed')
 
 # %%
-id_source = '7'
-id_dest = '7'
+id_source = None
 # load data
 ms = []
 for i in tqdm(np.arange(len(estimators)), dynamic_ncols=True):
@@ -280,67 +346,90 @@ def saves(path, names, plots, prefix, hspace, wspace):
         _save(fig, path=path_.format(path, prefix, name))
 
 
-def _plot_mean_plus_quantile(ax, x, y, color, label, alpha):
+def _plot_mean_plus_quantile(ax, x, y, color, label, alpha=0.05, tranparency=0.2):
     ax.plot(x, np.mean(y, axis=0), color=color, alpha=1, label=label)
-    ax.plot(x, np.quantile(y, q=1 - alpha / 2, axis=0), color=color, alpha=0.2, linestyle='dashed')
-    ax.plot(x, np.quantile(y, q=alpha / 2, axis=0), color=color, alpha=0.2, linestyle='dashed')
+    ax.plot(x, np.quantile(y, q=1 - alpha / 2, axis=0), color=color, alpha=tranparency, linestyle='dashed')
+    ax.plot(x, np.quantile(y, q=alpha / 2, axis=0), color=color, alpha=tranparency, linestyle='dashed')
 
 
-def __plot_background(func, ax, ms, colors, labels, alpha=0.05, star=True):
-    if star:
-        ax.hist(ms[0].background.from_,
-                ms[0].background.to_,
-                weights=ms[0].background.star,
-                density=False, color='magenta', alpha=0.05)
-
+def __plot_background(func, ax, ms, colors, labels, alpha=0.05):
     for i in np.arange(len(ms)):
         m = ms[i]
         _plot_mean_plus_quantile(ax=ax,
-                                 x=m.background.x_axis,
+                                 x=m.background.trans.x_axis,
                                  y=func(m),
                                  color=colors[i],
                                  label=labels[i],
-                                 alpha=alpha)
+                                 alpha=alpha,
+                                 tranparency=0.3)
 
-        ax.axvline(x=m.tlower, color='magenta', linestyle='--')
-        ax.axvline(x=m.tupper, color='magenta', linestyle='--')
+        ax.axvline(x=m.tlower, color='red', linestyle='--')
+        ax.axvline(x=m.tupper, color='red', linestyle='--')
 
     ax.legend()
 
 
 def __plot_signal(func, ax, ms, colors, labels, alpha=0.05, star=True):
     if star:
-        ax.plot(ms[0].signal.x_axis, ms[0].signal.star, color='magenta')
+        ax.plot(ms[0].signal.x_axis, ms[0].signal.star, color='black', label='True signal')
 
     for i in np.arange(len(ms)):
         m = ms[i]
         _plot_mean_plus_quantile(ax=ax,
                                  x=m.signal.x_axis,
                                  y=func(m),
-                                 color=colors[i], label=labels[i], alpha=alpha)
+                                 color=colors[i], label=labels[i],
+                                 alpha=alpha,
+                                 tranparency=0.4)
 
         # plot signal region
-        ax.axvline(x=m.lower, color='magenta', linestyle='--')
-        ax.axvline(x=m.upper, color='magenta', linestyle='--')
+        ax.axvline(x=m.lower, color='red', linestyle='--')
+        ax.axvline(x=m.upper, color='red', linestyle='--')
 
     ax.legend()
 
 
-def plot_background(ms, path, colors, labels, alpha=0.05):
-    _plot_background = partial(__plot_background, func=lambda m: m.background.predictions)
-    _plot_background_error = partial(__plot_background, func=lambda m: m.background.residuals, star=False)
+def plot_background(ms, path, colors, labels, alpha=0.05, fontsize=20):
+    _plot_background = partial(__plot_background, func=lambda m: m.background.trans.predictions)
+    _plot_background_error = partial(__plot_background, func=lambda m: m.background.trans.residuals)
     _plot_signal = partial(__plot_signal, func=lambda m: m.signal.predictions)
     _plot_signal_error = partial(__plot_signal, func=lambda m: m.signal.residuals, star=False)
 
-    fig, axs = plt.subplots(1, 2, sharex='none', sharey='none', figsize=(15, 5))
+    fig, axs = plt.subplots(1, 2, sharex='none', sharey='none', figsize=(17, 5))
+    fig.suptitle('Background estimation', fontsize=fontsize)
+    # left panel
+    axs[0].set_xlabel('Mass (projected scale)', fontsize=fontsize)
+    axs[0].set_ylabel('Normalized counts', fontsize=fontsize)
+    axs[0].hist(ms[0].background.trans.from_,
+                ms[0].background.trans.to_,
+                weights=ms[0].background.star,
+                density=False, color='black', alpha=0.05)
+    # axs[0].errorbar(x=(ms[0].background.trans.from_ + ms[0].background.trans.to_) / 2,
+    #                 y=ms[0].background.star,
+    #                 yerr=np.sqrt(ms[0].background.star),
+    #                 color='magenta',
+    #                 capsize=3)
     _plot_background(ax=axs[0], ms=ms, labels=labels, colors=colors, alpha=alpha)
+
+    # right panel
+    axs[1].set_xlabel('Mass (projected scale)', fontsize=fontsize)
+    axs[1].set_ylabel('Residuals', fontsize=fontsize)
+    axs[1].axhline(y=0, color='black', linestyle='-', alpha=0.5)
     _plot_background_error(ax=axs[1], ms=ms, labels=labels, colors=colors, alpha=alpha)
     save(fig=fig, path=path, name='background')
+    print('Finish plotting background')
 
-    fig, axs = plt.subplots(1, 2, sharex='none', sharey='none', figsize=(15, 5))
+    fig, axs = plt.subplots(1, 2, sharex='none', sharey='none', figsize=(18, 5))
+    fig.suptitle('Signal estimation', fontsize=fontsize)
+    axs[0].set_xlabel('Mass (GeV)', fontsize=fontsize)
+    axs[0].set_ylabel('Density', fontsize=fontsize)
     _plot_signal(ax=axs[0], ms=ms, labels=labels, colors=colors, alpha=alpha)
+    axs[1].set_xlabel('Mass (GeV)', fontsize=fontsize)
+    axs[1].set_ylabel('Residuals', fontsize=fontsize)
+    axs[1].axhline(y=0, color='black', linestyle='-', alpha=0.5)
     _plot_signal_error(ax=axs[1], ms=ms, labels=labels, colors=colors, alpha=alpha)
     save(fig=fig, path=path, name='signal')
+    print('Finish plotting signal')
 
 
 def create_hierarchy(df):
@@ -354,11 +443,11 @@ def concat(df, dic_):
                      ignore_index=True)
 
 
-def append(df, method, labels, values, type):
+def append(table, method, labels, values, type):
     d = dict(zip(labels, values))
     d['type'] = type
     d['method'] = method
-    df_ = concat(df, d)
+    df_ = concat(table, d)
     return df_
 
 
@@ -393,20 +482,25 @@ def create_figs(names, n_rows, n_cols, width, height):
     return plots
 
 
-def plot_series_with_uncertainty(ax, x, mean, lower, upper, title):
-    ax.set_title(title)
+def plot_series_with_uncertainty(ax, x, mean, lower=None, upper=None):
+    mean = mean.reshape(-1)
     ax.set_xticks(x)
-    ax.errorbar(x=x, y=mean,
-                yerr=np.vstack((mean - lower, upper - mean)).reshape(2, -1),
-                color='black',
-                capsize=3)
+    if lower is None and upper is None:
+        ax.plot(x, mean, color='black')
+    else:
+        lower = lower.reshape(-1)
+        upper = upper.reshape(-1)
+        ax.errorbar(x=x, y=mean,
+                    yerr=np.vstack((mean - lower, upper - mean)).reshape(2, -1),
+                    color='black',
+                    capsize=3)
 
 
 def create_entry(dotdic, n_rows, n_cols):
     shape = (n_rows, n_cols)
-    dotdic.mean = np.zeros(shape, dtype=np.float64)
-    dotdic.upper = np.zeros(shape, dtype=np.float64)
-    dotdic.lower = np.zeros(shape, dtype=np.float64)
+    dotdic.mean = onp.zeros(shape, dtype=np.float64)
+    dotdic.upper = onp.zeros(shape, dtype=np.float64)
+    dotdic.lower = onp.zeros(shape, dtype=np.float64)
 
 
 def assing_entry(dotdic, index, mean, lower, upper):
@@ -423,31 +517,31 @@ def assing_quantiles(dotdic, index, series, alpha):
     assing_entry(dotdic=dotdic, index=index, mean=mean, lower=lower, upper=upper)
 
 
-def process_data(ms, labels, path, alpha=0.05):
-    plt.close('all')  # close all previous figures
+def assign_table(table, dotdic, method, index, labels):
+    table = append(table=table, method=method, labels=labels, values=dotdic.lower[index, :], type='lower')
+    table = append(table=table, method=method, labels=labels, values=dotdic.upper[index, :], type='upper')
+    table = append(table=table, method=method, labels=labels, values=dotdic.mean[index, :], type='mean')
+    return table
 
-    l2_entries = ['l2_back', 'l2_signal', 'chi2_back']
 
-    # l2 = pd.DataFrame(columns=l2_entries + ['method', 'type'])
+def process_data(ms, labels, alpha=0.05, normalize=True):
     bias_table = pd.DataFrame(columns=ESTIMATORS + ['method', 'type'])
     cov_table = pd.DataFrame(columns=CIS_DELTA + ['method', 'type'])
     width_table = pd.DataFrame(columns=CIS_DELTA + ['method', 'type'])
-
-    n_cols = len(ms)
-    hspace = 0.4
-    wspace = 0.2
-    width = 20
-    height = 5
-    bins = 35
-
-    bias_plots = create_figs(ESTIMATORS, 2, n_cols, width, height * 2)
-    cov_plots = create_figs(CIS_DELTA, 1, n_cols, width, height)
-    error_plots = create_figs(ERRORS, 1, n_cols, width, height)
 
     data = DotDic()
     create_entry(data.bias, n_rows=len(ms), n_cols=len(ESTIMATORS))
     create_entry(data.cov, n_rows=len(ms), n_cols=len(CIS_DELTA))
     create_entry(data.width, n_rows=len(ms), n_cols=len(CIS_DELTA))
+    create_entry(data.l2.background.all, n_rows=len(ms), n_cols=1)
+    create_entry(data.l2.background.sideband, n_rows=len(ms), n_cols=1)
+    create_entry(data.l2.background.signal_region, n_rows=len(ms), n_cols=1)
+    create_entry(data.l2.background.trans.all, n_rows=len(ms), n_cols=1)
+    create_entry(data.l2.background.trans.sideband, n_rows=len(ms), n_cols=1)
+    create_entry(data.l2.background.trans.signal_region, n_rows=len(ms), n_cols=1)
+    create_entry(data.l2.signal, n_rows=len(ms), n_cols=1)
+    create_entry(data.l2.mixture, n_rows=len(ms), n_cols=1)
+    data.normalize = normalize
 
     for i in np.arange(len(ms)):
         m = ms[i]
@@ -455,41 +549,81 @@ def process_data(ms, labels, path, alpha=0.05):
 
         # bias
         assing_quantiles(dotdic=data.bias, series=m.bias, index=i, alpha=alpha)
-        bias_table = append(bias_table, label, ESTIMATORS, data.bias.lower[i, :], 'lower')
-        bias_table = append(bias_table, label, ESTIMATORS, data.bias.upper[i, :], 'upper')
-        bias_table = append(bias_table, label, ESTIMATORS, data.bias.mean[i, :], 'mean')
+        bias_table = assign_table(table=bias_table, dotdic=data.bias, labels=ESTIMATORS, method=label, index=i)
         shape = data.bias.mean[i, :].shape
-        data.bias.mean[i, :] /= m.parameters_star.reshape(shape)
-        data.bias.lower[i, :] /= m.parameters_star.reshape(shape)
-        data.bias.upper[i, :] /= m.parameters_star.reshape(shape)
+        if normalize:
+            data.bias.mean[i, :] /= m.parameters_star.reshape(shape)
+            data.bias.lower[i, :] /= m.parameters_star.reshape(shape)
+            data.bias.upper[i, :] /= m.parameters_star.reshape(shape)
 
         # coverage
         cp = clopper_pearson(m.cov, alpha=alpha)
         assing_entry(data.cov, index=i,
                      mean=np.mean(m.cov, axis=0).reshape(-1),
                      lower=cp[:, 0], upper=cp[:, 1])
-        cov_table = append(cov_table, label, CIS_DELTA, data.cov.lower[i, :], 'lower')
-        cov_table = append(cov_table, label, CIS_DELTA, data.cov.upper[i, :], 'upper')
-        cov_table = append(cov_table, label, CIS_DELTA, data.cov.mean[i, :], 'mean')
+        cov_table = assign_table(table=cov_table, dotdic=data.cov, labels=CIS_DELTA, method=label, index=i)
 
         # ci width
         assing_quantiles(data.width, series=m.width, index=i, alpha=alpha)
-        width_table = append(width_table, label, CIS_DELTA, data.width.lower[i, :], 'lower')
-        width_table = append(width_table, label, CIS_DELTA, data.width.upper[i, :], 'upper')
-        width_table = append(width_table, label, CIS_DELTA, data.width.mean[i, :], 'mean')
+        width_table = assign_table(table=width_table, dotdic=data.width, labels=CIS_DELTA, method=label, index=i)
         shape = data.width.mean[i, :].shape
-        data.width.mean[i, :] /= m.parameters_star.reshape(shape)
-        data.width.lower[i, :] /= m.parameters_star.reshape(shape)
-        data.width.upper[i, :] /= m.parameters_star.reshape(shape)
+        if normalize:
+            data.width.mean[i, :] /= m.parameters_star.reshape(shape)
+            data.width.lower[i, :] /= m.parameters_star.reshape(shape)
+            data.width.upper[i, :] /= m.parameters_star.reshape(shape)
 
-        # for dataframe/table creation
-        # l2 data
-        # l2 = append(l2, name, l2_entries, [np.std(m.l2_background, axis=0), np.std(m.l2_signal, axis=0), 0],
-        #                 'std')
-        #     l2 = append(l2, name, l2_entries, [np.mean(m.l2_background, axis=0), np.mean(m.l2_signal, axis=0),
-        #                                        np.mean(m.chi2_background, axis=0)], 'mean')
-        #
-        #     # bias data
+        # l2
+        assing_quantiles(dotdic=data.l2.background.trans.all, series=m.background.trans.l2.all,
+                         index=i, alpha=alpha)
+        assing_quantiles(dotdic=data.l2.background.trans.signal_region, series=m.background.trans.l2.signal_region,
+                         index=i, alpha=alpha)
+        assing_quantiles(dotdic=data.l2.background.trans.sideband, series=m.background.trans.l2.sideband,
+                         index=i, alpha=alpha)
+        assing_quantiles(dotdic=data.l2.background.all, series=m.background.l2.all,
+                         index=i, alpha=alpha)
+        assing_quantiles(dotdic=data.l2.background.signal_region, series=m.background.l2.signal_region,
+                         index=i, alpha=alpha)
+        assing_quantiles(dotdic=data.l2.background.sideband, series=m.background.l2.sideband,
+                         index=i, alpha=alpha)
+        assing_quantiles(dotdic=data.l2.signal, series=m.signal.l2, index=i, alpha=alpha)
+        assing_quantiles(dotdic=data.l2.mixture, series=m.mixture.l2, index=i, alpha=alpha)
+
+    print('Finish processing data')
+
+    return data
+
+
+# def tables(bias_table,cov_table,width_table):
+# # create hierarchical structure
+# # bias_table = create_hierarchy(bias_table)
+# # width_table = create_hierarchy(width_table)
+# # cov_table = create_hierarchy(cov_table)
+#
+# # save statistics
+# html(path, bias_table, 'bias', digits=5)
+# html(path, cov_table, 'cov', digits=2, col_space=60)
+# html(path, width_table, 'width', digits=3, col_space=60)
+# print('Finished tables')
+
+
+def estimates(ms, labels, path):
+    ERRORS = ['gamma_error', 'gamma_fit', 'signal_error', 'signal_fit']
+
+    plt.close('all')  # close all previous figures
+
+    hspace = 0.4
+    wspace = 0.2
+    width = 20
+    height = 5
+    bins = 35
+
+    bias_plots = create_figs(ESTIMATORS, 2, len(ms), width, height * 2)
+    cov_plots = create_figs(CIS_DELTA, 1, len(ms), width, height)
+    error_plots = create_figs(ERRORS, 1, len(ms), width, height)
+
+    for i in np.arange(len(ms)):
+        m = ms[i]
+        label = labels[i]
 
         # estimate plot
         for j in np.arange(len(PARAMETERS)):
@@ -519,9 +653,6 @@ def process_data(ms, labels, path, alpha=0.05):
         for j in np.arange(len(PARAMETERS)):
             ax = cov_plots[j][1][i]
             ax.set_title(label)
-            # plot.title(ax,
-            #            '{0}\nmean {1:.2f} std {2:.2f} width {3:.2f}'.format(
-            #                m.name, cov_.mean[j], cov_.std[j], cov_.width[j]))
             for k in np.arange(m.cis.shape[0]):
                 ax.plot(m.cis[k, j, :], np.repeat(k, 2) * 0.1,
                         color='blue',
@@ -533,89 +664,238 @@ def process_data(ms, labels, path, alpha=0.05):
         for j in np.arange(len(ERRORS)):
             ax = error_plots[j][1][i]
             ax.set_title(label)
-            series = m[ERRORS[j]]
-            ax.plot(np.arange(series.shape[0]) + 1, series, color='blue')
+            ax.hist(m[ERRORS[j]], bins=bins, density=True)
+            ax.axvline(x=np.mean(m[ERRORS[j]]), color='red', linestyle='--')
 
     saves(path, ESTIMATORS, bias_plots, 'bias', hspace, wspace)
+    print('Finished plotting estimates')
+
     saves(path, CIS_DELTA, cov_plots, 'cov', hspace, wspace)
+    print('Finished plotting confidence intervals')
+
     saves(path, ERRORS, error_plots, None, hspace, wspace)
+    print('Finished plotting errors')
 
-    # create hierarchical structure
-    bias_table = create_hierarchy(bias_table)
-    width_table = create_hierarchy(width_table)
-    cov_table = create_hierarchy(cov_table)
 
-    # save statistics
-    html(path, bias_table, 'bias', digits=5)
-    html(path, cov_table, 'cov', digits=2, col_space=60)
-    html(path, width_table, 'width', digits=3, col_space=60)
+def set_log_scale(active, ax, x_formatter=None):
+    if active:
+        ax.set_xscale('log')
+        if x_formatter is not None:
+            ax.xaxis.set_major_formatter(x_formatter)
+        else:
+            ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: LogFormatterMathtext()(x)))
+        ax.xaxis.set_minor_formatter(NullFormatter())
+        plt.minorticks_off()
 
+
+def metrics(data, labels, path,
+            xlabel=None, fontsize=20, invert_x_axis=False,
+            x_log_scale=False,
+            # y_log_scale=False,
+            x_formatter=None,
+            # bias_lim=None,
+            cov_lim=None):
     # bias, coverage, width plot for delta method confidence interval
-    fig, axs = plt.subplots(3, len(ESTIMATORS),
-                            sharex='col', sharey='row', figsize=(20, 15))
-    # axs[0, 0].set_ylabel(r'$\frac{E[\hat{\theta}]-\theta}{\theta}$')
-    axs[0, 0].set_ylabel(r'Normalized empirical bias')
+    fig, axs = plt.subplots(2, len(ESTIMATORS), sharex='all', sharey='none', figsize=(20, 8))
+    axs[0, 0].set_ylabel('{0}mpirical bias'.format('Normalized e' if data.normalize else 'E'), fontsize=fontsize)
+    axs[1, 0].set_ylabel('Empirical coverage', fontsize=fontsize)
+    titles = [r'$\hat{\lambda}$',
+              r'$\hat{\lambda}_{MLE}$',
+              r'$\hat{\mu}_{MLE}$',
+              r'$\hat{\sigma}^2_{MLE}$']
+
+    low = np.minimum(np.minimum(np.min(data.bias.mean[:, 0]), np.min(data.bias.mean[:, 1])), -0.001)
+    high = np.maximum(np.maximum(np.max(data.bias.mean[:, 0]), np.max(data.bias.mean[:, 1])), 0.001)
+
     for i in np.arange(len(ESTIMATORS)):
-        bias_entry = ESTIMATORS[i]
         axs[0, i].axhline(y=0, color='red', linestyle='--')
+        axs[0, i].set_title(titles[i], fontsize=fontsize)
+        if i == 0 or i == 1:
+            axs[0, i].set_ylim((low, high))
+        set_log_scale(x_log_scale, axs[0, i], x_formatter)
         plot_series_with_uncertainty(
             ax=axs[0, i],
-            title=bias_entry,
             x=labels,
-            mean=data.bias.mean[:, i],
-            lower=data.bias.lower[:, i],
-            upper=data.bias.upper[:, i])
+            mean=data.bias.mean[:, i]
+            # lower=data.bias.lower[:, i],
+            # upper=data.bias.upper[:, i]
+        )
 
-    # axs[1, 0].set_ylabel(r'$\theta \in C_{95\%}(\hat{\theta})$')
-    axs[1, 0].set_ylabel('Empirical coverage')
-    for i in np.arange(len(CIS_DELTA)):
-        cov_entry = CIS_DELTA[i]
         axs[1, i].axhline(y=0.95, color='red', linestyle='--')
+        if cov_lim is not None:
+            axs[1, i].set_ylim(cov_lim)
+        else:
+            axs[1, i].set_ylim([0, 1])
+        set_log_scale(x_log_scale, axs[1, i], x_formatter)
         plot_series_with_uncertainty(
             ax=axs[1, i],
-            title='',
             x=labels,
             mean=data.cov.mean[:, i],
             lower=data.cov.lower[:, i],
             upper=data.cov.upper[:, i])
-
-    # axs[2, 0].set_ylabel(r'$\frac{WIDTH(C_{95\%}(\hat{\theta}))}{\theta}$')
-    axs[2, 0].set_ylabel('Normalized empirical width')
-    for i in np.arange(len(CIS_DELTA)):
-        cov_entry = CIS_DELTA[i]
-        plot_series_with_uncertainty(
-            ax=axs[2, i],
-            title='',
-            x=labels,
-            mean=data.width.mean[:, i],
-            lower=data.width.lower[:, i],
-            upper=data.width.upper[:, i])
-
+    if xlabel is not None:
+        if x_log_scale:
+            xlabel = "{0} (log scale)".format(xlabel)
+        fig.supxlabel(xlabel, fontsize=fontsize)
+    if invert_x_axis:
+        plt.gca().invert_xaxis()
     save(fig=fig, path=path, name='bias-cov')
-    print("Finish plotting bias and cov")
+    print('Finished plotting bias-cov')
 
-    # fig, axs = plt.subplots(1, len(l2_entries), sharex='all', figsize=(20, 5))
-    # for i in np.arange(len(l2_entries)):
-    #     l2_entry = l2_entries[i]
+    # fig, ax = plt.subplots(1, len(ESTIMATORS), sharex='all', sharey='row', figsize=(20, 10))
+    # ax[0].set_ylabel('Normalized empirical width')
+    # for i in np.arange(len(ESTIMATORS)):
+    #     cov_entry = CIS_DELTA[i]
+    #     ax[i].set_title(cov_entry)
     #     plot_series_with_uncertainty(
-    #         ax=axs[i],
-    #         title=l2_entry,
-    #         x=x_axis,
-    #         mean=l2[(l2_entry, 'mean')].values,
-    #         uncertainty=l2[(l2_entry, 'std')].values)
-    # save_fig(fig=fig, id_dest=id_dest, name='l2')
-    # print("Finish plotting l2")
-    # plt.close('all')  # close all previous figures
+    #         ax=ax,
+    #         x=labels,
+    #         mean=data.width.mean[:, i],
+    #         lower=data.width.lower[:, i],
+    #         upper=data.width.upper[:, i])
+    # save(fig=fig, path=path, name='width')
 
+    # fig, axs = plt.subplots(3, 3, sharex='none', sharey='none', figsize=(20, 15))
+    # axs[0, 0].set_title('projected background (all)')
+    # plot_series_with_uncertainty(
+    #     ax=axs[0, 0],
+    #     title=,
+    #     x=labels,
+    #     mean=data.l2.background.trans.all.mean,
+    #     lower=data.l2.background.trans.all.lower,
+    #     upper=data.l2.background.trans.all.upper)
+    # plot_series_with_uncertainty(
+    #     ax=axs[0, 1],
+    #     title='projected background (sideband)',
+    #     x=labels,
+    #     mean=data.l2.background.trans.sideband.mean,
+    #     lower=data.l2.background.trans.sideband.lower,
+    #     upper=data.l2.background.trans.sideband.upper)
+    # plot_series_with_uncertainty(
+    #     ax=axs[0, 2],
+    #     title='projected background (signal)',
+    #     x=labels,
+    #     mean=data.l2.background.trans.signal_region.mean,
+    #     lower=data.l2.background.trans.signal_region.lower,
+    #     upper=data.l2.background.trans.signal_region.upper)
+    # plot_series_with_uncertainty(
+    #     ax=axs[1, 0],
+    #     title='background (all)',
+    #     x=labels,
+    #     mean=data.l2.background.all.mean,
+    #     lower=data.l2.background.all.lower,
+    #     upper=data.l2.background.all.upper)
+    # plot_series_with_uncertainty(
+    #     ax=axs[1, 1],
+    #     title='background (sideband)',
+    #     x=labels,
+    #     mean=data.l2.background.sideband.mean,
+    #     lower=data.l2.background.sideband.lower,
+    #     upper=data.l2.background.sideband.upper)
+    # plot_series_with_uncertainty(
+    #     ax=axs[1, 2],
+    #     title='background (signal)',
+    #     x=labels,
+    #     mean=data.l2.background.signal_region.mean,
+    #     lower=data.l2.background.signal_region.lower,
+    #     upper=data.l2.background.signal_region.upper)
+    # plot_series_with_uncertainty(
+    #     ax=axs[2, 0],
+    #     title='signal',
+    #     x=labels,
+    #     mean=data.l2.signal.mean,
+    #     lower=data.l2.signal.lower,
+    #     upper=data.l2.signal.upper)
+    #
+    # plot_series_with_uncertainty(
+    #     ax=axs[2, 1],
+    #     title='mixture',
+    #     x=labels,
+    #     mean=data.l2.mixture.mean,
+    #     lower=data.l2.mixture.lower,
+    #     upper=data.l2.mixture.upper)
+    #
+    # save(fig=fig, path=path, name='l2')
+    # print('Finished plotting l2')
 
-def _plots(ms, path, colors, labels):
-    plot_background(ms=ms, path=path, colors=colors, labels=labels)
-    process_data(ms=ms, path=path, labels=labels)
+    plt.close('all')  # close all previous figures
 
 
 # %%
+id_dest = 'sim' if data_id != 'real' else 'real'
+# %%
+# background and signal estimation as K increases, fixed n
+ms_ = select(ms=ms, names=reduced_parameters)
+labels_ = ['K={0}'.format(k) for k in REDUCED_PARAMETERS]
 
-_plots(ms=select(ms=ms, names=increasing_parameters_bin_mle),
-       path='{0}/parameters/bin_mle'.format(id_dest),
-       colors=['red', 'brown', 'orange', 'blue', 'green', 'pink', 'yellow'],
-       labels=np.array([4, 5, 10, 20, 30]) + 1)
+plot_background(ms=ms_,
+                path='{0}/parameters/bin_mle/reduced'.format(id_dest),
+                colors=['blue', 'green', 'brown'],
+                labels=labels_)
+
+# %%
+
+estimates(ms=ms_,
+          labels=labels_,
+          path='{0}/parameters/bin_mle/reduced'.format(id_dest))
+
+# %%
+# bias-coverage as K increases, fixed n
+ms_ = select(ms=ms, names=increasing_parameters)
+labels_ = INCREASING_PARAMETERS
+data_ = process_data(ms=ms_, labels=labels_)
+
+metrics(data=data_,
+        path='{0}/parameters/bin_mle'.format(id_dest),
+        labels=labels_,
+        xlabel='background complexity (K)'
+        )
+
+# %%
+
+estimates(ms=ms_,
+          labels=labels_,
+          path='{0}/parameters/bin_mle/'.format(id_dest))
+# %%
+# bias-coverage as n increases, fixed K
+if data_id != 'real':
+    ms_ = select(ms=ms, names=increasing_sample)
+    labels_ = np.array([1, 10, 100, 200]) * 1000
+    data_ = process_data(ms=ms_, labels=labels_)
+
+    metrics(data=data_,
+            path='{0}/sample/bin_mle'.format(id_dest),
+            labels=labels_,
+            xlabel='sample size',
+            cov_lim=(0.4, 1),
+            x_log_scale=True)
+# %%
+# bias-coverage as lambda->0, fixed K
+ms_ = select(ms=ms, names=diminishing_signal)
+labels_ = DIMINISHING_SIGNAL
+data_ = process_data(ms=ms_, labels=labels_, normalize=False)
+
+metrics(data=data_,
+        path='{0}/mixture/bin_mle'.format(id_dest),
+        labels=labels_,
+        xlabel=r'$\lambda$',
+        invert_x_axis=False,
+        # bias_lim=[(-0.001, 0.0014), (-0.001, 0.0014), None, None],
+        cov_lim=(0.4, 1),
+        x_log_scale=True)
+# %%
+# bias-coverage as the contamination is increased, fixed K, fixed n
+from jax.scipy.stats.norm import cdf
+
+contamination = lambda x: np.round((1 - (cdf(x) - cdf(-x))) * 100, 1)
+ms_ = select(ms=ms, names=increasing_contamination)
+labels_ = contamination(INCREASING_CONTAMINATION)
+data_ = process_data(ms=ms_, labels=labels_, normalize=True)
+
+metrics(data=data_,
+        path='{0}/contamination/bin_mle'.format(id_dest),
+        labels=labels_,
+        xlabel=r'$S_{\theta}(C)\approx\epsilon\%$',
+        # bias_lim=[(-0.8, 0.01), (-0.8, 0.01), None, None],
+        x_log_scale=True,
+        x_formatter=StrMethodFormatter('{x:.0f}'))

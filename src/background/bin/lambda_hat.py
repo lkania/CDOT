@@ -11,8 +11,8 @@ def _compute_lambda_hat(props, gamma, int_control):
 # M is a lxK matrix, integral of the basis over
 # the the bins in the control region
 def estimate_lambda(props, compute_gamma, int_control):
-    gamma, gamma_error = compute_gamma(props)
+    gamma, gamma_aux = compute_gamma(props)
     lambda_hat = _compute_lambda_hat(props=props,
                                      gamma=gamma,
                                      int_control=int_control)
-    return lambda_hat, (gamma, gamma_error)
+    return lambda_hat, (gamma, gamma_aux)

@@ -32,7 +32,7 @@ def delta_ci(point_estimate, influence):
 
 def delta_cis(params, method):
     influence_, aux = method.signal.influence()
-    point_estimates, gamma_hat, gamma_error, signal_error = aux
+    point_estimates, gamma_hat, gamma_aux, signal_aux = aux
     point_estimates = point_estimates.reshape(-1)
     delta_cis_ = delta_ci(point_estimate=point_estimates, influence=influence_)
 
@@ -50,5 +50,5 @@ def delta_cis(params, method):
 
     method.gamma = gamma_hat
 
-    method.gamma_error = gamma_error
-    method.signal_error = signal_error
+    method.gamma_aux = gamma_aux
+    method.signal_aux = signal_aux

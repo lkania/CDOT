@@ -3,7 +3,7 @@
 # load functions
 . panes.sh
 
-restart
+tmux kill-session -t monitor
 tmux new -s monitor -d
 10panes
 tmux send-keys -t monitor.0 "ssh -t hydra12 htop --user lkania" ENTER

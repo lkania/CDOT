@@ -9,8 +9,8 @@ def _compute_lambda_hat(pc, gamma, int_control):
 
 # compute_gamma might not be jittable
 def compute_lambda_hat(pc, mu, compute_gamma, int_control):
-    gamma, gamma_error = compute_gamma(mu)
+    gamma, gamma_aux = compute_gamma(mu)
     lambda_hat = _compute_lambda_hat(pc=pc,
                                      gamma=gamma,
                                      int_control=int_control)
-    return lambda_hat, gamma, gamma_error
+    return lambda_hat, gamma, gamma_aux

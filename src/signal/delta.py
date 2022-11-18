@@ -47,22 +47,22 @@ def Psi(X, nu, signal, background_hat):
 
 def estimate(h_hat, method, params):
     lambda_hat0, aux = method.background.estimate_lambda(h_hat)
-    gamma_hat, gamma_error = aux
+    gamma_hat, gamma_aux = aux
     background_hat = method.background.estimate_background_from_gamma(gamma=gamma_hat, X=method.X)
-    nu_hat, signal_error = method.signal.estimate_nu(lambda_hat0=lambda_hat0,
-                                                     background_hat=background_hat)
+    nu_hat, signal_aux = method.signal.estimate_nu(lambda_hat0=lambda_hat0,
+                                                   background_hat=background_hat)
     mean_psis, psis = Psi(X=method.X,
                           nu=stop_gradient(nu_hat),
                           # stop_gradient so that the derivative w.r.t. h_hat goes only through background_hat
                           signal=params.signal.signal,
                           background_hat=background_hat)
-    aux = (lambda_hat0, nu_hat, gamma_hat, background_hat, psis, gamma_error, signal_error)
+    aux = (lambda_hat0, nu_hat, gamma_hat, background_hat, psis, gamma_aux, signal_aux)
     return np.insert(mean_psis, obj=0, values=lambda_hat0), aux
 
 
 def influence(method, params):
     influence_, aux = method.background.influence(func=partial(estimate, method=method, params=params))
-    lambda_hat0, nu_hat, gamma_hat, background_hat, psis, gamma_error, signal_error = aux
+    lambda_hat0, nu_hat, gamma_hat, background_hat, psis, gamma_aux, signal_aux = aux
 
     influence_lambda_hat0 = influence_[0, :].reshape(1, -1)  # 1 x n_obs
     influence_nu_hat = influence_[1:, :]  # shape: n_parameters x n_obs
@@ -77,5 +77,5 @@ def influence(method, params):
     influence_nu_hat = inv_info_matrix @ influence_nu_hat
 
     influence_ = np.vstack((influence_lambda_hat0, influence_nu_hat))  # shape = (n_parameters+1,n_obs)
-    aux = (np.insert(nu_hat.reshape(-1), obj=0, values=lambda_hat0), gamma_hat, gamma_error, signal_error)
+    aux = (np.insert(nu_hat.reshape(-1), obj=0, values=lambda_hat0), gamma_hat, gamma_aux, signal_aux)
     return influence_, aux

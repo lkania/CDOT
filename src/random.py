@@ -13,3 +13,6 @@ def add_signal(X, params, method):
         signal = signal.reshape(-1)
         X_with_signal = np.concatenate((X, signal))
         method.X = X_with_signal
+        method.signal.X = signal
+
+    method.background.X = X

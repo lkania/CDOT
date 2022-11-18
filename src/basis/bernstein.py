@@ -70,7 +70,7 @@ def integrated_inner_product(k):
     return int_ * c
 
 
-# integrates inner product matrix from [0,a] and [b,1]
+# integrates inner product matrix over control region, i.e. [0,a] union [b,1]
 @partial(jit, static_argnames=['k'])
 def outer_inner_product(k, a, b):
     r = np.arange(0, k + 1)

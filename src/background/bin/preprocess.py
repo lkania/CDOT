@@ -1,29 +1,15 @@
 import jax.numpy as np
 import src.bin as bin_
 from src.background.bin.delta import influence
-from jax import jit
 from functools import partial
 from src.transform import transform
-
-
-@partial(jit, static_argnames=['basis', 'k'])
-def density(gamma, X, k, basis):
-    density_ = basis.evaluate(k=k, X=X) @ gamma.reshape(-1, 1)
-    return density_.reshape(-1)
-
-
-@partial(jit, static_argnames=['tilt_density', 'k', 'basis'])
-def estimate_background_from_gamma(gamma, tilt_density, X, k, basis):
-    background_hat = tilt_density(density=partial(density, k=k, basis=basis, gamma=gamma), X=X)
-    return background_hat
+from src.background.density import background
 
 
 def preprocess(params, method):
     assert params.k <= np.int32(params.bins / 2) * 2
 
-    # TODO: We ignore the dependency of tilt_density on min(X),
-    #  it can be easily fixed by choosing a reasonable constant
-    trans, tilt_density, _ = transform(base=np.min(method.X), c=params.c)
+    trans, tilt_density, _ = transform(a=params.a, b=params.b, rate=params.rate)
     tX = trans(X=method.X)
     tlower = trans(X=params.lower)
     tupper = trans(X=params.upper)
@@ -44,11 +30,14 @@ def preprocess(params, method):
     method.background.M = M
     method.background.int_control = int_control
 
-    # indicators is a n_props x n_obs matrix that indicates to which bin every observation belongs
-    method.background.influence = partial(influence,
-                                          empirical_probabilities=empirical_probabilities,
-                                          indicators=indicators)
-    method.background.estimate_background_from_gamma = partial(estimate_background_from_gamma,
-                                                               tilt_density=tilt_density,
-                                                               k=params.k,
-                                                               basis=params.basis)
+    # indicators is a n_props x n_obs matrix that indicates
+    # to which bin every observation belongs
+    method.background.influence = partial(
+        influence,
+        empirical_probabilities=empirical_probabilities,
+        indicators=indicators)
+    method.background.estimate_background_from_gamma = partial(
+        background,
+        tilt_density=tilt_density,
+        k=params.k,
+        basis=params.basis)

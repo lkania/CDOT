@@ -1,13 +1,15 @@
 #!/bin/bash
 
-# load functions
-. distribute.sh
+./distribute.sh --server hydra12 --method bin_mle --k 5 --std_signal_region 3 --data_id 50 --session CONTAMINATION
+./distribute.sh --server hydra11 --method bin_mle --k 5 --std_signal_region 2.5 --data_id 50 --session CONTAMINATION
+./distribute.sh --server hydra10 --method bin_mle --k 5 --std_signal_region 2 --data_id 50 --session CONTAMINATION
+./distribute.sh --server hydra9 --method bin_mle --k 5 --std_signal_region 1.5 --data_id 50 --session CONTAMINATION
+./distribute.sh --server hydra8 --method bin_mle --k 5 --std_signal_region 1 --data_id 50 --session CONTAMINATION
+./distribute.sh --server hydra7 --method bin_mle --k 5 --std_signal_region 0.5 --data_id 50 --session CONTAMINATION
 
-# hydra 7 and 8 are 126G
-send hydra12 bin_mle None 30 3  False
-send hydra11 bin_mle None 30 2  False
-send hydra10 bin_mle None 30 1  False
-
-send hydra9 bin_mom lawson_scipy 30 3  False
-send hydra8 bin_mom lawson_scipy 30 2  False
-send hydra7 bin_mom lawson_scipy 30 1  False
+./distribute.sh --server hydra12 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session CONTAMINATION_REAL --mu 45 --sigma 2 --a 30 --b 60 --rate 0.01
+./distribute.sh --server hydra11 --method bin_mle --k 5 --std_signal_region 2.5 --data_id real --session CONTAMINATION_REAL  --mu 45 --sigma 2 --a 30 --b 60 --rate 0.01
+./distribute.sh --server hydra10 --method bin_mle --k 5 --std_signal_region 2 --data_id real --session CONTAMINATION_REAL  --mu 45 --sigma 2 --a 30 --b 60 --rate 0.01
+./distribute.sh --server hydra9 --method bin_mle --k 5 --std_signal_region 1.5 --data_id real --session CONTAMINATION_REAL  --mu 45 --sigma 2 --a 30 --b 60 --rate 0.01
+./distribute.sh --server hydra8 --method bin_mle --k 5 --std_signal_region 1 --data_id real --session CONTAMINATION_REAL  --mu 45 --sigma 2 --a 30 --b 60 --rate 0.01
+./distribute.sh --server hydra7 --method bin_mle --k 5 --std_signal_region 0.5 --data_id real --session CONTAMINATION_REAL  --mu 45 --sigma 2 --a 30 --b 60 --rate 0.01

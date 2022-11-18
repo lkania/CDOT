@@ -39,8 +39,8 @@ def evaluate(X, params):
     save.cis = onp.zeros((len(params.cis), 2), dtype=params.dtype)
 
     save.gamma = method.gamma
-    save.gamma_error = method.gamma_error
-    save.signal_error = method.signal_error
+    save.gamma_aux = method.gamma_aux
+    save.signal_aux = method.signal_aux
 
     # bias
     for i in np.arange(len(params.estimators)):
@@ -73,7 +73,7 @@ def run(params):
     idx = random.permutation(key=params.key,
                              x=np.arange(X_.shape[0]),
                              independent=True)
-    idxs = np.array(np.split(idx, indices_or_sections=params.folds))
+    idxs = np.array_split(idx, indices_or_sections=params.folds)
 
     #######################################################
     # print info
@@ -81,7 +81,7 @@ def run(params):
     print('\n{0}'.format(params.name))
     print('Data source: {0}'.format(params.data))
     print('Using {0} datasets'.format(params.folds))
-    print('Datasets have {0} examples'.format(X_[idxs[0, :]].shape[0]))
+    print('Datasets have {0} examples'.format(X_[idxs[0]].shape[0]))
 
     save = DotDic()
     save.bias = onp.zeros((params.folds, len(params.estimators)), dtype=params.dtype)
@@ -90,19 +90,19 @@ def run(params):
     save.estimates = onp.zeros((params.folds, len(params.estimators)), dtype=params.dtype)
     save.cis = onp.zeros((params.folds, len(params.cis), 2), dtype=params.dtype)
     save.gamma = onp.zeros((params.folds, params.k + 1), dtype=params.dtype)
-    save.gamma_error = onp.zeros((params.folds,), dtype=params.dtype)
-    save.signal_error = onp.zeros((params.folds,), dtype=params.dtype)
+    save.gamma_aux = onp.zeros((params.folds, 2), dtype=params.dtype)
+    save.signal_aux = onp.zeros((params.folds, 2), dtype=params.dtype)
 
     for i in tqdm(range(params.folds), dynamic_ncols=True):
-        save_ = evaluate(X=X_[idxs[i, :]], params=params)
+        save_ = evaluate(X=X_[idxs[i]], params=params)
         save.bias[i, :] = save_.bias
         save.coverage[i, :] = save_.coverage
         save.width[i, :] = save_.width
         save.estimates[i, :] = save_.estimates
         save.cis[i, :, :] = save_.cis
         save.gamma[i, :] = save_.gamma.reshape(-1)
-        save.gamma_error[i] = save_.gamma_error
-        save.signal_error[i] = save_.signal_error
+        save.gamma_aux[i, :] = save_.gamma_aux
+        save.signal_aux[i, :] = save_.signal_aux
 
     return save
 
@@ -135,8 +135,8 @@ def run_and_save(params):
 
               # estimator
               gamma=save.gamma,
-              gamma_error=save.gamma_error,
-              signal_error=save.signal_error,
+              gamma_aux=save.gamma_aux,
+              signal_aux=save.signal_aux,
 
               # results
               bias=save.bias,
