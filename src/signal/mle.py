@@ -38,7 +38,8 @@ def _delta(data0, background_hat, X, lower, upper, signal):
 
 
 @partial(jit, static_argnames=['signal'])
-def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control, signal, tol, maxiter):
+def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
+                 signal, tol, maxiter):
     # compute initial parameters for EM
     mu_hat0 = np.mean(X_control)
     mu_hat0 = np.minimum(np.maximum(mu_hat0, lower), upper)
@@ -69,18 +70,21 @@ def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control, signal
         data0,  # init params are non-differentiable
         background_hat.reshape(-1))  # auxiliary parameters are differentiable
 
-    nu_hat = sol[0]  # where mu_hat = data[0], sigma2_hat = data[1] and lambda_hat = data[2]
+    nu_hat = sol[
+        0]  # where mu_hat = data[0], sigma2_hat = data[1] and lambda_hat = data[2]
 
     signal_error = (sol[1])[1]
-    signal_fit = objective(X=X, nu=nu_hat, signal=signal, background_hat=background_hat)
+    signal_fit = objective(X=X, nu=nu_hat, signal=signal,
+                           background_hat=background_hat)
     signal_aux = (signal_error, signal_fit)
-    
+
     return nu_hat, signal_aux
 
 
 def estimate_nu(lambda_hat0, background_hat, params, method):
     # the following boolean array cannot be jit
-    idx_control = np.array((method.X <= params.lower) + (method.X >= params.upper), dtype=np.bool_)
+    idx_control = np.array(
+        (method.X <= params.lower) + (method.X >= params.upper), dtype=np.bool_)
     X_control = method.X[idx_control].reshape(-1)
     return _estimate_nu(lambda_hat0=lambda_hat0,
                         background_hat=background_hat,
@@ -94,5 +98,6 @@ def estimate_nu(lambda_hat0, background_hat, params, method):
 
 
 def fit(params, method):
-    method.signal.estimate_nu = partial(estimate_nu, params=params, method=method)
-    method.signal.influence = lambda: influence(method=method, params=params)
+    method.signal.estimate_nu = partial(estimate_nu, params=params,
+                                        method=method)
+    method.signal.influence = partial(influence, method=method, params=params)

@@ -83,11 +83,16 @@ def run(params):
     print('Using {0} datasets'.format(params.folds))
     print('Datasets have {0} examples'.format(X_[idxs[0]].shape[0]))
 
+    if params.sample_split:
+        print('Using sample splitting')
+
     save = DotDic()
-    save.bias = onp.zeros((params.folds, len(params.estimators)), dtype=params.dtype)
+    save.bias = onp.zeros((params.folds, len(params.estimators)),
+                          dtype=params.dtype)
     save.coverage = onp.zeros((params.folds, len(params.cis)), dtype=onp.bool_)
     save.width = onp.zeros((params.folds, len(params.cis)), dtype=params.dtype)
-    save.estimates = onp.zeros((params.folds, len(params.estimators)), dtype=params.dtype)
+    save.estimates = onp.zeros((params.folds, len(params.estimators)),
+                               dtype=params.dtype)
     save.cis = onp.zeros((params.folds, len(params.cis), 2), dtype=params.dtype)
     save.gamma = onp.zeros((params.folds, params.k + 1), dtype=params.dtype)
     save.gamma_aux = onp.zeros((params.folds, 2), dtype=params.dtype)

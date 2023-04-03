@@ -3,7 +3,8 @@
 #######################################################
 
 PARAMETERS = ['lambda_star', 'lambda_star', 'mu_star', 'sigma2_star']
-CIS_DELTA = ['lambda_hat0_delta', 'lambda_hat_delta', 'mu_hat_delta', 'sigma2_hat_delta']
+CIS_DELTA = ['lambda_hat0_delta', 'lambda_hat_delta', 'mu_hat_delta',
+             'sigma2_hat_delta']
 ESTIMATORS = ['lambda_hat0', 'lambda_hat', 'mu_hat', 'sigma2_hat']
 
 #######################################################
@@ -61,13 +62,14 @@ def build_parameters(args):
     #######################################################
     params.data_id = args.data_id
     params.data = '{0}/data/{1}/m_muamu.txt'.format(args.cwd, params.data_id)
-    params.folds = 500
+    params.folds = args.folds
+    params.sample_split = args.sample_split
 
     #######################################################
     # Background parameters
     #######################################################
     params.k = args.k  # high impact on jacobian computation for non-bin methods
-    params.bins = 100  # high impact on jacobian computation for bin methods
+    params.bins = args.bins  # high impact on jacobian computation for bin methods
 
     #######################################################
     # parameters for background transformation
@@ -120,7 +122,8 @@ def build_parameters(args):
     #######################################################
     # quantities of interest during simulation
     #######################################################
-    params.true_parameters = [params.lambda_star, params.lambda_star, params.mu_star, params.sigma2_star]
+    params.true_parameters = [params.lambda_star, params.lambda_star,
+                              params.mu_star, params.sigma2_star]
     params.estimators = ESTIMATORS
     params.ci_parameters = params.true_parameters
     params.cis = CIS_DELTA
@@ -177,7 +180,8 @@ def build_parameters(args):
          str(params.std_signal_region),
          str(params.lambda_star),
          str(params.data_id),
-         str(params.folds)])
+         str(params.folds),
+         str(params.sample_split)])
 
     # sanity checks
     assert (params.bins > params.k + 1)

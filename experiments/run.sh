@@ -5,6 +5,7 @@ method=${method:-bin_mle}
 k=${k:-5}
 std_signal_region=${std_signal_region:-3}
 data_id=${data_id:-50}
+folds=${folds:-500}
 session=${session:-olaf}
 lambda=${lambda:-0.01}
 mu=${mu:-450}
@@ -33,6 +34,7 @@ co+="--b $b "
 
 co+="--std_signal_region $std_signal_region "
 co+="--data_id $data_id "
+co+="--folds $folds "
 
 co+="--lambda_star $lambda "
 co+="--mu_star $mu "

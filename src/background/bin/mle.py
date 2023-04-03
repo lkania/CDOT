@@ -1,8 +1,8 @@
 from src.background.bin.preprocess import preprocess
-import jax.numpy as np
-from jax import jit
 from src.normalize import normalize, threshold
 from src.background.bin.lambda_hat import estimate_lambda
+
+from jax import jit, numpy as np
 from jaxopt import FixedPointIteration, AndersonAcceleration, ProjectedGradient
 from functools import partial
 from jaxopt.projection import projection_polyhedron
@@ -35,7 +35,7 @@ def _update(gamma0, props, M, int_control, int_omega, _delta):
 
 
 @partial(jit, static_argnames=['dtype', 'tol', 'maxiter', 'dtype'])
-def _update_until_convergence(props, M, int_control, int_omega, tol, maxiter, dtype):
+def _update_until_convergence1(props, M, int_control, int_omega, tol, maxiter, dtype):
     _delta = _delta2
     sol = AndersonAcceleration(fixed_point_fun=partial(_update, _delta=_delta),
                                jit=True,

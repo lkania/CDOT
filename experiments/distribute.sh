@@ -13,6 +13,7 @@ sigma=${sigma:-20}
 rate=${rate:-0.003}
 a=${a:-250}
 b=${b:-0}
+folds=${folds:-500}
 
 while [ $# -gt 0 ]; do
 
@@ -35,6 +36,7 @@ co+="--b $b "
 
 co+="--std_signal_region $std_signal_region "
 co+="--data_id $data_id "
+co+="--folds $folds "
 
 co+="--lambda $lambda "
 co+="--mu $mu "
