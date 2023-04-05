@@ -1,5 +1,3 @@
-# TODO: plot metrics of diff model classes (mle vs bin_mom) in the same plot (e.g. cov and bias)
-
 ######################################################################
 # parse arguments
 ######################################################################
@@ -63,36 +61,36 @@ sample_split = '_False'
 
 estimators = []
 # %%
-# INCREASING_CONTAMINATION = np.array([3.0, 2.5, 2.0, 1.5, 1.0, 0.5])
-# increasing_contamination = [
-#     'bin_mle_5_{0}_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for
-#     l in
-#     INCREASING_CONTAMINATION]
-# estimators += increasing_contamination
+INCREASING_CONTAMINATION = np.array([3.0, 2.5, 2.0, 1.5, 1.0, 0.5])
+increasing_contamination = [
+    'bin_mle_5_{0}_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for
+    l in
+    INCREASING_CONTAMINATION]
+estimators += increasing_contamination
 # %%
-INCREASING_PARAMETERS = np.array([2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 70],
+INCREASING_PARAMETERS = np.array([2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45],
                                  dtype=np.int32)
 increasing_parameters = [
     'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
     for l in INCREASING_PARAMETERS]
 estimators += increasing_parameters
 # %%
-REDUCED_PARAMETERS = np.array([5, 10, 20, 30, 40], dtype=np.int32)
+REDUCED_PARAMETERS = np.array([5, 10, 20], dtype=np.int32)
 reduced_parameters = [
     'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
     for l in REDUCED_PARAMETERS]
 # %%
-# DIMINISHING_SIGNAL = np.array([0.0001, 0.0005, 0.001, 0.005, 0.01])
-# diminishing_signal = [
-#     'bin_mle_5_3.0_{0}_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for l
-#     in DIMINISHING_SIGNAL]
-# estimators += diminishing_signal
+DIMINISHING_SIGNAL = np.array([0.0001, 0.0005, 0.001, 0.005, 0.01])
+diminishing_signal = [
+    'bin_mle_5_3.0_{0}_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for l
+    in DIMINISHING_SIGNAL]
+estimators += diminishing_signal
 # %%
-# if data_id != 'real':
-#     INCREASING_SAMPLE = ['half', '5', '50', '100', '200']
-#     increasing_sample = ['bin_mle_5_3.0_0.01_{0}_500'.format(l) for l in
-#                          INCREASING_SAMPLE]
-#     estimators += increasing_sample
+if data_id != 'real':
+    INCREASING_SAMPLE = ['half', '5', '50', '100', '200']
+    increasing_sample = ['bin_mle_5_3.0_0.01_{0}_500'.format(l) for l in
+                         INCREASING_SAMPLE]
+    estimators += increasing_sample
 # %%
 estimators = list(set(estimators))
 print('Using {0} estimators'.format(len(estimators)))
@@ -298,7 +296,7 @@ trans, tilt_density, inv_trans = transform(
 
 # background in transformed scale
 data.trans = trans
-from_, to_ = uniform_bin(n_bins=100)
+from_, to_ = uniform_bin(n_bins=50 if data_id != 'real' else 100)
 data.background.trans.from_ = from_
 data.background.trans.to_ = to_
 data.background.trans.x_axis = (from_ + to_) / 2
@@ -1009,6 +1007,13 @@ metrics(data=data_,
 
 # %%
 
+
+estimates(ms=ms_,
+          labels=labels_,
+          path='{0}/parameters/bin_mle/'.format(id_dest))
+
+# %%
+
 # background and signal estimation as K increases, fixed n
 ms_ = select(ms=ms, names=reduced_parameters)
 labels_ = ['K={0}'.format(k) for k in REDUCED_PARAMETERS]
@@ -1017,10 +1022,8 @@ plot_background_and_signal(ms=ms_,
                            path='{0}/parameters/bin_mle/reduced'.format(
                                id_dest),
                            colors=['blue',
-                                   'green',
-                                   'brown',
-                                   'orange',
-                                   'red'],
+                                   'red',
+                                   'green'],
                            labels=labels_)
 
 # %%
@@ -1029,11 +1032,6 @@ estimates(ms=ms_,
           labels=labels_,
           path='{0}/parameters/bin_mle/reduced'.format(id_dest))
 
-# %%
-
-# estimates(ms=ms_,
-#           labels=labels_,
-#           path='{0}/parameters/bin_mle/'.format(id_dest))
 # %%
 # bias-coverage as n increases, fixed K
 if data_id != 'real':
@@ -1051,10 +1049,6 @@ if data_id != 'real':
 labels_ = DIMINISHING_SIGNAL * 100
 ms_ = select(ms=ms, names=diminishing_signal)
 data_ = process_data(ms=ms_, labels=labels_, normalize=True)
-
-data_.cov.mean = np.flip(data_.cov.mean, axis=0)
-data_.cov.lower = np.flip(data_.cov.lower, axis=0)
-data_.cov.upper = np.flip(data_.cov.upper, axis=0)
 
 metrics(data=data_,
         path='{0}/mixture/bin_mle'.format(id_dest),

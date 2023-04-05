@@ -7,10 +7,10 @@
 ./distribute.sh --server hydra8 --method bin_mle --k 5 --std_signal_region 3 --data_id 50 --session SIGNAL --lambda 0.0001
 ./distribute.sh --server hydra7 --method bin_mle --k 5 --std_signal_region 3 --data_id 50 --session SIGNAL --lambda 0
 
-#./distribute.sh --server hydra6 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.01 --rate 0.01 --folds 200
-#./distribute.sh --server hydra5 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.005 --rate 0.01 --folds 200
-#./distribute.sh --server hydra4 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.001 --rate 0.01 --folds 200
-#./distribute.sh --server hydra3 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.0005 --rate 0.01 --folds 200
-#./distribute.sh --server hydra2 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.0001 --rate 0.01 --folds 200
-#./distribute.sh --server hydra1 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0 --rate 0.01 --folds 200
+./distribute.sh --server hydra6 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.01 --rate 0.01 --folds 200
+./distribute.sh --server hydra5 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.005 --rate 0.01 --folds 200
+./distribute.sh --server hydra4 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.001 --rate 0.01 --folds 200
+./distribute.sh --server hydra3 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.0005 --rate 0.01 --folds 200
+./distribute.sh --server hydra2 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0.0001 --rate 0.01 --folds 200
+./distribute.sh --server hydra1 --method bin_mle --k 5 --std_signal_region 3 --data_id real --session SIGNAL_REAL --mu 42 --sigma 1 --a 30 --b 60 --lambda 0 --rate 0.01 --folds 200
 
