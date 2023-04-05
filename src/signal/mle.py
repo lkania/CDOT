@@ -1,6 +1,6 @@
 import jax.numpy as np
 from jax import jit
-from jaxopt import FixedPointIteration
+from jaxopt import FixedPointIteration, AndersonAcceleration
 from functools import partial
 from src.signal.delta import influence, objective
 

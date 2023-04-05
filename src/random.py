@@ -19,11 +19,11 @@ def add_signal(X, params, method):
         method.X = X_with_signal
         method.signal.X = signal
 
-    # sample splitting
-    if params.sample_split:
-        idx = random.permutation(key=params.key,
-                                 x=np.arange(method.X.shape[0]),
-                                 independent=True)
-        idxs = np.array_split(idx, indices_or_sections=2)
-        method.X = method.X[idxs[0]]
-        method.X2 = method.X[idxs[1]]
+    # # sample splitting
+    # if params.sample_split:
+    #     idx = random.permutation(key=params.key,
+    #                              x=np.arange(method.X.shape[0]),
+    #                              independent=True)
+    #     idxs = np.array_split(idx, indices_or_sections=2)
+    #     method.X = method.X[idxs[0]]
+    #     method.X2 = method.X[idxs[1]]

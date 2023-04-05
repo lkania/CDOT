@@ -50,7 +50,7 @@ from src.stat.binom import clopper_pearson
 from src.dotdic import DotDic
 import src.basis.bernstein as basis
 from src.transform import transform
-from src.bin import proportions, uniform_bin
+from src.bin import proportions, uniform_bin, adaptive_bin
 from src.background.density import background, density as projected_density
 from experiments.parameters import PARAMETERS, CIS_DELTA, ESTIMATORS, normal
 
@@ -58,41 +58,41 @@ from experiments.parameters import PARAMETERS, CIS_DELTA, ESTIMATORS, normal
 
 # %%
 # Define estimators of interest
-folds = 500 if data_id != 'real' else 10
-sample_split = '_True' if True else ''
+folds = 500 if data_id != 'real' else 200
+sample_split = '_False'
 
 estimators = []
 # %%
-INCREASING_CONTAMINATION = np.array([3.0, 2.5, 2.0, 1.5, 1.0, 0.5])
-increasing_contamination = [
-    'bin_mle_5_{0}_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for
-    l in
-    INCREASING_CONTAMINATION]
-estimators += increasing_contamination
+# INCREASING_CONTAMINATION = np.array([3.0, 2.5, 2.0, 1.5, 1.0, 0.5])
+# increasing_contamination = [
+#     'bin_mle_5_{0}_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for
+#     l in
+#     INCREASING_CONTAMINATION]
+# estimators += increasing_contamination
 # %%
-INCREASING_PARAMETERS = np.array([2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45],
+INCREASING_PARAMETERS = np.array([2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 70],
                                  dtype=np.int32)
 increasing_parameters = [
     'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
     for l in INCREASING_PARAMETERS]
 estimators += increasing_parameters
 # %%
-REDUCED_PARAMETERS = np.array([4, 5, 10], dtype=np.int32)
+REDUCED_PARAMETERS = np.array([5, 10, 20, 30, 40], dtype=np.int32)
 reduced_parameters = [
     'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
     for l in REDUCED_PARAMETERS]
 # %%
-DIMINISHING_SIGNAL = np.array([0.0001, 0.0005, 0.001, 0.005, 0.01])
-diminishing_signal = [
-    'bin_mle_5_3.0_{0}_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for l
-    in DIMINISHING_SIGNAL]
-estimators += diminishing_signal
+# DIMINISHING_SIGNAL = np.array([0.0001, 0.0005, 0.001, 0.005, 0.01])
+# diminishing_signal = [
+#     'bin_mle_5_3.0_{0}_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for l
+#     in DIMINISHING_SIGNAL]
+# estimators += diminishing_signal
 # %%
-if data_id != 'real':
-    INCREASING_SAMPLE = ['half', '5', '50', '100', '200']
-    increasing_sample = ['bin_mle_5_3.0_0.01_{0}_500'.format(l) for l in
-                         INCREASING_SAMPLE]
-    estimators += increasing_sample
+# if data_id != 'real':
+#     INCREASING_SAMPLE = ['half', '5', '50', '100', '200']
+#     increasing_sample = ['bin_mle_5_3.0_0.01_{0}_500'.format(l) for l in
+#                          INCREASING_SAMPLE]
+#     estimators += increasing_sample
 # %%
 estimators = list(set(estimators))
 print('Using {0} estimators'.format(len(estimators)))
@@ -205,7 +205,8 @@ def load(id, name, data):
     m.background.trans.predictions = onp.zeros(
         (m.gamma.shape[0], m.background.star.shape[0]))
 
-    basis_ = basis.integrate(k=m.k, a=data.background.trans.from_,
+    basis_ = basis.integrate(k=m.k,
+                             a=data.background.trans.from_,
                              b=data.background.trans.to_)
 
     # l2 error for background
@@ -297,21 +298,22 @@ trans, tilt_density, inv_trans = transform(
 
 # background in transformed scale
 data.trans = trans
-from_, to_ = uniform_bin(n_bins=200)
+from_, to_ = uniform_bin(n_bins=100)
 data.background.trans.from_ = from_
 data.background.trans.to_ = to_
 data.background.trans.x_axis = (from_ + to_) / 2
 data.background.trans.X = trans(data.background.X)
 data.background.empirical_probabilities, _ = proportions(
     X=data.background.trans.X,
-    from_=from_,
-    to_=to_)
+    from_=data.background.trans.from_,
+    to_=data.background.trans.to_)
 
 # axis in original scale
 data.background.from_ = inv_trans(from_)
 data.background.to_ = onp.array(inv_trans(to_).reshape(-1), dtype=np.float64)
-data.background.to_[-1] = np.max(
-    data.background.X)  # change infinity for maximum value
+if data_id != 'real':
+    # change infinity for maximum value
+    data.background.to_[-1] = np.max(data.background.X)
 data.background.to_ = np.array(data.background.to_)
 data.background.x_axis = (data.background.from_ + data.background.to_) / 2
 
@@ -326,12 +328,15 @@ data.signal.n = np.int32(data.background.n * lambda_star)
 data.signal.X = mu_star + sigma_star * random.normal(key,
                                                      shape=(data.signal.n,))
 data.X = np.concatenate((data.background.X, data.signal.X))
-data.empirical_probabilities = proportions(X=trans(data.X), from_=from_,
+data.empirical_probabilities = proportions(X=trans(data.X),
+                                           from_=from_,
                                            to_=to_)
 
 # densities
-data.background.trans.density = partial(projected_density, basis=basis)
-data.background.density = partial(background, tilt_density=tilt_density,
+data.background.trans.density = partial(projected_density,
+                                        basis=basis)
+data.background.density = partial(background,
+                                  tilt_density=tilt_density,
                                   basis=basis)
 data.signal.density = normal
 
@@ -340,7 +345,9 @@ def mixture_density(X, k, gamma, lambda_, mu, sigma2):
     scaled_background = (1 - lambda_) * data.background.density(X=X,
                                                                 gamma=gamma,
                                                                 k=k)
-    scaled_signal = lambda_ * data.signal.density(X=X, mu=mu, sigma2=sigma2)
+    scaled_signal = lambda_ * data.signal.density(X=X,
+                                                  mu=mu,
+                                                  sigma2=sigma2)
     return scaled_background + scaled_signal
 
 
@@ -398,13 +405,19 @@ def saves(path, names, plots, prefix, hspace, wspace):
         _save(fig, path=path_.format(path, prefix, name))
 
 
-def _plot_mean_plus_quantile(ax, x, y, color, label, alpha=0.05,
-                             tranparency=0.2):
+def _plot_mean_plus_quantile(ax, x, y, color, label,
+                             alpha=0.05,
+                             transparency=0.1):
     ax.plot(x, np.mean(y, axis=0), color=color, alpha=1, label=label)
-    ax.plot(x, np.quantile(y, q=1 - alpha / 2, axis=0), color=color,
-            alpha=tranparency, linestyle='dashed')
-    ax.plot(x, np.quantile(y, q=alpha / 2, axis=0), color=color,
-            alpha=tranparency, linestyle='dashed')
+    ax.fill_between(x, np.mean(y, axis=0),
+                    np.quantile(y, q=1 - alpha / 2, axis=0),
+                    color=color,
+                    alpha=transparency)
+
+    # ax.plot(x, np.quantile(y, q=1 - alpha / 2, axis=0), color=color,
+    #         alpha=tranparency, linestyle='dashed')
+    # ax.plot(x, np.quantile(y, q=alpha / 2, axis=0), color=color,
+    #         alpha=tranparency, linestyle='dashed')
 
 
 def __plot_background(func, ax, ms, colors, labels, alpha=0.05):
@@ -416,7 +429,7 @@ def __plot_background(func, ax, ms, colors, labels, alpha=0.05):
                                  color=colors[i],
                                  label=labels[i],
                                  alpha=alpha,
-                                 tranparency=0.3)
+                                 transparency=0.3)
 
         ax.axvline(x=m.tlower, color='red', linestyle='--')
         ax.axvline(x=m.tupper, color='red', linestyle='--')
@@ -436,7 +449,7 @@ def __plot_signal(func, ax, ms, colors, labels, alpha=0.05, star=True):
                                  y=func(m),
                                  color=colors[i], label=labels[i],
                                  alpha=alpha,
-                                 tranparency=0.4)
+                                 transparency=0.4)
 
         # plot signal region
         ax.axvline(x=m.lower, color='red', linestyle='--')
@@ -461,9 +474,12 @@ def plot_background_and_signal(ms, path, colors, labels, alpha=0.05,
     axs[0].set_xlabel('Mass (projected scale)', fontsize=fontsize)
     axs[0].set_ylabel('Normalized counts', fontsize=fontsize)
     axs[0].hist(ms[0].background.trans.from_,
-                ms[0].background.trans.to_,
+                np.concatenate((np.array([0]), ms[0].background.trans.to_)),
+                # ms[0].background.trans.to_,
                 weights=ms[0].background.star,
-                density=False, color='black', alpha=0.05)
+                density=False,
+                color='black',
+                alpha=0.05)
     # axs[0].errorbar(x=(ms[0].background.trans.from_ + ms[0].background.trans.to_) / 2,
     #                 y=ms[0].background.star,
     #                 yerr=np.sqrt(ms[0].background.star),
@@ -979,22 +995,6 @@ def metrics(data, labels, path,
 
 # %%
 id_dest = 'sim' if data_id != 'real' else 'real'
-# %%
-# background and signal estimation as K increases, fixed n
-ms_ = select(ms=ms, names=reduced_parameters)
-labels_ = ['K={0}'.format(k) for k in REDUCED_PARAMETERS]
-
-plot_background_and_signal(ms=ms_,
-                           path='{0}/parameters/bin_mle/reduced'.format(
-                               id_dest),
-                           colors=['blue', 'green', 'brown'],
-                           labels=labels_)
-
-# %%
-
-estimates(ms=ms_,
-          labels=labels_,
-          path='{0}/parameters/bin_mle/reduced'.format(id_dest))
 
 # %%
 # bias-coverage as K increases, fixed n
@@ -1009,9 +1009,31 @@ metrics(data=data_,
 
 # %%
 
+# background and signal estimation as K increases, fixed n
+ms_ = select(ms=ms, names=reduced_parameters)
+labels_ = ['K={0}'.format(k) for k in REDUCED_PARAMETERS]
+
+plot_background_and_signal(ms=ms_,
+                           path='{0}/parameters/bin_mle/reduced'.format(
+                               id_dest),
+                           colors=['blue',
+                                   'green',
+                                   'brown',
+                                   'orange',
+                                   'red'],
+                           labels=labels_)
+
+# %%
+
 estimates(ms=ms_,
           labels=labels_,
-          path='{0}/parameters/bin_mle/'.format(id_dest))
+          path='{0}/parameters/bin_mle/reduced'.format(id_dest))
+
+# %%
+
+# estimates(ms=ms_,
+#           labels=labels_,
+#           path='{0}/parameters/bin_mle/'.format(id_dest))
 # %%
 # bias-coverage as n increases, fixed K
 if data_id != 'real':

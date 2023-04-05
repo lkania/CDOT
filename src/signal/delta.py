@@ -49,7 +49,7 @@ def Psi(X, nu, signal, background_hat):
     return mean_psis, psis
 
 
-def estimate(h_hat, method, params, X):
+def estimate(h_hat, method, params):
     lambda_hat0, aux = method.background.estimate_lambda(h_hat)
     gamma_hat, gamma_aux = aux
     background_hat = method.background.estimate_background_from_gamma(
@@ -57,31 +57,21 @@ def estimate(h_hat, method, params, X):
     nu_hat, signal_aux = method.signal.estimate_nu(lambda_hat0=lambda_hat0,
                                                    background_hat=background_hat)
 
-    # needed when doing sample splitting
-    background_hat_ = method.background.estimate_background_from_gamma(
-        gamma=gamma_hat, X=X)
-
-    mean_psis, psis = Psi(X=X,
+    mean_psis, psis = Psi(X=method.X,
                           nu=stop_gradient(nu_hat),
                           # stop_gradient so that the derivative w.r.t. h_hat
                           # goes only through background_hat
                           signal=params.signal.signal,
-                          background_hat=background_hat_)
+                          background_hat=background_hat)
     aux = (
         lambda_hat0, nu_hat, gamma_hat, background_hat, psis, gamma_aux,
         signal_aux)
     return np.insert(mean_psis, obj=0, values=lambda_hat0), aux
 
 
-def influence(method, params, X=None):
-    if X is None:
-        X = method.X
-        X_ = None
-    else:
-        X_ = X
-
+def influence(method, params):
     influence_, aux = method.background.influence(
-        func=partial(estimate, method=method, params=params, X=X), X=X_)
+        func=partial(estimate, method=method, params=params))
 
     lambda_hat0, nu_hat, gamma_hat, background_hat, psis, gamma_aux, signal_aux = aux
 

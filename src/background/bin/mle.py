@@ -12,43 +12,57 @@ from jaxopt.projection import projection_polyhedron
 
 @jit
 def _delta1(gamma0, props, M, int_control, int_omega):
-    return (M.transpose() @ (props.reshape(-1, 1) / (M @ gamma0.reshape(-1, 1)))) / int_control.reshape(-1, 1)
+    return (M.transpose() @ (props.reshape(-1, 1) / (
+            M @ gamma0.reshape(-1, 1)))) / int_control.reshape(-1, 1)
 
 
 @jit
 def _delta2(gamma0, props, M, int_control, int_omega):
     pred = np.dot(int_control.reshape(-1), gamma0.reshape(-1))
-    denominator = int_control.reshape(-1, 1) + (np.sum(props) - pred) * int_omega.reshape(-1, 1)
-    return (M.transpose() @ (props.reshape(-1, 1) / (M @ gamma0.reshape(-1, 1)))) / denominator
+    denominator = int_control.reshape(-1, 1) + (
+            np.sum(props) - pred) * int_omega.reshape(-1, 1)
+    return (M.transpose() @ (props.reshape(-1, 1) / (
+            M @ gamma0.reshape(-1, 1)))) / denominator
 
 
 @jit
 def _delta3(gamma0, props, M, int_control, int_omega):
     prob = np.dot(int_control.reshape(-1), gamma0.reshape(-1))
-    denominator = (int_control.reshape(-1, 1) + (1 - prob) * int_omega.reshape(-1, 1))  # * np.sum(props)
-    return (M.transpose() @ (props.reshape(-1, 1) / (M @ gamma0.reshape(-1, 1)))) / denominator
+    denominator = (
+            int_control.reshape(-1, 1) + (1 - prob) * int_omega.reshape(-1,
+                                                                        1))  # * np.sum(props)
+    return (M.transpose() @ (props.reshape(-1, 1) / (
+            M @ gamma0.reshape(-1, 1)))) / denominator
 
 
 @partial(jit, static_argnames=['_delta'])
 def _update(gamma0, props, M, int_control, int_omega, _delta):
-    return gamma0 * _delta(gamma0=gamma0, props=props, M=M, int_control=int_control, int_omega=int_omega)
+    return gamma0 * _delta(gamma0=gamma0, props=props, M=M,
+                           int_control=int_control, int_omega=int_omega)
 
 
 @partial(jit, static_argnames=['dtype', 'tol', 'maxiter', 'dtype'])
-def _update_until_convergence1(props, M, int_control, int_omega, tol, maxiter, dtype):
-    _delta = _delta2
+def _update_until_convergence1(props, M, int_control, int_omega, tol, maxiter,
+                               dtype):
+    _delta = _delta1
     sol = AndersonAcceleration(fixed_point_fun=partial(_update, _delta=_delta),
                                jit=True,
                                implicit_diff=True,
+                               history_size=5,
+                               mixing_frequency=5,
                                tol=tol,
                                maxiter=maxiter).run(
-        np.full_like(int_control, 1, dtype=dtype) / np.sum(int_omega),  # init params (non-differentiable)
-        props, M, int_control, int_omega)  # auxiliary parameters (differentiable)
+        np.full_like(int_control, 1, dtype=dtype) / np.sum(int_omega),
+        # init params (non-differentiable)
+        props, M, int_control,
+        int_omega)  # auxiliary parameters (differentiable)
 
-    gamma = normalize(threshold(sol[0], tol=tol, dtype=dtype), int_omega=int_omega)
+    gamma = normalize(threshold(sol[0], tol=tol, dtype=dtype),
+                      int_omega=int_omega)
 
     gamma_error = np.max(
-        np.abs(_delta(gamma0=gamma, props=props, M=M, int_control=int_control, int_omega=int_omega) - 1))
+        np.abs(_delta(gamma0=gamma, props=props, M=M, int_control=int_control,
+                      int_omega=int_omega) - 1))
     gamma_fit = multinomial_nll(gamma=gamma, data=(M, props, int_control))
     gamma_aux = (gamma_error, gamma_fit)
 
@@ -56,7 +70,8 @@ def _update_until_convergence1(props, M, int_control, int_omega, tol, maxiter, d
 
 
 @partial(jit, static_argnames=['dtype', 'tol', 'maxiter', 'dtype'])
-def _update_until_convergence2(props, M, int_control, int_omega, tol, maxiter, dtype):
+def _update_until_convergence2(props, M, int_control, int_omega, tol, maxiter,
+                               dtype):
     A = M
     b = props.reshape(-1)
     c = int_omega.reshape(-1)
@@ -68,9 +83,11 @@ def _update_until_convergence2(props, M, int_control, int_omega, tol, maxiter, d
                            tol=tol,
                            maxiter=maxiter,
                            jit=True,
-                           projection=lambda x, hyperparams: projection_polyhedron(x=x,
-                                                                                   hyperparams=hyperparams,
-                                                                                   check_feasible=False))
+                           projection=lambda x,
+                                             hyperparams: projection_polyhedron(
+                               x=x,
+                               hyperparams=hyperparams,
+                               check_feasible=False))
     # equality constraint
     A_ = c.reshape(1, -1)
     b_ = np.array([1.0])
@@ -113,7 +130,10 @@ def fit(params, method):
 @jit
 def multinomial_nll(gamma, data):
     M, props, int_control = data
-    log_ratio = np.log((M @ gamma.reshape(-1, 1)).reshape(-1) / np.dot(gamma.reshape(-1), int_control.reshape(-1)))
+    log_ratio = np.log(
+        (M @ gamma.reshape(-1, 1)).reshape(-1) / np.dot(gamma.reshape(-1),
+                                                        int_control.reshape(
+                                                            -1)))
     return (-1) * np.sum(props.reshape(-1) * log_ratio)
 
 

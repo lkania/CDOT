@@ -1,6 +1,5 @@
 from jax import jit
 import jax.numpy as np
-from src.bin import proportions, uniform_bin
 
 
 @jit

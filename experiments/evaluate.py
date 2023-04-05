@@ -56,6 +56,8 @@ def evaluate(X, params):
         save.width[i] = ci[1] - ci[0]
         save.cis[i, :] = ci
 
+    # plots related to one of the iterations
+
     return save
 
 

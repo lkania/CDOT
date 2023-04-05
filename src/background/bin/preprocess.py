@@ -16,7 +16,9 @@ def preprocess(params, method):
 
     # TODO: We ignore the randomness of the equal-counts binning,
     #  it can be fixed by using a fixed binning
-    from_, to_ = adaptive_bin(X=tX, lower=tlower, upper=tupper,
+    from_, to_ = adaptive_bin(X=tX,
+                              lower=tlower,
+                              upper=tupper,
                               n_bins=params.bins)
 
     empirical_probabilities, indicators = proportions(X=tX, from_=from_,
@@ -36,11 +38,8 @@ def preprocess(params, method):
     # indicators is a n_props x n_obs matrix that indicates
     # to which bin every observation belongs
     method.background.influence = partial(
-        influence_,
+        influence,
         empirical_probabilities=empirical_probabilities,
-        from_=from_,
-        to_=to_,
-        trans=trans,
         indicators=indicators)
 
     method.background.estimate_background_from_gamma = partial(
@@ -48,11 +47,3 @@ def preprocess(params, method):
         tilt_density=tilt_density,
         k=params.k,
         basis=params.basis)
-
-
-def influence_(func, empirical_probabilities, X, indicators, from_, to_, trans):
-    if X is not None:
-        indicators = indicator(trans(X), from_, to_)
-    return influence(func=func,
-                     indicators=indicators,
-                     empirical_probabilities=empirical_probabilities)

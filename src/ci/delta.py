@@ -17,28 +17,17 @@ def non_negative(ci):
 
 
 @jit
-def delta_ci(point_estimate, influence, influence2):
+def delta_ci(point_estimate, influence):
     # influence must have shape = (n_parameters,n_obs)
     point_estimate = point_estimate.reshape(-1)
     n_parameters = point_estimate.shape[0]
     n = influence.shape[1]
     mean_influence = np.sum(influence, axis=1).reshape(n_parameters, 1) / n
-    if influence2 is None:
-        centred_influence = influence - mean_influence  # n_parameters x n_obs
-        # compute diagonal elements
-        t2_hat = np.sum(np.square(centred_influence), axis=1).reshape(
-            -1) / n  # n_parameters
-    else:
-        # de-bias estimator
-        n = influence2.shape[1]
-        centred_influence = influence2 - mean_influence.reshape(n_parameters, 1)
-        point_estimate = point_estimate.reshape(n_parameters, 1) \
-                         + np.sum(centred_influence, axis=1).reshape(
-            n_parameters, 1) / n
-        point_estimate = point_estimate.reshape(-1)
 
-        t2_hat = np.mean(np.square(centred_influence), axis=1).reshape(
-            -1) / n  # n_parameters
+    centred_influence = influence - mean_influence  # n_parameters x n_obs
+    # compute diagonal elements
+    t2_hat = np.sum(np.square(centred_influence), axis=1).reshape(
+        -1) / n  # n_parameters
 
     delta = 1.96 * np.sqrt(t2_hat / n)
     return np.column_stack(
@@ -50,13 +39,8 @@ def delta_cis(params, method):
     point_estimates, gamma_hat, gamma_aux, signal_aux = aux
     point_estimates = point_estimates.reshape(-1)
 
-    influence_2 = None
-    if params.sample_split:
-        influence_2, _ = method.signal.influence(X=method.X2)
-
     delta_cis_ = delta_ci(point_estimate=point_estimates,
-                          influence=influence_,
-                          influence2=influence_2)
+                          influence=influence_)
 
     # threshold confidence intervals
     method.lambda_hat0_delta = between_0_and_1(delta_cis_[0, :])

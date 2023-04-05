@@ -58,7 +58,7 @@ def n_bins_(n_lower, n_upper, n_bins):
     return bins_lower, bins_upper
 
 
-# Note: The method assumes that the data lays on the [0,1] interval
+# The method assumes that the data lays on the [0,1] interval
 def adaptive_bin(X, lower, upper, n_bins):
     lower_idx = X <= lower
     n_lower = np.sum(lower_idx)
@@ -80,8 +80,8 @@ def adaptive_bin(X, lower, upper, n_bins):
 
 def uniform_bin(n_bins, from_=0, to_=1):
     core = np.linspace(start=from_, stop=to_, num=n_bins)
-    from_ = core
-    to_ = np.concatenate((core[1:], np.array([to_])))
+    from_ = core[:-1]
+    to_ = core[1:]
 
     return from_, to_
 
