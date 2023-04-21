@@ -1,5 +1,5 @@
 import jax.numpy as np
-from src.bin import adaptive_bin, proportions, indicator
+from src.bin import adaptive_bin, proportions, indicator, _adaptive_bin
 from src.background.bin.delta import influence
 from functools import partial
 from src.transform import transform
@@ -21,8 +21,49 @@ def preprocess(params, method):
                               upper=tupper,
                               n_bins=params.bins)
 
-    empirical_probabilities, indicators = proportions(X=tX, from_=from_,
+    ####################################################################
+    # modifications for model selection
+    ####################################################################
+    # we reserve some bins for model selection
+    # that is, compute gamma on fewer bins
+    # and then predict bins around the signal region
+    if params.model_selection:
+        n_model_selection = params.bins_selection
+        s_lower, s_upper = _adaptive_bin(X=tX,
+                                         lower=tlower,
+                                         upper=tupper,
+                                         n_bins=params.bins)
+
+        # choose bins around signal region to check the extrapolation of the model
+        _sel_lower = s_lower[-n_model_selection:]
+        _sel_upper = s_upper[:n_model_selection]
+        _s_lower = s_lower[:-n_model_selection]
+        _s_upper = s_upper[n_model_selection:]
+
+        _from_ = np.concatenate(
+            (np.array([0]), _s_lower, np.array([_sel_upper[-1]]), _s_upper))
+        _to_ = np.concatenate(
+            (_s_lower, np.array([_sel_lower[0]]), _s_upper, np.array([1])))
+
+        sel_from_ = np.concatenate(
+            (_sel_lower, np.array([tupper]), _sel_upper[:-1]))
+        sel_to_ = np.concatenate(
+            (_sel_lower[1:], np.array([tlower]), _sel_upper))
+
+        from_ = _from_
+        to_ = _to_
+
+        props_val = proportions(X=tX, from_=sel_from_, to_=sel_to_)[0].reshape(
+            -1)
+        basis_val = params.basis.integrate(params.k, sel_from_, sel_to_)
+
+    ####################################################################
+    # bookeeping
+    ####################################################################
+    empirical_probabilities, indicators = proportions(X=tX,
+                                                      from_=from_,
                                                       to_=to_)
+
     int_omega = params.basis.int_omega(k=params.k)
     M = params.basis.integrate(params.k, from_, to_)  # n_bins x n_parameters
     int_control = np.sum(M, axis=0).reshape(-1, 1)
@@ -47,3 +88,10 @@ def preprocess(params, method):
         tilt_density=tilt_density,
         k=params.k,
         basis=params.basis)
+
+    # for model selection
+    if params.model_selection:
+        method.background.validation = lambda compute_gamma: np.sqrt(np.sum(
+            np.square(
+                (basis_val @ compute_gamma(empirical_probabilities)[0].reshape(
+                    -1, 1)).reshape(-1) - props_val)))

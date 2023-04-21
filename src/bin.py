@@ -59,7 +59,7 @@ def n_bins_(n_lower, n_upper, n_bins):
 
 
 # The method assumes that the data lays on the [0,1] interval
-def adaptive_bin(X, lower, upper, n_bins):
+def _adaptive_bin(X, lower, upper, n_bins):
     lower_idx = X <= lower
     n_lower = np.sum(lower_idx)
     X_lower = X[lower_idx]
@@ -71,6 +71,12 @@ def adaptive_bin(X, lower, upper, n_bins):
     bins_lower, bins_upper = n_bins_(n_lower, n_upper, n_bins)
     s_lower = split_positions(X_lower, n_bins=bins_lower)
     s_upper = split_positions(X_upper, n_bins=bins_upper)
+
+    return s_lower, s_upper
+
+
+def adaptive_bin(X, lower, upper, n_bins):
+    s_lower, s_upper = _adaptive_bin(X, lower, upper, n_bins)
 
     from_ = np.concatenate((np.array([0]), s_lower, np.array([upper]), s_upper))
     to_ = np.concatenate((s_lower, np.array([lower]), s_upper, np.array([1])))

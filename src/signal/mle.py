@@ -98,6 +98,5 @@ def estimate_nu(lambda_hat0, background_hat, params, method):
 
 
 def fit(params, method):
-    method.signal.estimate_nu = partial(estimate_nu, params=params,
-                                        method=method)
+    method.signal.estimate_nu = partial(estimate_nu, params=params, method=method)
     method.signal.influence = partial(influence, method=method, params=params)

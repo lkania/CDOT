@@ -48,7 +48,7 @@ from src.stat.binom import clopper_pearson
 from src.dotdic import DotDic
 import src.basis.bernstein as basis
 from src.transform import transform
-from src.bin import proportions, uniform_bin, adaptive_bin
+from src.bin import proportions, uniform_bin
 from src.background.density import background, density as projected_density
 from experiments.parameters import PARAMETERS, CIS_DELTA, ESTIMATORS, normal
 

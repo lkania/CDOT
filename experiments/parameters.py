@@ -68,8 +68,17 @@ def build_parameters(args):
     #######################################################
     # Background parameters
     #######################################################
-    params.k = args.k  # high impact on jacobian computation for non-bin methods
     params.bins = args.bins  # high impact on jacobian computation for bin methods
+    params.k = args.k  # high impact on jacobian computation for non-bin methods
+
+    assert (params.bins > params.k + 1)
+
+    params.model_selection = False
+    if params.k == 0:
+        params.model_selection = True
+        params.bins_selection = 5
+        params.k_grid = range(1, 10)
+        assert (params.bins > 21)
 
     #######################################################
     # parameters for background transformation
@@ -182,8 +191,5 @@ def build_parameters(args):
          str(params.data_id),
          str(params.folds),
          str(params.sample_split)])
-
-    # sanity checks
-    assert (params.bins > params.k + 1)
 
     return params

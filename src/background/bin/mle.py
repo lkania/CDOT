@@ -42,8 +42,8 @@ def _update(gamma0, props, M, int_control, int_omega, _delta):
 
 
 @partial(jit, static_argnames=['dtype', 'tol', 'maxiter', 'dtype'])
-def _update_until_convergence1(props, M, int_control, int_omega, tol, maxiter,
-                               dtype):
+def _update_until_convergence(props, M, int_control, int_omega, tol, maxiter,
+                              dtype):
     _delta = _delta1
     sol = AndersonAcceleration(fixed_point_fun=partial(_update, _delta=_delta),
                                jit=True,
@@ -61,69 +61,80 @@ def _update_until_convergence1(props, M, int_control, int_omega, tol, maxiter,
                       int_omega=int_omega)
 
     gamma_error = np.max(
-        np.abs(_delta(gamma0=gamma, props=props, M=M, int_control=int_control,
+        np.abs(_delta(gamma0=gamma,
+                      props=props,
+                      M=M,
+                      int_control=int_control,
                       int_omega=int_omega) - 1))
+    # TODO: replace by l2 error since the negative log-likelihood of the
+    # multinomial nll doesn't change much
     gamma_fit = multinomial_nll(gamma=gamma, data=(M, props, int_control))
     gamma_aux = (gamma_error, gamma_fit)
 
     return gamma, gamma_aux
 
 
-@partial(jit, static_argnames=['dtype', 'tol', 'maxiter', 'dtype'])
-def _update_until_convergence2(props, M, int_control, int_omega, tol, maxiter,
-                               dtype):
-    A = M
-    b = props.reshape(-1)
-    c = int_omega.reshape(-1)
-    n_params = A.shape[1]
-    pg = ProjectedGradient(fun=poisson_nll,
-                           verbose=False,
-                           acceleration=True,
-                           implicit_diff=True,
-                           tol=tol,
-                           maxiter=maxiter,
-                           jit=True,
-                           projection=lambda x,
-                                             hyperparams: projection_polyhedron(
-                               x=x,
-                               hyperparams=hyperparams,
-                               check_feasible=False))
-    # equality constraint
-    A_ = c.reshape(1, -1)
-    b_ = np.array([1.0])
-
-    # inequality constraint
-    G = -1 * np.eye(n_params)
-    h = np.zeros((n_params,))
-
-    pg_sol = pg.run(init_params=np.full_like(c, 1, dtype=dtype) / n_params,
-                    data=(A, b, c),
-                    hyperparams_proj=(A_, b_, G, h))
-    x = pg_sol.params
-
-    gamma = normalize(threshold(x, tol=tol, dtype=dtype), int_omega=int_omega)
-
-    gamma_error = 0
-    gamma_fit = multinomial_nll(gamma=gamma, data=(M, props, int_control))
-    gamma_aux = (gamma_error, gamma_fit)
-
-    return gamma, gamma_aux
+# @partial(jit, static_argnames=['dtype', 'tol', 'maxiter', 'dtype'])
+# def _update_until_convergence2(props, M, int_control, int_omega, tol, maxiter,
+#                                dtype):
+#     A = M
+#     b = props.reshape(-1)
+#     c = int_omega.reshape(-1)
+#     n_params = A.shape[1]
+#     pg = ProjectedGradient(fun=poisson_nll,
+#                            verbose=False,
+#                            acceleration=True,
+#                            implicit_diff=True,
+#                            tol=tol,
+#                            maxiter=maxiter,
+#                            jit=True,
+#                            projection=lambda x,
+#                                              hyperparams: projection_polyhedron(
+#                                x=x,
+#                                hyperparams=hyperparams,
+#                                check_feasible=False))
+#     # equality constraint
+#     A_ = c.reshape(1, -1)
+#     b_ = np.array([1.0])
+#
+#     # inequality constraint
+#     G = -1 * np.eye(n_params)
+#     h = np.zeros((n_params,))
+#
+#     pg_sol = pg.run(init_params=np.full_like(c, 1, dtype=dtype) / n_params,
+#                     data=(A, b, c),
+#                     hyperparams_proj=(A_, b_, G, h))
+#     x = pg_sol.params
+#
+#     gamma = normalize(threshold(x, tol=tol, dtype=dtype), int_omega=int_omega)
+#
+#     gamma_error = 0
+#     gamma_fit = multinomial_nll(gamma=gamma, data=(M, props, int_control))
+#     gamma_aux = (gamma_error, gamma_fit)
+#
+#     return gamma, gamma_aux
 
 
 def fit(params, method):
     preprocess(params=params, method=method)
 
-    method.background.estimate_gamma = partial(_update_until_convergence1,
-                                               M=method.background.M,
-                                               int_control=method.background.int_control,
-                                               int_omega=method.background.int_omega,
-                                               tol=params.tol,
-                                               maxiter=params.maxiter,
-                                               dtype=params.dtype)
+    method.background.estimate_gamma = partial(
+        _update_until_convergence,
+        M=method.background.M,
+        int_control=method.background.int_control,
+        int_omega=method.background.int_omega,
+        tol=params.tol,
+        maxiter=params.maxiter,
+        dtype=params.dtype)
 
-    method.background.estimate_lambda = partial(estimate_lambda,
-                                                compute_gamma=method.background.estimate_gamma,
-                                                int_control=method.background.int_control)
+    method.background.estimate_lambda = partial(
+        estimate_lambda,
+        compute_gamma=method.background.estimate_gamma,
+        int_control=method.background.int_control)
+
+    method.background.validation_error = partial(
+        method.background.validation,
+        compute_gamma=method.background.estimate_gamma)
 
 
 # utility function for compute the negative log-likelihood of the original multinomial model
