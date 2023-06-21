@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser()
 
-parser.add_argument('--data_id', type=str, default='real')
+parser.add_argument('--data_id', type=str, default='50')
 args, _ = parser.parse_known_args()
 data_id = args.data_id
 
@@ -61,36 +61,37 @@ sample_split = '_False'
 
 estimators = []
 # %%
-INCREASING_CONTAMINATION = np.array([3.0, 2.5, 2.0, 1.5, 1.0, 0.5])
-increasing_contamination = [
-    'bin_mle_5_{0}_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for
-    l in
-    INCREASING_CONTAMINATION]
-estimators += increasing_contamination
+# INCREASING_CONTAMINATION = np.array([3.0, 2.5, 2.0, 1.5, 1.0, 0.5])
+# increasing_contamination = [
+#     'bin_mle_5_{0}_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for
+#     l in
+#     INCREASING_CONTAMINATION]
+# estimators += increasing_contamination
 # %%
-INCREASING_PARAMETERS = np.array([2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45],
-                                 dtype=np.int32)
-increasing_parameters = [
-    'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
-    for l in INCREASING_PARAMETERS]
-estimators += increasing_parameters
+# INCREASING_PARAMETERS = np.array(
+#     [2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45],
+#     dtype=np.int32)
+# increasing_parameters = [
+#     'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
+#     for l in INCREASING_PARAMETERS]
+# estimators += increasing_parameters
 # %%
-REDUCED_PARAMETERS = np.array([5, 10, 20], dtype=np.int32)
-reduced_parameters = [
-    'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
-    for l in REDUCED_PARAMETERS]
+# REDUCED_PARAMETERS = np.array([5, 10, 20], dtype=np.int32)
+# reduced_parameters = [
+#     'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
+#     for l in REDUCED_PARAMETERS]
 # %%
 DIMINISHING_SIGNAL = np.array([0.0001, 0.0005, 0.001, 0.005, 0.01])
 diminishing_signal = [
-    'bin_mle_5_3.0_{0}_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for l
+    'bin_mle_0_3.0_{0}_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for l
     in DIMINISHING_SIGNAL]
 estimators += diminishing_signal
 # %%
-if data_id != 'real':
-    INCREASING_SAMPLE = ['half', '5', '50', '100', '200']
-    increasing_sample = ['bin_mle_5_3.0_0.01_{0}_500'.format(l) for l in
-                         INCREASING_SAMPLE]
-    estimators += increasing_sample
+# if data_id != 'real':
+#     INCREASING_SAMPLE = ['half', '5', '50', '100', '200']
+#     increasing_sample = ['bin_mle_5_3.0_0.01_{0}_500'.format(l) for l in
+#                          INCREASING_SAMPLE]
+#     estimators += increasing_sample
 # %%
 estimators = list(set(estimators))
 print('Using {0} estimators'.format(len(estimators)))
@@ -127,7 +128,9 @@ def load(id, name, data):
     m = DotDic()
     m.name = name
 
-    m.gamma = file['gamma']
+    m.std_signal_region = int(file['std_signal_region'])
+    m.k = int(file['k'])
+    m.bins = int(file['bins'])
 
     m.bias = file['bias']
     m.est = file['estimates']
@@ -141,10 +144,6 @@ def load(id, name, data):
     m.upper = np.float64(file['upper'])
     m.tupper = data.trans(m.upper)
 
-    m.std_signal_region = int(file['std_signal_region'])
-    m.k = int(file['k'])
-    m.bins = int(file['bins'])
-
     m.mu_star = np.float64(file['mu_star'])
     m.sigma_star = np.float64(file['sigma_star'])
     m.sigma2_star = np.float64(file['sigma2_star'])
@@ -156,6 +155,9 @@ def load(id, name, data):
     m.gamma_aux = file['gamma_aux']
     m.gamma_error = m.gamma_aux[:, 0]
     m.gamma_fit = m.gamma_aux[:, 1]
+    m.gamma = file['gamma']
+    if m.k == 0:
+        m.gamma = np.zeros_like(m.gamma_error)
 
     m.signal_aux = file['signal_aux']
     m.signal_error = m.signal_aux[:, 0]
@@ -644,7 +646,8 @@ def process_data(ms, labels, alpha=0.05, normalize=True):
         cp = clopper_pearson(m.cov, alpha=alpha)
         assing_entry(data.cov, index=i,
                      mean=np.mean(m.cov, axis=0).reshape(-1),
-                     lower=cp[:, 0], upper=cp[:, 1])
+                     lower=cp[:, 0],
+                     upper=cp[:, 1])
         cov_table = assign_table(table=cov_table, dotdic=data.cov,
                                  labels=CIS_DELTA, method=label, index=i)
 
@@ -855,7 +858,7 @@ def bias_cov(data, fig, axs, labels, xlabel, titles, fontsize, x_log_scale,
         # if cov_lim is not None:
         #     axs[1, i].set_ylim(cov_lim)
         # else:
-        axs[1, i].set_ylim([0, 1])
+        axs[1, i].set_ylim([0.8, 1])
         set_log_scale(x_log_scale, axs[1, i], x_formatter)
         plot_series_with_uncertainty(
             ax=axs[1, i],
@@ -1008,9 +1011,9 @@ metrics(data=data_,
 # %%
 
 
-estimates(ms=ms_,
-          labels=labels_,
-          path='{0}/parameters/bin_mle/'.format(id_dest))
+# estimates(ms=ms_,
+#           labels=labels_,
+#           path='{0}/parameters/bin_mle/'.format(id_dest))
 
 # %%
 
@@ -1028,9 +1031,9 @@ plot_background_and_signal(ms=ms_,
 
 # %%
 
-estimates(ms=ms_,
-          labels=labels_,
-          path='{0}/parameters/bin_mle/reduced'.format(id_dest))
+# estimates(ms=ms_,
+#           labels=labels_,
+#           path='{0}/parameters/bin_mle/reduced'.format(id_dest))
 
 # %%
 # bias-coverage as n increases, fixed K

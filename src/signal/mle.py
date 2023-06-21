@@ -6,7 +6,8 @@ from src.signal.delta import influence, objective
 
 
 # TODO: The following method assumes that the signal density is gaussian/normal
-# It can be generalized to any signal by replacing the iteration for a numerical optimization
+# It can be generalized to any signal by replacing the iteration for
+# a numerical optimization
 @partial(jit, static_argnames=['signal'])
 def _delta(data0, background_hat, X, lower, upper, signal):
     mu_hat0 = data0[0]
@@ -44,7 +45,8 @@ def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
     mu_hat0 = np.mean(X_control)
     mu_hat0 = np.minimum(np.maximum(mu_hat0, lower), upper)
 
-    # TODO: add restriction to sigma2_hat in the init parameter and during optimization
+    # TODO: add restriction to sigma2_hat in the init parameter
+    #  and during optimization
     sigma2_hat0 = np.mean(np.square(X_control - mu_hat0))
 
     # in order to avoid degenerate solutions, restrict the initial lambda estimate
@@ -53,8 +55,10 @@ def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
     data0 = np.array([mu_hat0, sigma2_hat0, lambda_hat0])
 
     # compute fix point solution
-    # NOTE: We are ignoring the randomness of lambda_hat0, mu_hat0 and sigma2_hat0 but since they
-    # are initial parameters and the EM-optimization has a unique minimum, it's unimportant
+    # NOTE: We are ignoring the randomness of lambda_hat0, mu_hat0 and
+    # sigma2_hat0 but since they
+    # are initial parameters and the EM-optimization has a unique minimum,
+    # it's unimportant
     __delta = lambda data0, background_hat: _delta(data0=data0,
                                                    background_hat=background_hat,
                                                    X=X.reshape(-1),
@@ -70,8 +74,10 @@ def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
         data0,  # init params are non-differentiable
         background_hat.reshape(-1))  # auxiliary parameters are differentiable
 
-    nu_hat = sol[
-        0]  # where mu_hat = data[0], sigma2_hat = data[1] and lambda_hat = data[2]
+    nu_hat = sol[0]
+    # where mu_hat = data[0],
+    # sigma2_hat = data[1] and
+    # lambda_hat = data[2]
 
     signal_error = (sol[1])[1]
     signal_fit = objective(X=X, nu=nu_hat, signal=signal,
@@ -98,5 +104,6 @@ def estimate_nu(lambda_hat0, background_hat, params, method):
 
 
 def fit(params, method):
-    method.signal.estimate_nu = partial(estimate_nu, params=params, method=method)
+    method.signal.estimate_nu = partial(estimate_nu, params=params,
+                                        method=method)
     method.signal.influence = partial(influence, method=method, params=params)

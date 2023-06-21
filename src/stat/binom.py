@@ -1,6 +1,7 @@
 import numpy as np
 
-from scipy.stats._binomtest import _binom_exact_conf_int as _clopper_pearson, _binom_wilson_conf_int as _wilson
+from scipy.stats._binomtest import _binom_exact_conf_int as _clopper_pearson, \
+    _binom_wilson_conf_int as _wilson
 
 
 def vectorize(obs, f):
@@ -24,11 +25,11 @@ def clopper_pearson(obs,
 
 def wilson(obs,
            alternative='two-sided',
-           confidence_level=0.95,
+           alpha=0.05,
            correction=False):
     return vectorize(obs, f=lambda o: _wilson(
         k=np.sum(o),  # number of successes
         n=o.shape[0],  # number of trials
         alternative=alternative,
-        confidence_level=confidence_level,
+        confidence_level=1 - alpha,
         correction=correction))

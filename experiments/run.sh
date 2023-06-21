@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-co="source activate olaf-analysis-np && python runner.py "
+co="source activate test && python runner.py "
 co+="--method $method "
 co+="--k $k "
 

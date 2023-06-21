@@ -132,9 +132,10 @@ def fit(params, method):
         compute_gamma=method.background.estimate_gamma,
         int_control=method.background.int_control)
 
-    method.background.validation_error = partial(
-        method.background.validation,
-        compute_gamma=method.background.estimate_gamma)
+    if params.model_selection:
+        method.background.validation_error = partial(
+            method.background.validation,
+            compute_gamma=method.background.estimate_gamma)
 
 
 # utility function for compute the negative log-likelihood of the original multinomial model

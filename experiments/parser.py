@@ -10,7 +10,7 @@ def parse():
     parser.add_argument("--data_id", default='50', type=str)
     parser.add_argument("--sample_split", default=False, type=bool)
 
-    parser.add_argument("--k", type=int, default=0)
+    parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--bins", default=100, type=int)
 
     parser.add_argument("--std_signal_region", default=3, type=float)

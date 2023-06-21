@@ -2,7 +2,6 @@ from src.load import load
 from src.random import add_signal
 import jax.random as random
 import jax.numpy as np
-import numpy as onp
 from tqdm import tqdm
 from src.dotdic import DotDic
 from src.ci.delta import delta_cis
@@ -94,6 +93,7 @@ def run(params):
     print('Data source: {0}'.format(params.data))
     print('Using {0} datasets'.format(params.folds))
     print('Datasets have {0} examples'.format(X_[idxs[0]].shape[0]))
+    print('Model selection: {0}'.format(params.model_selection))
 
     if params.sample_split:
         print('Using sample splitting')
