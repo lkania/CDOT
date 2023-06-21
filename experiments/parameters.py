@@ -29,10 +29,7 @@ from src.basis import bernstein
 #######################################################
 # background methods
 #######################################################
-# from src.background.unbin import mom
-# from src.background.bin import chi2 as bin_chi2
 from src.background.bin import mle as bin_mle
-# from src.background.bin import mom as bin_mom
 
 #######################################################
 # signal methods
@@ -43,6 +40,11 @@ from src.signal import mle as signal_mle
 # signals
 #######################################################
 from jax.scipy.stats.norm import pdf as dnorm  # Gaussian/normal signal
+
+
+#######################################################
+# track stats
+#######################################################
 
 
 @jit
