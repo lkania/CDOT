@@ -1,15 +1,12 @@
 #!/bin/bash
 
-function restart {
-  tmux kill-server
-  sleep 0.2
-  tmux start-server
-}
+# The following are functions for creating nicely formatted tmux panes
 
 function 2panes {
   tmux split-window -d
   tmux select-layout tiled
 
+  tmux set -g pane-border-status top
   sleep 1
 }
 
@@ -19,6 +16,7 @@ function 4panes {
   tmux split-window -d
   tmux select-layout tiled
 
+  tmux set -g pane-border-status top
   sleep 1
 }
 
@@ -37,6 +35,7 @@ function 6panes {
   tmux splitw -v -p 50 # split it into two halves
   tmux selectp -t 0    # go back to the first pane
 
+  tmux set -g pane-border-status top
   sleep 1
 }
 
@@ -60,6 +59,7 @@ function 8panes {
   tmux splitw -v -p 50 # split it into two halves
   tmux selectp -t 0    # go back to the first pane
 
+  tmux set -g pane-border-status top
   sleep 1
 }
 
@@ -88,5 +88,6 @@ function 10panes {
   tmux splitw -v -p 50 # split it into two halves
   tmux selectp -t 0    # go back to the first pane
 
+  tmux set -g pane-border-status top
   sleep 2
 }

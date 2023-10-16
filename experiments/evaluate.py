@@ -110,7 +110,8 @@ def run(params):
     save.gamma_aux = onp.zeros((params.folds, 2), dtype=params.dtype)
     save.signal_aux = onp.zeros((params.folds, 2), dtype=params.dtype)
 
-    for i in tqdm(range(params.folds), dynamic_ncols=True):
+    for i in tqdm(range(params.folds),
+                  dynamic_ncols=True):
         save_ = evaluate(X=X_[idxs[i]], params=params)
         save.bias[i, :] = save_.bias
         save.coverage[i, :] = save_.coverage
@@ -128,7 +129,7 @@ def run(params):
 def run_and_save(params):
     save = run(params=params)
 
-    onp.savez(file='./results/{0}'.format(params.name),
+    onp.savez(file='./experiments/results/{0}'.format(params.name),
 
               # randomness
               seed=params.seed,

@@ -50,7 +50,7 @@ import src.basis.bernstein as basis
 from src.transform import transform
 from src.bin import proportions, uniform_bin
 from src.background.density import background, density as projected_density
-from experiments.parameters import PARAMETERS, CIS_DELTA, ESTIMATORS, normal
+from experiments.builder import PARAMETERS, CIS_DELTA, ESTIMATORS, normal
 
 ######################################################################
 
