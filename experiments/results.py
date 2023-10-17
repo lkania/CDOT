@@ -5,10 +5,33 @@
 from argparse import ArgumentParser
 
 parser = ArgumentParser()
-
-parser.add_argument('--data_id', type=str, default='50')
+parser.add_argument('--cwd', type=str, default='.')
+parser.add_argument('--data_id', type=str, required=True)
+parser.add_argument('--id_dest', type=str, required=True)
+parser.add_argument('--a_star', type=int, required=True)
+parser.add_argument('--b_star',
+                    type=lambda x: None if x == 'None' else int(x),
+                    required=True)
+parser.add_argument('--rate_star', type=float, required=True)
+parser.add_argument('--n_bins_star', type=int, required=True)
 args, _ = parser.parse_known_args()
-data_id = args.data_id
+print(args)
+
+# data_id = '3b'
+# folds = 10
+# sample_split = '_False'
+# id_dest = '3b'
+#
+# a_star = 201
+# b_star = None
+# rate_star = 0.003
+
+# data_id = '3b'
+# id_dest = '3b'
+# a_star = 201
+# b_star = None
+# rate_star = 0.003
+# n_bins_star = 50
 
 ######################################################################
 # Configure matplolib
@@ -42,7 +65,7 @@ from pathlib import Path
 from tqdm import tqdm
 from functools import partial
 
-# import localize
+import localize
 from src.load import load as load_data
 from src.stat.binom import clopper_pearson
 from src.dotdic import DotDic
@@ -50,48 +73,120 @@ import src.basis.bernstein as basis
 from src.transform import transform
 from src.bin import proportions, uniform_bin
 from src.background.density import background, density as projected_density
-from experiments.builder import PARAMETERS, CIS_DELTA, ESTIMATORS, normal
+from experiments.builder import PARAMETERS, CIS_DELTA, ESTIMATORS, normal, \
+    filename
 
 ######################################################################
 
 # %%
 # Define estimators of interest
-folds = 500 if data_id != 'real' else 200
-sample_split = '_False'
+
 
 estimators = []
 # %%
-# INCREASING_CONTAMINATION = np.array([3.0, 2.5, 2.0, 1.5, 1.0, 0.5])
-# increasing_contamination = [
-#     'bin_mle_5_{0}_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for
-#     l in
-#     INCREASING_CONTAMINATION]
-# estimators += increasing_contamination
+######################################################################
+# INCREASING_CONTAMINATION
+######################################################################
+INCREASING_CONTAMINATION = np.array([4.0, 3.0, 2.0, 1.0])
+params = DotDic()
+params.method = 'bin_mle'
+params.lambda_star = '0.0'
+params.data_id = args.data_id
+params.folds = 1000
+params.sample_split = False
+params.sampling.type = 'subsample'
+params.sampling.size = 5000
+params.k = 22
+
+
+def get_params(l):
+    params.std_signal_region = l
+    return params
+
+
+increasing_contamination = [filename(get_params(l)) for l in
+                            INCREASING_CONTAMINATION]
+estimators += increasing_contamination
 # %%
-# INCREASING_PARAMETERS = np.array(
-#     [2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45],
-#     dtype=np.int32)
-# increasing_parameters = [
-#     'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
-#     for l in INCREASING_PARAMETERS]
-# estimators += increasing_parameters
+######################################################################
+# INCREASING_PARAMETERS
+######################################################################
+INCREASING_PARAMETERS = np.array(
+    [5, 10, 15, 20, 21, 22, 23, 24, 25, 26, 27, 28],
+    dtype=np.int32)
+params = DotDic()
+params.method = 'bin_mle'
+params.lambda_star = '0.0'
+params.std_signal_region = '2.0'
+params.data_id = args.data_id
+params.folds = 1000
+params.sample_split = False
+params.sampling.type = 'subsample'
+params.sampling.size = 5000
+
+
+def get_params(l):
+    params.k = l
+    return params
+
+
+increasing_parameters = [filename(get_params(l)) for l in INCREASING_PARAMETERS]
+estimators += increasing_parameters
 # %%
-# REDUCED_PARAMETERS = np.array([5, 10, 20], dtype=np.int32)
-# reduced_parameters = [
-#     'bin_mle_{0}_3.0_0.01_{1}_{2}{3}'.format(l, data_id, folds, sample_split)
-#     for l in REDUCED_PARAMETERS]
+######################################################################
+# REDUCED PARAMETERS
+######################################################################
+REDUCED_PARAMETERS = np.array([20, 21, 22], dtype=np.int32)
+reduced_parameters = [filename(get_params(l)) for l in REDUCED_PARAMETERS]
+estimators += reduced_parameters
 # %%
-DIMINISHING_SIGNAL = np.array([0.0001, 0.0005, 0.001, 0.005, 0.01])
-diminishing_signal = [
-    'bin_mle_0_3.0_{0}_{1}_{2}{3}'.format(l, data_id, folds, sample_split) for l
-    in DIMINISHING_SIGNAL]
+######################################################################
+# DIMINISHING SIGNAL
+######################################################################
+
+DIMINISHING_SIGNAL = np.array([0.0, 0.001, 0.005, 0.01, 0.05, 0.1])
+params = DotDic()
+params.method = 'bin_mle'
+params.std_signal_region = '2.0'
+params.data_id = args.data_id
+params.folds = 1000
+params.sample_split = False
+params.sampling.type = 'subsample'
+params.sampling.size = 5000
+params.k = 23
+
+
+def get_params(l):
+    params.lambda_star = l
+    return params
+
+
+diminishing_signal = [filename(get_params(l)) for l in DIMINISHING_SIGNAL]
 estimators += diminishing_signal
+
 # %%
-# if data_id != 'real':
-#     INCREASING_SAMPLE = ['half', '5', '50', '100', '200']
-#     increasing_sample = ['bin_mle_5_3.0_0.01_{0}_500'.format(l) for l in
-#                          INCREASING_SAMPLE]
-#     estimators += increasing_sample
+######################################################################
+# INCREASING SAMPLE
+######################################################################
+INCREASING_SAMPLE = [1000, 3000, 5000]
+params = DotDic()
+params.method = 'bin_mle'
+params.lambda_star = '0.0'
+params.std_signal_region = '2.0'
+params.data_id = args.data_id
+params.folds = 1000
+params.sample_split = False
+params.sampling.type = 'subsample'
+params.k = 22
+
+
+def get_params(l):
+    params.sampling.size = l
+    return params
+
+
+increasing_sample = [filename(get_params(l)) for l in INCREASING_SAMPLE]
+estimators += increasing_sample
 # %%
 estimators = list(set(estimators))
 print('Using {0} estimators'.format(len(estimators)))
@@ -120,9 +215,9 @@ def l2_sideband(func, X, from_, to_):
 
 def load(id, name, data):
     if id is not None:
-        path = './experiments/results/{0}/{1}.npz'.format(id, name)
+        path = '{0}/experiments/results/{1}/{2}.npz'.format(args.cwd, id, name)
     else:
-        path = './experiments/results/{0}.npz'.format(name)
+        path = '{0}/experiments/results/{1}.npz'.format(args.cwd, name)
 
     file = onp.load(path)
     m = DotDic()
@@ -285,20 +380,22 @@ def load(id, name, data):
 # load background data
 data = DotDic()
 data.background.X = load_data(
-    './data/{0}/m_muamu.txt'.format('30' if data_id != 'real' else 'real'))
+    '{0}/data/{1}/m_muamu.txt'.format(args.cwd, args.data_id))
 print("Data loaded")
 
 # %%
-
+# a=250 if data_id != 'real' else 30,
+#     b=None if data_id != 'real' else 60,
+#     rate=0.003 if data_id != 'real' else 0.01
 data.background.n = data.background.X.shape[0]
 trans, tilt_density, inv_trans = transform(
-    a=250 if data_id != 'real' else 30,
-    b=None if data_id != 'real' else 60,
-    rate=0.003 if data_id != 'real' else 0.01)
+    a=args.a_star,
+    b=args.b_star,
+    rate=args.rate_star)
 
 # background in transformed scale
 data.trans = trans
-from_, to_ = uniform_bin(n_bins=50 if data_id != 'real' else 100)
+from_, to_ = uniform_bin(n_bins=args.n_bins_star)
 data.background.trans.from_ = from_
 data.background.trans.to_ = to_
 data.background.trans.x_axis = (from_ + to_) / 2
@@ -311,17 +408,17 @@ data.background.empirical_probabilities, _ = proportions(
 # axis in original scale
 data.background.from_ = inv_trans(from_)
 data.background.to_ = onp.array(inv_trans(to_).reshape(-1), dtype=np.float64)
-if data_id != 'real':
+if args.data_id != 'real':
     # change infinity for maximum value
     data.background.to_[-1] = np.max(data.background.X)
 data.background.to_ = np.array(data.background.to_)
 data.background.x_axis = (data.background.from_ + data.background.to_) / 2
 
 # add fake signal
-sigma_star = 20 if data_id != 'real' else 1
+sigma_star = 20.33321
+mu_star = 395.8171
+lambda_star = 0
 sigma2_star = np.square(sigma_star)
-mu_star = 450 if data_id != 'real' else 42
-lambda_star = 0.01
 key = random.PRNGKey(seed=0)
 
 data.signal.n = np.int32(data.background.n * lambda_star)
@@ -360,7 +457,11 @@ id_source = None
 ms = []
 for i in tqdm(np.arange(len(estimators)), dynamic_ncols=True):
     name = estimators[i]
-    ms.append(load(id=id_source, name=name, data=data))
+    try:
+        ms.append(load(id=id_source, name=name, data=data))
+    except FileNotFoundError:
+        print("\nFile {0} is missing\n".format(name))
+        pass
 
 print('Models loaded')
 
@@ -386,23 +487,24 @@ def _save(fig, path):
 
 
 def save(fig, name, path):
-    Path('./experiments/summaries/{0}'.format(path)).mkdir(parents=True,
-                                                           exist_ok=True)
-    path_ = './experiments/summaries/{0}/{1}.pdf'
-    path_ = path_.format(path, name)
+    Path('{0}/experiments/summaries/{1}'.format(args.cwd, path)).mkdir(
+        parents=True,
+        exist_ok=True)
+    path_ = '{0}/experiments/summaries/{1}/{2}.pdf'
+    path_ = path_.format(args.cwd, path, name)
     print(path_)
     _save(fig, path=path_)
 
 
 def saves(path, names, plots, prefix, hspace, wspace):
     if prefix is not None:
-        path_ = './experiments/summaries/{0}/{1}_{2}.pdf'
+        path_ = '{0}/experiments/summaries/{1}/{2}_{3}.pdf'
     else:
-        path_ = './experiments/summaries/{0}/{2}.pdf'
+        path_ = '{0}/experiments/summaries/{1}/{3}.pdf'
     for i, name in enumerate(names):
         fig = plots[i][0]
         fig.subplots_adjust(hspace=hspace, wspace=wspace)
-        _save(fig, path=path_.format(path, prefix, name))
+        _save(fig, path=path_.format(args.cwd, path, prefix, name))
 
 
 def _plot_mean_plus_quantile(ax, x, y, color, label,
@@ -539,7 +641,7 @@ def align_right(str):
 
 
 def html(id, df, name, digits, col_space=100):
-    fname = './experiments/summaries/{0}/{1}.html'.format(id, name)
+    fname = '{0}/experiments/summaries/{1}/{2}.html'.format(args.cwd, id, name)
     content = align_right(df.to_html(None,
                                      justify='right',
                                      col_space=col_space,
@@ -858,7 +960,7 @@ def bias_cov(data, fig, axs, labels, xlabel, titles, fontsize, x_log_scale,
         # if cov_lim is not None:
         #     axs[1, i].set_ylim(cov_lim)
         # else:
-        axs[1, i].set_ylim([0.8, 1])
+        # axs[1, i].set_ylim([0.8, 1])
         set_log_scale(x_log_scale, axs[1, i], x_formatter)
         plot_series_with_uncertainty(
             ax=axs[1, i],
@@ -900,14 +1002,16 @@ def metrics(data, labels, path,
              x_formatter=x_formatter)
     save(fig=fig, path=path, name='bias-cov')
 
-    fig, axs = plt.subplots(2, 2, sharex='all', sharey='none', figsize=(10, 8))
+    fig, axs = plt.subplots(2, 2,
+                            squeeze=False,
+                            sharex='all', sharey='none',
+                            figsize=(10, 8))
     bias_cov(data=data,
              fig=fig,
              axs=axs,
              labels=labels,
              xlabel=xlabel,
-             titles=[r'$\lambda(\hat{F})$',
-                     r'$\lambda_{MLE}(\hat{F})$'],
+             titles=[r'$\lambda(\hat{F})$'],
              fontsize=fontsize,
              x_log_scale=x_log_scale,
              x_formatter=x_formatter)
@@ -995,81 +1099,85 @@ def metrics(data, labels, path,
 
 
 # %%
-id_dest = 'sim' if data_id != 'real' else 'real'
-
-# %%
 # bias-coverage as K increases, fixed n
 ms_ = select(ms=ms, names=increasing_parameters)
 labels_ = INCREASING_PARAMETERS
-data_ = process_data(ms=ms_, labels=labels_, normalize=True)
+data_ = process_data(ms=ms_, labels=labels_, normalize=False)
 
 metrics(data=data_,
-        path='{0}/parameters/bin_mle'.format(id_dest),
+        path='{0}/parameters/bin_mle'.format(args.id_dest),
         labels=labels_,
         xlabel='background complexity (K)')
 
-# %%
-
-
-# estimates(ms=ms_,
-#           labels=labels_,
-#           path='{0}/parameters/bin_mle/'.format(id_dest))
+estimates(ms=ms_,
+          labels=labels_,
+          path='{0}/parameters/bin_mle/'.format(args.id_dest))
 
 # %%
 
 # background and signal estimation as K increases, fixed n
 ms_ = select(ms=ms, names=reduced_parameters)
-labels_ = ['K={0}'.format(k) for k in REDUCED_PARAMETERS]
+labels_ = REDUCED_PARAMETERS
+data_ = process_data(ms=ms_, labels=labels_, normalize=False)
 
 plot_background_and_signal(ms=ms_,
                            path='{0}/parameters/bin_mle/reduced'.format(
-                               id_dest),
+                               args.id_dest),
                            colors=['blue',
                                    'red',
-                                   'green'],
-                           labels=labels_)
+                                   'green',
+                                   'magenta'],
+                           labels=['K={0}'.format(k) for k in
+                                   REDUCED_PARAMETERS])
 
-# %%
+metrics(data=data_,
+        path='{0}/parameters/bin_mle/reduced'.format(args.id_dest),
+        labels=labels_,
+        xlabel='background complexity (K)')
 
-# estimates(ms=ms_,
-#           labels=labels_,
-#           path='{0}/parameters/bin_mle/reduced'.format(id_dest))
+estimates(ms=ms_,
+          labels=labels_,
+          path='{0}/parameters/bin_mle/reduced'.format(args.id_dest))
 
 # %%
 # bias-coverage as n increases, fixed K
-if data_id != 'real':
-    ms_ = select(ms=ms, names=increasing_sample)
-    labels_ = np.array([1, 10, 100, 200, 400]) * 1000
-    data_ = process_data(ms=ms_, labels=labels_, normalize=True)
+ms_ = select(ms=ms, names=increasing_sample)
+labels_ = INCREASING_SAMPLE
+data_ = process_data(ms=ms_, labels=labels_, normalize=False)
+metrics(data=data_,
+        path='{0}/sample/bin_mle'.format(args.id_dest),
+        labels=labels_,
+        xlabel='folds',
+        x_log_scale=False)
 
-    metrics(data=data_,
-            path='{0}/sample/bin_mle'.format(id_dest),
-            labels=labels_,
-            xlabel='sample size',
-            x_log_scale=True)
 # %%
 # bias-coverage as lambda->0, fixed K
 labels_ = DIMINISHING_SIGNAL * 100
 ms_ = select(ms=ms, names=diminishing_signal)
-data_ = process_data(ms=ms_, labels=labels_, normalize=True)
+data_ = process_data(ms=ms_, labels=labels_, normalize=False)
 
 metrics(data=data_,
-        path='{0}/mixture/bin_mle'.format(id_dest),
+        path='{0}/signal/bin_mle'.format(args.id_dest),
         labels=labels_,
-        xlabel='Percentage of data from the signal',  # r'$\lambda$',
-        x_log_scale=True,
-        x_formatter=StrMethodFormatter('{x:.02}'))
-# %%
+        xlabel='Percentage of data from the signal')  # r'$\lambda$',
+# x_log_scale=True,
+# x_formatter=StrMethodFormatter('{x:.02}'))
+
+estimates(ms=ms_,
+          labels=labels_,
+          path='{0}/signal/bin_mle'.format(args.id_dest))
+
+# # %%
 # bias-coverage as the contamination is increased, fixed K, fixed n
 from jax.scipy.stats.norm import cdf
 
 contamination = lambda x: np.round((1 - (cdf(x) - cdf(-x))) * 100, 1)
 ms_ = select(ms=ms, names=increasing_contamination)
 labels_ = contamination(INCREASING_CONTAMINATION)
-data_ = process_data(ms=ms_, labels=labels_, normalize=True)
+data_ = process_data(ms=ms_, labels=labels_, normalize=False)
 
 metrics(data=data_,
-        path='{0}/contamination/bin_mle'.format(id_dest),
+        path='{0}/contamination/bin_mle'.format(args.id_dest),
         labels=labels_,
         xlabel='Percentage of signal outside signal region',
         # r'$S_{\theta}(C)\approx\epsilon\%$',

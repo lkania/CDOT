@@ -39,7 +39,7 @@ def _delta(data0, background_hat, X, lower, upper, signal):
 
 
 # Function cannot be jit in GPU
-# @partial(jit, static_argnames=['signal'])
+@partial(jit, static_argnames=['signal'])
 def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
                  signal, tol, maxiter):
     # compute initial parameters for EM

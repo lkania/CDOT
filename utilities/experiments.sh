@@ -28,7 +28,7 @@ for i in "${!parameters[@]}"; do
                   --bins 100                \
                   --std_signal_region 3     \
                   --folds 500               \
-                  --data_id 50              \
+                  --data_id 3b              \
                   --mu 450                  \
                   --sigma 20                \
                   --lambda 0.01             \

@@ -20,7 +20,7 @@ from jax import numpy as np, random, jit
 # Utilities
 #######################################################
 from src.dotdic import DotDic
-
+from src.load import load
 #######################################################
 # Basis
 #######################################################
@@ -54,6 +54,19 @@ def normal(X, mu, sigma2):
 
 #######################################################
 
+def filename(params):
+    name = params.method
+    return '_'.join([name,
+                     str(params.k),
+                     str(params.std_signal_region),
+                     str(params.lambda_star),
+                     str(params.data_id),
+                     str(params.sampling.type),
+                     str(params.folds),
+                     str(params.sampling.size),
+                     str(params.sample_split)])
+
+
 def build_parameters(args):
     params = DotDic()
     params.seed = 0
@@ -62,9 +75,16 @@ def build_parameters(args):
     #######################################################
     # Data parameters
     #######################################################
+    params.cwd = args.cwd
     params.data_id = args.data_id
-    params.data = '{0}/data/{1}/m_muamu.txt'.format(args.cwd, params.data_id)
+    params.data = '{0}/data/{1}/m_muamu.txt'.format(params.cwd,
+                                                    params.data_id)
+    #######################################################
+    # Sampling
+    #######################################################
     params.folds = args.folds
+    params.sampling.type = args.sampling_type
+    params.sampling.size = args.sampling_size
     params.sample_split = args.sample_split
 
     #######################################################
@@ -81,6 +101,7 @@ def build_parameters(args):
         params.bins_selection = 5
         params.k_grid = range(1, 10)
         assert (params.bins > 21)
+        print('Model selection will be used')
 
     #######################################################
     # parameters for background transformation
@@ -88,7 +109,10 @@ def build_parameters(args):
     params.rate = args.rate
     params.a = args.a
     params.b = None if (args.b < 1e-6) else args.b
-
+    print('Data transformation. Support [{0},{1}] - rate {2} '.format(
+        params.a,
+        params.b,
+        params.rate))
     #######################################################
     # Basis
     #######################################################
@@ -101,8 +125,15 @@ def build_parameters(args):
     params.sigma_star = args.sigma_star
     params.sigma2_star = np.square(params.sigma_star)
     params.lambda_star = args.lambda_star
+    print('Signal parameters: lambda {0} mu {1} sigma {2}'.format(
+        params.lambda_star,
+        params.mu_star,
+        params.sigma_star
+    ))
 
     params.no_signal = (args.lambda_star < 1e-6)  # i.e. if lambda_star == 0
+    if params.no_signal:
+        print("No signal will be added to the sample")
     # we don't modify sigma_star and mu_star so that
     # the signal_region stays the same regardless of lambda
 
@@ -129,6 +160,18 @@ def build_parameters(args):
     # signal
     #######################################################
     params.signal.signal = normal
+    match args.signal:
+        case 'normal':
+            params.signal.sample = \
+                lambda n: params.mu_star + params.sigma_star * random.normal(
+                    params.key, shape=(n,))
+        case 'file':
+            path = '{0}/data/{1}/signal.txt'.format(
+                params.cwd,
+                params.data_id)
+            signal = load(path)
+            params.signal.sample = \
+                lambda n: random.choice(params.key, signal, shape=(n,))
 
     #######################################################
     # quantities of interest during simulation
@@ -142,7 +185,8 @@ def build_parameters(args):
     #######################################################
     # Background method
     #######################################################
-    match args.method:
+    params.method = args.method
+    match params.method:
         case 'bin_mle':
             params.background.fit = bin_mle.fit
         # case 'bin_mom':
@@ -151,6 +195,12 @@ def build_parameters(args):
         #     params.background = bin_chi2
         # case 'mom':
         #     params.background = mom
+    print(
+        "Method: {0}\n\tnumber of bins {1}\n\tnumber of basis {2}\n\tsignal region {3}\n".format(
+            args.method,
+            params.bins,
+            params.k,
+            params.std_signal_region))
 
     # match args.nnls:
     #     case 'conic_cvx':
@@ -181,17 +231,11 @@ def build_parameters(args):
     # - std for signal region
     # - presence of signal
     # if args.nnls == 'None':
-    params.name = args.method
     # else:
     #     params.name = '_'.join([args.method, args.nnls])
 
-    params.name = '_'.join(
-        [params.name,
-         str(params.k),
-         str(params.std_signal_region),
-         str(params.lambda_star),
-         str(params.data_id),
-         str(params.folds),
-         str(params.sample_split)])
+    params.name = filename(params)
+
+    print('Filename: {0}'.format(params.name))
 
     return params

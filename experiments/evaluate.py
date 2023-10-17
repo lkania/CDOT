@@ -75,25 +75,30 @@ def run(params):
     # load background data
     #######################################################
     X_ = load(params.data)
-
+    print("Minimum value of the data {0}".format(np.round(np.min(X_)), 2))
+    print("Maximum value of the data {0}".format(np.round(np.max(X_)), 2))
     #######################################################
     # split data
     #######################################################
-    print("Original data size: {0}".format(X_.shape[0]))
-    print("Folds: {0}".format(params.folds))
+    print('Data source: {0} Size: '.format(params.data,
+                                           X_.shape[0]))
     idx = random.permutation(key=params.key,
                              x=np.arange(X_.shape[0]),
                              independent=True)
-    idxs = np.array_split(idx, indices_or_sections=params.folds)
 
-    #######################################################
-    # print info
-    #######################################################
-    print('\n{0}'.format(params.name))
-    print('Data source: {0}'.format(params.data))
-    print('Using {0} datasets'.format(params.folds))
-    print('Datasets have {0} examples'.format(X_[idxs[0]].shape[0]))
-    print('Model selection: {0}'.format(params.model_selection))
+    match params.sampling.type:
+        case 'independent':
+            idxs = np.array_split(idx, indices_or_sections=params.folds)
+            params.sampling.size = X_[idxs[0]].shape[0]
+        case 'subsample':
+            idxs = random.choice(params.key, idx,
+                                 shape=(params.folds,
+                                        params.sampling.size))
+
+    print("{0}: Number {1} Size {2}".format(
+        params.sampling.type,
+        params.folds,
+        params.sampling.size))
 
     if params.sample_split:
         print('Using sample splitting')
@@ -129,7 +134,8 @@ def run(params):
 def run_and_save(params):
     save = run(params=params)
 
-    onp.savez(file='./experiments/results/{0}'.format(params.name),
+    onp.savez(file='{0}/experiments/results/{1}'.format(params.cwd,
+                                                        params.name),
 
               # randomness
               seed=params.seed,
