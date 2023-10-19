@@ -21,6 +21,7 @@ from jax import numpy as np, random, jit
 #######################################################
 from src.dotdic import DotDic
 from src.load import load
+from src.bin import proportions
 #######################################################
 # Basis
 #######################################################
@@ -30,6 +31,10 @@ from src.basis import bernstein
 # background methods
 #######################################################
 from src.background.bin import mle as bin_mle
+#######################################################
+# background transform
+#######################################################
+from src.transform import transform
 
 #######################################################
 # signal methods
@@ -79,13 +84,54 @@ def build_parameters(args):
     params.data_id = args.data_id
     params.data = '{0}/data/{1}/m_muamu.txt'.format(params.cwd,
                                                     params.data_id)
+
+    #######################################################
+    # load background data
+    #######################################################
+    print("Loading background data")
+    params.background.X = load(params.data)
+    params.background.n = params.background.X.shape[0]
+    print('Data source: {0} Size: {1}'.format(params.data, params.background.n))
+    print("Minimum value of the data {0}".format(
+        np.round(np.min(params.background.X)), 2))
+    print("Maximum value of the data {0}".format(
+        np.round(np.max(params.background.X)), 2))
+
     #######################################################
     # Sampling
     #######################################################
     params.folds = args.folds
     params.sampling.type = args.sampling_type
     params.sampling.size = args.sampling_size
+
+    #######################################################
+    # split data
+    #######################################################
+    params.idx = random.permutation(key=params.key,
+                                    x=np.arange(params.background.n),
+                                    independent=True)
+
+    match params.sampling.type:
+        case 'independent':
+            params.idxs = np.array_split(params.idx,
+                                         indices_or_sections=params.folds)
+            params.sampling.size = params.background.X[params.idxs[0]].shape[0]
+        case 'subsample':
+            params.idxs = random.choice(params.key, params.idx,
+                                        shape=(params.folds,
+                                               params.sampling.size))
+        case _:
+            raise ValueError('Sampling type not supported')
+
+    print("{0}: Number {1} Size {2}".format(
+        params.sampling.type,
+        params.folds,
+        params.sampling.size))
+
     params.sample_split = args.sample_split
+
+    if params.sample_split:
+        print('Using sample splitting')
 
     #######################################################
     # Background parameters
@@ -93,7 +139,7 @@ def build_parameters(args):
     params.bins = args.bins  # high impact on jacobian computation for bin methods
     params.k = args.k  # high impact on jacobian computation for non-bin methods
 
-    assert (params.bins > params.k + 1)
+    assert (params.bins >= (params.k + 1))
 
     params.model_selection = False
     if params.k == 0:
@@ -104,7 +150,7 @@ def build_parameters(args):
         print('Model selection will be used')
 
     #######################################################
-    # parameters for background transformation
+    # background transformation
     #######################################################
     params.rate = args.rate
     params.a = args.a
@@ -113,6 +159,12 @@ def build_parameters(args):
         params.a,
         params.b,
         params.rate))
+
+    trans, tilt_density, _ = transform(
+        a=params.a, b=params.b, rate=params.rate)
+    params.trans = trans
+    params.tilt_density = tilt_density
+
     #######################################################
     # Basis
     #######################################################
@@ -132,10 +184,6 @@ def build_parameters(args):
     ))
 
     params.no_signal = (args.lambda_star < 1e-6)  # i.e. if lambda_star == 0
-    if params.no_signal:
-        print("No signal will be added to the sample")
-    # we don't modify sigma_star and mu_star so that
-    # the signal_region stays the same regardless of lambda
 
     #######################################################
     # amount of contamination
@@ -143,6 +191,8 @@ def build_parameters(args):
     params.std_signal_region = args.std_signal_region
     params.lower = params.mu_star - params.std_signal_region * params.sigma_star
     params.upper = params.mu_star + params.std_signal_region * params.sigma_star
+    params.tlower = params.trans(X=params.lower)
+    params.tupper = params.trans(X=params.upper)
 
     #######################################################
     # allow 64 bits
@@ -152,8 +202,8 @@ def build_parameters(args):
     #######################################################
     # numerical methods
     #######################################################
-    params.tol = 1e-6  # convergence criterion of iterative methods
-    params.maxiter = 20000
+    params.tol = args.tol  # convergence criterion of iterative methods
+    params.maxiter = args.maxiter
     # params.rcond = 1e-6  # thresholding for singular values
 
     #######################################################
@@ -170,8 +220,27 @@ def build_parameters(args):
                 params.cwd,
                 params.data_id)
             signal = load(path)
+            prop, _ = proportions(signal,
+                                  np.array([params.lower]),
+                                  np.array([params.upper]))
+            prop = prop[0]
+            print(
+                '{0:.2f}% of the loaded signal is contained in the signal region'
+                .format(prop * 100))
             params.signal.sample = \
                 lambda n: random.choice(params.key, signal, shape=(n,))
+
+    if params.no_signal:
+        print("No signal will be added to the sample")
+        params.mixture.X = params.background.X
+    else:
+        n_signal = np.int32(params.background.n * params.lambda_star)
+        signal = params.signal.sample(n_signal)
+        signal = signal.reshape(-1)
+        params.mixture.X = np.concatenate((params.background.X,
+                                           signal))
+
+    params.mixture.n = params.mixture.X.shape[0]
 
     #######################################################
     # quantities of interest during simulation
@@ -186,9 +255,19 @@ def build_parameters(args):
     # Background method
     #######################################################
     params.method = args.method
+    params.optimizer = args.optimizer
     match params.method:
         case 'bin_mle':
             params.background.fit = bin_mle.fit
+            match args.optimizer:
+                case 'poisson':
+                    params.background.optimizer = bin_mle.poisson_opt
+                case 'multinomial':
+                    params.background.optimizer = bin_mle.multinomial_opt
+                case 'mom':
+                    params.background.optimizer = bin_mle.mom_opt
+                case _:
+                    raise ValueError('Optimizer not supported')
         # case 'bin_mom':
         #     params.background = bin_mom
         # case 'bin_chi2':
@@ -196,8 +275,13 @@ def build_parameters(args):
         # case 'mom':
         #     params.background = mom
     print(
-        "Method: {0}\n\tnumber of bins {1}\n\tnumber of basis {2}\n\tsignal region {3}\n".format(
+        "Method: {0} with {1} optimizer"
+        "\n\tnumber of bins {2}"
+        "\n\tbasis size {3}"
+        "\n\tsignal region {4} standard deviations\n"
+        .format(
             args.method,
+            args.optimizer,
             params.bins,
             params.k,
             params.std_signal_region))

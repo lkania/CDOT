@@ -84,6 +84,18 @@ def adaptive_bin(X, lower, upper, n_bins):
     return from_, to_
 
 
+# do not skip the signal region bin
+def full_adaptive_bin(X, lower, upper, n_bins):
+    s_lower, s_upper = _adaptive_bin(X, lower, upper, n_bins)
+
+    from_ = np.concatenate(
+        (np.array([0]), s_lower, np.array([lower]), np.array([upper]), s_upper))
+    to_ = np.concatenate(
+        (s_lower, np.array([lower]), np.array([upper]), s_upper, np.array([1])))
+
+    return from_, to_
+
+
 def uniform_bin(n_bins, from_=0, to_=1):
     core = np.linspace(start=from_, stop=to_, num=n_bins)
     from_ = core[:-1]
@@ -96,8 +108,9 @@ def uniform_bin(n_bins, from_=0, to_=1):
 def indicator(X, from_, to_):
     X = X.reshape(-1)
     # indicators has n_bins x n_obs
-    indicators = np.logical_and(X >= np.expand_dims(from_, 1),
-                                X < np.expand_dims(to_, 1))
+    indicators = np.logical_and(
+        X >= np.expand_dims(from_, 1),
+        X < np.expand_dims(to_, 1))
     indicators = np.array(indicators, dtype=np.int32)  # shape: n_probs x n_obs
     return indicators
 

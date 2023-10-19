@@ -2,23 +2,19 @@ import jax.numpy as np
 from src.bin import adaptive_bin, proportions, indicator, _adaptive_bin
 from src.background.bin.delta import influence
 from functools import partial
-from src.transform import transform
 from src.background.density import background
 
 
 def preprocess(params, method):
     assert params.k <= (params.bins + 1)
 
-    trans, tilt_density, _ = transform(a=params.a, b=params.b, rate=params.rate)
-    tX = trans(X=method.X)
-    tlower = trans(X=params.lower)
-    tupper = trans(X=params.upper)
+    method.tX = params.trans(X=method.X)
 
     # TODO: We ignore the randomness of the equal-counts binning,
     #  it can be fixed by using a fixed binning
-    from_, to_ = adaptive_bin(X=tX,
-                              lower=tlower,
-                              upper=tupper,
+    from_, to_ = adaptive_bin(X=method.tX,
+                              lower=params.tlower,
+                              upper=params.tupper,
                               n_bins=params.bins)
 
     ####################################################################
@@ -29,9 +25,9 @@ def preprocess(params, method):
     # and then predict bins around the signal region
     if params.model_selection:
         n_model_selection = params.bins_selection
-        s_lower, s_upper = _adaptive_bin(X=tX,
-                                         lower=tlower,
-                                         upper=tupper,
+        s_lower, s_upper = _adaptive_bin(X=method.tX,
+                                         lower=params.tlower,
+                                         upper=params.tupper,
                                          n_bins=params.bins)
 
         # choose bins around signal region to check the extrapolation of the model
@@ -46,23 +42,24 @@ def preprocess(params, method):
             (_s_lower, np.array([_sel_lower[0]]), _s_upper, np.array([1])))
 
         sel_from_ = np.concatenate(
-            (_sel_lower, np.array([tupper]), _sel_upper[:-1]))
+            (_sel_lower, np.array([params.tupper]), _sel_upper[:-1]))
         sel_to_ = np.concatenate(
-            (_sel_lower[1:], np.array([tlower]), _sel_upper))
+            (_sel_lower[1:], np.array([params.tlower]), _sel_upper))
 
         from_ = _from_
         to_ = _to_
 
-        props_val = proportions(X=tX, from_=sel_from_, to_=sel_to_)[0].reshape(
-            -1)
+        props_val = proportions(X=method.tX,
+                                from_=sel_from_, to_=sel_to_)[0].reshape(-1)
         basis_val = params.basis.integrate(params.k, sel_from_, sel_to_)
 
     ####################################################################
     # bookeeping
     ####################################################################
-    empirical_probabilities, indicators = proportions(X=tX,
+    empirical_probabilities, indicators = proportions(X=method.tX,
                                                       from_=from_,
                                                       to_=to_)
+    method.background.empirical_probabilities = empirical_probabilities
 
     int_omega = params.basis.int_omega(k=params.k)
     M = params.basis.integrate(params.k, from_, to_)  # n_bins x n_parameters
@@ -85,7 +82,7 @@ def preprocess(params, method):
 
     method.background.estimate_background_from_gamma = partial(
         background,
-        tilt_density=tilt_density,
+        tilt_density=params.tilt_density,
         k=params.k,
         basis=params.basis)
 

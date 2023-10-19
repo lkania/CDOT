@@ -2,9 +2,6 @@ import jax.numpy as np
 from jax import jit
 
 
-# import jax.scipy as jsp
-
-
 # NOTES:
 # TODO: 1. the gradient of lstsq aren't the best, it seems like
 # they are propagating through SVD

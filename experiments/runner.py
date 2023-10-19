@@ -14,6 +14,7 @@ from experiments.parser import parse
 
 
 args = parse()
+
 params = build_parameters(args)
 
 run_and_save(params=params)

@@ -71,38 +71,6 @@ def evaluate(X, params):
 
 
 def run(params):
-    #######################################################
-    # load background data
-    #######################################################
-    X_ = load(params.data)
-    print("Minimum value of the data {0}".format(np.round(np.min(X_)), 2))
-    print("Maximum value of the data {0}".format(np.round(np.max(X_)), 2))
-    #######################################################
-    # split data
-    #######################################################
-    print('Data source: {0} Size: '.format(params.data,
-                                           X_.shape[0]))
-    idx = random.permutation(key=params.key,
-                             x=np.arange(X_.shape[0]),
-                             independent=True)
-
-    match params.sampling.type:
-        case 'independent':
-            idxs = np.array_split(idx, indices_or_sections=params.folds)
-            params.sampling.size = X_[idxs[0]].shape[0]
-        case 'subsample':
-            idxs = random.choice(params.key, idx,
-                                 shape=(params.folds,
-                                        params.sampling.size))
-
-    print("{0}: Number {1} Size {2}".format(
-        params.sampling.type,
-        params.folds,
-        params.sampling.size))
-
-    if params.sample_split:
-        print('Using sample splitting')
-
     save = DotDic()
     save.bias = onp.zeros((params.folds, len(params.estimators)),
                           dtype=params.dtype)
@@ -117,7 +85,8 @@ def run(params):
 
     for i in tqdm(range(params.folds),
                   dynamic_ncols=True):
-        save_ = evaluate(X=X_[idxs[i]], params=params)
+        save_ = evaluate(X=params.background.X[params.idxs[i]],
+                         params=params)
         save.bias[i, :] = save_.bias
         save.coverage[i, :] = save_.coverage
         save.width[i, :] = save_.width

@@ -6,14 +6,14 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser()
 parser.add_argument('--cwd', type=str, default='.')
-parser.add_argument('--data_id', type=str, required=True)
-parser.add_argument('--id_dest', type=str, required=True)
-parser.add_argument('--a_star', type=int, required=True)
+parser.add_argument('--data_id', type=str, default='3b')
+parser.add_argument('--id_dest', type=str, default='test')
+parser.add_argument('--a_star', type=int, default=201)
 parser.add_argument('--b_star',
                     type=lambda x: None if x == 'None' else int(x),
-                    required=True)
-parser.add_argument('--rate_star', type=float, required=True)
-parser.add_argument('--n_bins_star', type=int, required=True)
+                    default=None)
+parser.add_argument('--rate_star', type=float, default=0.003)
+parser.add_argument('--n_bins_star', type=int, default=100)
 args, _ = parser.parse_known_args()
 print(args)
 
@@ -72,7 +72,7 @@ from src.dotdic import DotDic
 import src.basis.bernstein as basis
 from src.transform import transform
 from src.bin import proportions, uniform_bin
-from src.background.density import background, density as projected_density
+# from src.background.density import background, density as projected_density
 from experiments.builder import PARAMETERS, CIS_DELTA, ESTIMATORS, normal, \
     filename
 
@@ -194,23 +194,23 @@ print('Using {0} estimators'.format(len(estimators)))
 
 # %%
 
-def squared_integral(func, from_, to_):
-    X = np.linspace(from_, to_, 2)
-    return np.trapz(y=np.square(func(X=X)), x=X)
-
-
-def l2(func, X, from_=None, to_=None):
-    if from_ is None:
-        from_ = np.min(X)
-    if to_ is None:
-        to_ = np.max(X)
-    return squared_integral(func, from_=from_, to_=to_) - 2 * np.mean(func(X=X))
-
-
-def l2_sideband(func, X, from_, to_):
-    return squared_integral(func, from_=np.min(X), to_=from_) + \
-        squared_integral(func, from_=to_, to_=np.max(X)) - \
-        2 * np.mean(func(X=X))
+# def squared_integral(func, from_, to_):
+#     X = np.linspace(from_, to_, 2)
+#     return np.trapz(y=np.square(func(X=X)), x=X)
+#
+#
+# def l2(func, X, from_=None, to_=None):
+#     if from_ is None:
+#         from_ = np.min(X)
+#     if to_ is None:
+#         to_ = np.max(X)
+#     return squared_integral(func, from_=from_, to_=to_) - 2 * np.mean(func(X=X))
+#
+#
+# def l2_sideband(func, X, from_, to_):
+#     return squared_integral(func, from_=np.min(X), to_=from_) + \
+#         squared_integral(func, from_=to_, to_=np.max(X)) - \
+#         2 * np.mean(func(X=X))
 
 
 def load(id, name, data):
@@ -290,8 +290,8 @@ def load(id, name, data):
     m.background.trans.from_ = data.background.trans.from_.reshape(-1)
     m.background.trans.to_ = data.background.trans.to_.reshape(-1)
 
-    m.background.trans.chi2.pearson = onp.zeros((m.gamma.shape[0],))
-    m.background.trans.chi2.neyman = onp.zeros((m.gamma.shape[0],))
+    # m.background.trans.chi2.pearson = onp.zeros((m.gamma.shape[0],))
+    # m.background.trans.chi2.neyman = onp.zeros((m.gamma.shape[0],))
 
     m.background.trans.scaled.residuals = onp.zeros(
         (m.gamma.shape[0], m.background.star.shape[0]))
@@ -305,18 +305,18 @@ def load(id, name, data):
                              b=data.background.trans.to_)
 
     # l2 error for background
-    m.background.l2.all = onp.zeros((m.gamma.shape[0],))
-    m.background.l2.sideband = onp.zeros((m.gamma.shape[0],))
-    m.background.l2.signal_region = onp.zeros((m.gamma.shape[0],))
-    m.background.trans.l2.all = onp.zeros((m.gamma.shape[0],))
-    m.background.trans.l2.sideband = onp.zeros((m.gamma.shape[0],))
-    m.background.trans.l2.signal_region = onp.zeros((m.gamma.shape[0],))
+    # m.background.l2.all = onp.zeros((m.gamma.shape[0],))
+    # m.background.l2.sideband = onp.zeros((m.gamma.shape[0],))
+    # m.background.l2.signal_region = onp.zeros((m.gamma.shape[0],))
+    # m.background.trans.l2.all = onp.zeros((m.gamma.shape[0],))
+    # m.background.trans.l2.sideband = onp.zeros((m.gamma.shape[0],))
+    # m.background.trans.l2.signal_region = onp.zeros((m.gamma.shape[0],))
 
     # l2 error for signal
-    m.signal.l2 = onp.zeros((m.gamma.shape[0],))
+    # m.signal.l2 = onp.zeros((m.gamma.shape[0],))
 
     # l2 error for mixture
-    m.mixture.l2 = onp.zeros((m.gamma.shape[0],))
+    # m.mixture.l2 = onp.zeros((m.gamma.shape[0],))
 
     for i in np.arange(m.est.shape[0]):
         gamma = m.gamma[i, :]
@@ -384,9 +384,6 @@ data.background.X = load_data(
 print("Data loaded")
 
 # %%
-# a=250 if data_id != 'real' else 30,
-#     b=None if data_id != 'real' else 60,
-#     rate=0.003 if data_id != 'real' else 0.01
 data.background.n = data.background.X.shape[0]
 trans, tilt_density, inv_trans = transform(
     a=args.a_star,
@@ -408,47 +405,45 @@ data.background.empirical_probabilities, _ = proportions(
 # axis in original scale
 data.background.from_ = inv_trans(from_)
 data.background.to_ = onp.array(inv_trans(to_).reshape(-1), dtype=np.float64)
-if args.data_id != 'real':
-    # change infinity for maximum value
-    data.background.to_[-1] = np.max(data.background.X)
+# change infinity for maximum value
+data.background.to_[-1] = np.max(data.background.X)
 data.background.to_ = np.array(data.background.to_)
 data.background.x_axis = (data.background.from_ + data.background.to_) / 2
 
 # add fake signal
-sigma_star = 20.33321
-mu_star = 395.8171
-lambda_star = 0
-sigma2_star = np.square(sigma_star)
-key = random.PRNGKey(seed=0)
-
-data.signal.n = np.int32(data.background.n * lambda_star)
-data.signal.X = mu_star + sigma_star * random.normal(key,
-                                                     shape=(data.signal.n,))
-data.X = np.concatenate((data.background.X, data.signal.X))
-data.empirical_probabilities = proportions(X=trans(data.X),
-                                           from_=from_,
-                                           to_=to_)
+# sigma_star = 20.33321
+# mu_star = 395.8171
+# lambda_star = 0
+# sigma2_star = np.square(sigma_star)
+# key = random.PRNGKey(seed=0)
+#
+# data.signal.n = np.int32(data.background.n * lambda_star)
+# data.signal.X = mu_star + sigma_star * random.normal(key,
+#                                                      shape=(data.signal.n,))
+# data.X = np.concatenate((data.background.X, data.signal.X))
+# data.empirical_probabilities = proportions(X=trans(data.X),
+#                                            from_=from_,
+#                                            to_=to_)
 
 # densities
-data.background.trans.density = partial(projected_density,
-                                        basis=basis)
-data.background.density = partial(background,
-                                  tilt_density=tilt_density,
-                                  basis=basis)
+# data.background.trans.density = partial(projected_density,
+#                                         basis=basis)
+# data.background.density = partial(background,
+#                                   tilt_density=tilt_density,
+#                                   basis=basis)
 data.signal.density = normal
 
-
-def mixture_density(X, k, gamma, lambda_, mu, sigma2):
-    scaled_background = (1 - lambda_) * data.background.density(X=X,
-                                                                gamma=gamma,
-                                                                k=k)
-    scaled_signal = lambda_ * data.signal.density(X=X,
-                                                  mu=mu,
-                                                  sigma2=sigma2)
-    return scaled_background + scaled_signal
-
-
-data.density = mixture_density
+# def mixture_density(X, k, gamma, lambda_, mu, sigma2):
+#     scaled_background = (1 - lambda_) * data.background.density(X=X,
+#                                                                 gamma=gamma,
+#                                                                 k=k)
+#     scaled_signal = lambda_ * data.signal.density(X=X,
+#                                                   mu=mu,
+#                                                   sigma2=sigma2)
+#     return scaled_background + scaled_signal
+#
+#
+# data.density = mixture_density
 print('Data processed')
 
 # %%
@@ -764,28 +759,28 @@ def process_data(ms, labels, alpha=0.05, normalize=True):
             data.width.upper[i, :] /= m.parameters_star.reshape(shape)
 
         # l2
-        assing_quantiles(dotdic=data.l2.background.trans.all,
-                         series=m.background.trans.l2.all,
-                         index=i, alpha=alpha)
-        assing_quantiles(dotdic=data.l2.background.trans.signal_region,
-                         series=m.background.trans.l2.signal_region,
-                         index=i, alpha=alpha)
-        assing_quantiles(dotdic=data.l2.background.trans.sideband,
-                         series=m.background.trans.l2.sideband,
-                         index=i, alpha=alpha)
-        assing_quantiles(dotdic=data.l2.background.all,
-                         series=m.background.l2.all,
-                         index=i, alpha=alpha)
-        assing_quantiles(dotdic=data.l2.background.signal_region,
-                         series=m.background.l2.signal_region,
-                         index=i, alpha=alpha)
-        assing_quantiles(dotdic=data.l2.background.sideband,
-                         series=m.background.l2.sideband,
-                         index=i, alpha=alpha)
-        assing_quantiles(dotdic=data.l2.signal, series=m.signal.l2, index=i,
-                         alpha=alpha)
-        assing_quantiles(dotdic=data.l2.mixture, series=m.mixture.l2, index=i,
-                         alpha=alpha)
+        # assing_quantiles(dotdic=data.l2.background.trans.all,
+        #                  series=m.background.trans.l2.all,
+        #                  index=i, alpha=alpha)
+        # assing_quantiles(dotdic=data.l2.background.trans.signal_region,
+        #                  series=m.background.trans.l2.signal_region,
+        #                  index=i, alpha=alpha)
+        # assing_quantiles(dotdic=data.l2.background.trans.sideband,
+        #                  series=m.background.trans.l2.sideband,
+        #                  index=i, alpha=alpha)
+        # assing_quantiles(dotdic=data.l2.background.all,
+        #                  series=m.background.l2.all,
+        #                  index=i, alpha=alpha)
+        # assing_quantiles(dotdic=data.l2.background.signal_region,
+        #                  series=m.background.l2.signal_region,
+        #                  index=i, alpha=alpha)
+        # assing_quantiles(dotdic=data.l2.background.sideband,
+        #                  series=m.background.l2.sideband,
+        #                  index=i, alpha=alpha)
+        # assing_quantiles(dotdic=data.l2.signal, series=m.signal.l2, index=i,
+        #                  alpha=alpha)
+        # assing_quantiles(dotdic=data.l2.mixture, series=m.mixture.l2, index=i,
+        #                  alpha=alpha)
 
     print('Finish processing data')
 

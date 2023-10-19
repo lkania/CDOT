@@ -4,8 +4,10 @@ from jax import jit
 
 @jit
 def _compute_lambda_hat(props, gamma, int_control):
-    return 1 - np.sum(props) / np.dot(gamma.reshape(-1),
-                                      int_control.reshape(-1))
+    F_over_control = np.sum(props)
+    B_over_control = np.dot(gamma.reshape(-1),
+                            int_control.reshape(-1))
+    return 1 - F_over_control / B_over_control
 
 
 # M is a lxK matrix, integral of the basis over
