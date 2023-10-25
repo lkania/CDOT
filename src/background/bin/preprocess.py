@@ -6,7 +6,7 @@ from src.background.density import background
 
 
 def preprocess(params, method):
-    assert params.k <= (params.bins + 1)
+    assert method.k <= (params.bins + 1)
 
     method.tX = params.trans(X=method.X)
 
@@ -23,22 +23,24 @@ def preprocess(params, method):
     # we reserve some bins for model selection
     # that is, compute gamma on fewer bins
     # and then predict bins around the signal region
-    if params.model_selection:
+    if method.model_selection.activated:
         n_model_selection = params.bins_selection
-        s_lower, s_upper = _adaptive_bin(X=method.tX,
-                                         lower=params.tlower,
-                                         upper=params.tupper,
-                                         n_bins=params.bins)
+        s_lower, s_upper = _adaptive_bin(
+            X=method.tX,
+            lower=params.tlower,
+            upper=params.tupper,
+            n_bins=params.bins)
 
-        # choose bins around signal region to check the extrapolation of the model
+        # choose bins around the signal region
+        # to check the extrapolation of the model
         _sel_lower = s_lower[-n_model_selection:]
         _sel_upper = s_upper[:n_model_selection]
         _s_lower = s_lower[:-n_model_selection]
         _s_upper = s_upper[n_model_selection:]
 
-        _from_ = np.concatenate(
+        from_ = np.concatenate(
             (np.array([0]), _s_lower, np.array([_sel_upper[-1]]), _s_upper))
-        _to_ = np.concatenate(
+        to_ = np.concatenate(
             (_s_lower, np.array([_sel_lower[0]]), _s_upper, np.array([1])))
 
         sel_from_ = np.concatenate(
@@ -46,12 +48,13 @@ def preprocess(params, method):
         sel_to_ = np.concatenate(
             (_sel_lower[1:], np.array([params.tlower]), _sel_upper))
 
-        from_ = _from_
-        to_ = _to_
+        method.model_selection.from_ = sel_from_[0]
+        method.model_selection.to_ = sel_to_[-1]
 
         props_val = proportions(X=method.tX,
-                                from_=sel_from_, to_=sel_to_)[0].reshape(-1)
-        basis_val = params.basis.integrate(params.k, sel_from_, sel_to_)
+                                from_=sel_from_,
+                                to_=sel_to_)[0].reshape(-1)
+        basis_val = params.basis.integrate(method.k, sel_from_, sel_to_)
 
     ####################################################################
     # bookeeping
@@ -61,8 +64,8 @@ def preprocess(params, method):
                                                       to_=to_)
     method.background.empirical_probabilities = empirical_probabilities
 
-    int_omega = params.basis.int_omega(k=params.k)
-    M = params.basis.integrate(params.k, from_, to_)  # n_bins x n_parameters
+    int_omega = params.basis.int_omega(k=method.k)
+    M = params.basis.integrate(method.k, from_, to_)  # n_bins x n_parameters
     int_control = np.sum(M, axis=0).reshape(-1, 1)
 
     method.background.bins = params.bins
@@ -83,11 +86,11 @@ def preprocess(params, method):
     method.background.estimate_background_from_gamma = partial(
         background,
         tilt_density=params.tilt_density,
-        k=params.k,
+        k=method.k,
         basis=params.basis)
 
     # for model selection
-    if params.model_selection:
+    if method.model_selection.activated:
         method.background.validation = lambda compute_gamma: np.sqrt(np.sum(
             np.square(
                 (basis_val @ compute_gamma(empirical_probabilities)[0].reshape(

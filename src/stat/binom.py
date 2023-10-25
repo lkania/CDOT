@@ -1,35 +1,41 @@
-import numpy as np
-
-from scipy.stats._binomtest import _binom_exact_conf_int as _clopper_pearson, \
-    _binom_wilson_conf_int as _wilson
-
-
-def vectorize(obs, f):
-    n_estimators = obs.shape[1]
-    cis = np.zeros((n_estimators, 2))
-    for i in np.arange(n_estimators):
-        cis[i, :] = f(obs[:, i])
-    return cis
+from jax import numpy as np
+from scipy.stats._binomtest import _binom_exact_conf_int
+from statsmodels.stats.proportion import proportion_confint
 
 
-def clopper_pearson(obs,
-                    alternative='two-sided',
-                    alpha=0.05):
+def _scipy_cp(n_successes, n_trials, alpha=0.05, alternative='two-sided'):
     confidence_level = 1 - alpha
-    return vectorize(obs, f=lambda o: _clopper_pearson(
-        k=np.sum(o),  # number of successes
-        n=o.shape[0],  # number of trials
+    return _binom_exact_conf_int(
+        k=n_successes,  # number of successes
+        n=n_trials,  # number of trials
         alternative=alternative,
-        confidence_level=confidence_level))
+        confidence_level=confidence_level)
 
 
-def wilson(obs,
-           alternative='two-sided',
-           alpha=0.05,
-           correction=False):
-    return vectorize(obs, f=lambda o: _wilson(
-        k=np.sum(o),  # number of successes
-        n=o.shape[0],  # number of trials
-        alternative=alternative,
-        confidence_level=1 - alpha,
-        correction=correction))
+def _statsmodels_cp(n_successes, n_trials, alpha=0.05):
+    return proportion_confint(
+        count=n_successes,
+        nobs=n_trials,
+        alpha=alpha,
+        method="beta")
+
+
+def clopper_pearson(n_successes,
+                    n_trials,
+                    alpha=0.05):
+    n_successes = np.array(n_successes)
+    # check that n_successes and n_trials
+    # contain no negative values
+    idx = np.where(n_successes < 0)[0]
+    assert len(idx) == 0, "negative value [{0}] found in n_successes".format(
+        n_successes[idx[0]])
+    assert n_trials >= 1, "n_trials must be greater or equal than 1"
+
+    # compute confidence intervals
+    cp = np.array(list(map(
+        lambda n: _statsmodels_cp(
+            n_successes=n,
+            n_trials=n_trials,
+            alpha=alpha),
+        n_successes)))
+    return cp

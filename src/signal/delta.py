@@ -53,24 +53,16 @@ def estimate(h_hat, method, params):
     lambda_hat0, aux = method.background.estimate_lambda(h_hat)
     gamma_hat, gamma_aux = aux
 
-    # fake output to avoid doing signal estiamtion
-    # uncomment to estimate signal
-    nu_hat = np.array([0.0, 0.0, 0.0])
-    signal_aux = (0.0, 0.0)
-    mean_psis = np.array([0.0, 0.0, 0.0])
-    psis = 0.0
-    background_hat = 0.0
-
-    # background_hat = method.background.estimate_background_from_gamma(
-    #     gamma=gamma_hat, X=method.X)
-    # nu_hat, signal_aux = method.signal.estimate_nu(lambda_hat0=lambda_hat0,
-    #                                                background_hat=background_hat)
-    # mean_psis, psis = Psi(X=method.X,
-    #                       nu=stop_gradient(nu_hat),
-    #                       # stop_gradient so that the derivative w.r.t. h_hat
-    #                       # goes only through background_hat
-    #                       signal=params.signal.signal,
-    #                       background_hat=background_hat)
+    background_hat = method.background.estimate_background_from_gamma(
+        gamma=gamma_hat, X=method.X)
+    nu_hat, signal_aux = method.signal.estimate_nu(lambda_hat0=lambda_hat0,
+                                                   background_hat=background_hat)
+    mean_psis, psis = Psi(X=method.X,
+                          nu=stop_gradient(nu_hat),
+                          # stop gradient so that the derivative w.r.t. h_hat
+                          # goes only through background_hat
+                          signal=params.signal.signal,
+                          background_hat=background_hat)
     aux = (
         lambda_hat0, nu_hat, gamma_hat, background_hat, psis, gamma_aux,
         signal_aux)
@@ -86,17 +78,16 @@ def influence(method, params):
     influence_lambda_hat0 = influence_[0, :].reshape(1, -1)  # 1 x n_obs
     influence_nu_hat = influence_[1:, :]  # shape: n_parameters x n_obs
 
-    # Disabled to speed_up computation
-    # influence_nu_hat = influence_nu_hat + psis  # shape: n_parameters x n_obs
-    # hessian_op = hessian(
-    #     fun=lambda nu: objective(X=method.X, nu=nu,
-    #                              signal=params.signal.signal,
-    #                              background_hat=background_hat),
-    #     argnums=0,
-    #     has_aux=False)
-    # info_matrix = hessian_op(nu_hat)  # shape = (n_parameters, n_parameters)
-    # inv_info_matrix = np.linalg.pinv(info_matrix)
-    # influence_nu_hat = inv_info_matrix @ influence_nu_hat
+    influence_nu_hat = influence_nu_hat + psis  # shape: n_parameters x n_obs
+    hessian_op = hessian(
+        fun=lambda nu: objective(X=method.X, nu=nu,
+                                 signal=params.signal.signal,
+                                 background_hat=background_hat),
+        argnums=0,
+        has_aux=False)
+    info_matrix = hessian_op(nu_hat)  # shape = (n_parameters, n_parameters)
+    inv_info_matrix = np.linalg.pinv(info_matrix)
+    influence_nu_hat = inv_info_matrix @ influence_nu_hat
 
     influence_ = np.vstack((influence_lambda_hat0,
                             influence_nu_hat))  # shape = (n_parameters+1,n_obs)

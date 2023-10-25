@@ -6,7 +6,7 @@ from src.opt.error import squared_ls_error
 # from jaxopt import OSQP
 # from jaxopt import CvxpyQP
 from src.normalize import normalize, threshold
-from functools import partial
+# from functools import partial
 from jax import jit, custom_jvp
 
 
@@ -54,21 +54,21 @@ def _normalized_ls_objective(x, data):
 # @partial(jit, static_argnames=['maxiter', 'tol', 'dtype'])
 def normalized_nnls_with_linear_constraint(A, b, c, maxiter, tol, dtype):
     n_params = A.shape[1]
-    pg = ProjectedGradient(fun=_normalized_ls_objective,
-                           verbose=False,
-                           acceleration=True,
-                           implicit_diff=False,
-                           # cannot enable implicit_diff due to custom vjp
-                           # not implemented for _normalized_ls_objective
-                           tol=tol,
-                           maxiter=maxiter,
-                           jit=False,
-                           projection=lambda x,
-                                             hyperparams: projection_polyhedron(
-                               x=x,
-                               hyperparams=hyperparams,
-                               check_feasible=False)
-                           )
+    pg = ProjectedGradient(
+        fun=_normalized_ls_objective,
+        verbose=False,
+        acceleration=True,
+        implicit_diff=False,
+        # cannot enable implicit_diff due to custom vjp
+        # not implemented for _normalized_ls_objective
+        tol=tol,
+        maxiter=maxiter,
+        jit=False,
+        projection=lambda x, hyperparams: projection_polyhedron(
+            x=x,
+            hyperparams=hyperparams,
+            check_feasible=False)
+    )
     # equality constraint
     A_ = c.reshape(1, -1)
     b_ = np.array([1.0])
@@ -86,35 +86,3 @@ def normalized_nnls_with_linear_constraint(A, b, c, maxiter, tol, dtype):
     x = normalize(threshold(x, tol=tol, dtype=dtype), int_omega=c)
 
     return x, _normalized_ls_objective(x=x, data=data)
-
-# def nnls_with_linear_constraint_QP(A, b, c, maxiter, tol):
-#     n_params = A.shape[1]
-#
-#     # equality constraint
-#     A_ = c.reshape(1, -1)
-#     b_ = np.array([1.0])
-#
-#     # inequality constraint
-#     G = -1 * np.eye(n_params)
-#     h = np.zeros((n_params,))
-#
-#     Q = A.transpose() @ A
-#     c_ = (-1 * A.transpose() @ b.reshape(-1, 1)).reshape(-1, )
-#
-#     # TODO: check BoxOSQP, since OSQP gets transformed into BoxOSQP
-#
-#     qp = OSQP(tol=tol,
-#               # momentum=1,
-#               # eq_qp_solve='cg+jacobi',
-#               primal_infeasible_tol=tol,
-#               dual_infeasible_tol=tol,
-#               check_primal_dual_infeasability=False,
-#               maxiter=maxiter,
-#               jit=True)
-#
-#     qp_sol = qp.run(params_obj=(Q, c_),
-#                     params_eq=(A_, b_),
-#                     params_ineq=(G, h))
-#
-#     x = qp_sol.params[0]
-#     return x, squared_ls_error(A=A, b=b, x=x)

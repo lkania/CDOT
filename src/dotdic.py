@@ -1,15 +1,9 @@
-from collections import defaultdict
+class DotDic(dict):
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
-
-class DotDic(defaultdict):
-    def __init__(self):
-        super(DotDic, self).__init__(DotDic)
-
-    def __getattr__(self, key):
+    def __getattr__(self, name):
         try:
-            return self[key]
+            return self[name]
         except KeyError:
-            raise AttributeError(key)
-
-    def __setattr__(self, key, value):
-        self[key] = value
+            raise AttributeError(name)

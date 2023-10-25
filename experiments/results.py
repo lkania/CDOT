@@ -17,22 +17,6 @@ parser.add_argument('--n_bins_star', type=int, default=100)
 args, _ = parser.parse_known_args()
 print(args)
 
-# data_id = '3b'
-# folds = 10
-# sample_split = '_False'
-# id_dest = '3b'
-#
-# a_star = 201
-# b_star = None
-# rate_star = 0.003
-
-# data_id = '3b'
-# id_dest = '3b'
-# a_star = 201
-# b_star = None
-# rate_star = 0.003
-# n_bins_star = 50
-
 ######################################################################
 # Configure matplolib
 ######################################################################
@@ -93,7 +77,6 @@ params.method = 'bin_mle'
 params.lambda_star = '0.0'
 params.data_id = args.data_id
 params.folds = 1000
-params.sample_split = False
 params.sampling.type = 'subsample'
 params.sampling.size = 5000
 params.k = 22
@@ -120,7 +103,6 @@ params.lambda_star = '0.0'
 params.std_signal_region = '2.0'
 params.data_id = args.data_id
 params.folds = 1000
-params.sample_split = False
 params.sampling.type = 'subsample'
 params.sampling.size = 5000
 
@@ -150,7 +132,6 @@ params.method = 'bin_mle'
 params.std_signal_region = '2.0'
 params.data_id = args.data_id
 params.folds = 1000
-params.sample_split = False
 params.sampling.type = 'subsample'
 params.sampling.size = 5000
 params.k = 23
@@ -175,7 +156,6 @@ params.lambda_star = '0.0'
 params.std_signal_region = '2.0'
 params.data_id = args.data_id
 params.folds = 1000
-params.sample_split = False
 params.sampling.type = 'subsample'
 params.k = 22
 

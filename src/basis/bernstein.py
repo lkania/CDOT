@@ -28,8 +28,6 @@ def evaluate(k, X):
     den = dbeta(x=X.reshape(-1, 1), a=r + 1, b=k - r + 1)  # n x k
     den /= k + 1
 
-    # assert max(abs(np.sum(den,1)-1))<1e-5
-
     return den
 
 
@@ -46,7 +44,8 @@ def integrate(k, a, b):
 
 
 def int_omega(k):
-    return integrate(k, np.array([0]), np.array([1]))
+    # the following is equivalent to integrate(k, np.array([0]), np.array([1]))
+    return np.full(shape=(1, k + 1), fill_value=1 / (k + 1))
 
 
 @partial(jit, static_argnames=['k'])
@@ -78,7 +77,8 @@ def outer_inner_product(k, a, b):
     lower = pbeta(x=a, a=sums + 1, b=2 * k - sums + 1)
     upper = pbeta(x=b, a=sums + 1, b=2 * k - sums + 1)
     int_ = 1 - (upper - lower)
-    int_ = int_ * pbeta(x=1, a=sums + 1, b=2 * k - sums + 1)  # we cancel the normalization of pbeta
+    int_ = int_ * pbeta(x=1, a=sums + 1,
+                        b=2 * k - sums + 1)  # we cancel the normalization of pbeta
 
     # we introduce the normalization for the inner product
     c = comb(k, r)

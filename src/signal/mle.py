@@ -5,9 +5,9 @@ from functools import partial
 from src.signal.delta import influence, objective
 
 
-# TODO: The following method assumes that the signal density is gaussian/normal
-# It can be generalized to any signal by replacing the iteration for
-# a numerical optimization
+# TODO: The following method assumes that the signal
+#  density is gaussian/normal. It can be generalized to
+#  any signal by replacing the _delta iteration for a numerical optimization
 @partial(jit, static_argnames=['signal'])
 def _delta(data0, background_hat, X, lower, upper, signal):
     mu_hat0 = data0[0]
@@ -50,28 +50,31 @@ def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
     #  and during optimization
     sigma2_hat0 = np.mean(np.square(X_control - mu_hat0))
 
-    # in order to avoid degenerate solutions, restrict the initial lambda estimate
+    # in order to avoid degenerate solutions,
+    # restrict the initial lambda estimate
     lambda_hat0 = np.minimum(np.maximum(lambda_hat0, 0.01), 0.99)
 
     data0 = np.array([mu_hat0, sigma2_hat0, lambda_hat0])
 
     # compute fix point solution
-    # NOTE: We are ignoring the randomness of lambda_hat0, mu_hat0 and
+    # TODO: We are ignoring the randomness of lambda_hat0, mu_hat0 and
     # sigma2_hat0 but since they
     # are initial parameters and the EM-optimization has a unique minimum,
     # it's unimportant
-    __delta = lambda data0, background_hat: _delta(data0=data0,
-                                                   background_hat=background_hat,
-                                                   X=X.reshape(-1),
-                                                   lower=lower,
-                                                   upper=upper,
-                                                   signal=signal)
+    __delta = lambda data0, background_hat: _delta(
+        data0=data0,
+        background_hat=background_hat,
+        X=X.reshape(-1),
+        lower=lower,
+        upper=upper,
+        signal=signal)
 
-    sol = FixedPointIteration(fixed_point_fun=__delta,
-                              jit=True,
-                              implicit_diff=True,
-                              tol=tol,
-                              maxiter=maxiter).run(
+    sol = FixedPointIteration(
+        fixed_point_fun=__delta,
+        jit=True,
+        implicit_diff=True,
+        tol=tol,
+        maxiter=maxiter).run(
         data0,  # init params are non-differentiable
         background_hat.reshape(-1))  # auxiliary parameters are differentiable
 

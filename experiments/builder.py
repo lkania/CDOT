@@ -15,10 +15,11 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 
 from jax import numpy as np, random, jit
-
+from jaxopt import AndersonAcceleration, FixedPointIteration
 #######################################################
 # Utilities
 #######################################################
+from functools import partial
 from src.dotdic import DotDic
 from src.load import load
 from src.bin import proportions
@@ -59,19 +60,7 @@ def normal(X, mu, sigma2):
 
 #######################################################
 
-def filename(params):
-    name = params.method
-    return '_'.join([name,
-                     str(params.k),
-                     str(params.std_signal_region),
-                     str(params.lambda_star),
-                     str(params.data_id),
-                     str(params.sampling.type),
-                     str(params.folds),
-                     str(params.sampling.size),
-                     str(params.sample_split)])
-
-
+# TODO: separate method and simulation parameters
 def build_parameters(args):
     params = DotDic()
     params.seed = 0
@@ -89,6 +78,7 @@ def build_parameters(args):
     # load background data
     #######################################################
     print("Loading background data")
+    params.background = DotDic()
     params.background.X = load(params.data)
     params.background.n = params.background.X.shape[0]
     print('Data source: {0} Size: {1}'.format(params.data, params.background.n))
@@ -101,6 +91,7 @@ def build_parameters(args):
     # Sampling
     #######################################################
     params.folds = args.folds
+    params.sampling = DotDic()
     params.sampling.type = args.sampling_type
     params.sampling.size = args.sampling_size
 
@@ -128,33 +119,33 @@ def build_parameters(args):
         params.folds,
         params.sampling.size))
 
-    params.sample_split = args.sample_split
-
-    if params.sample_split:
-        print('Using sample splitting')
-
     #######################################################
     # Background parameters
     #######################################################
     params.bins = args.bins  # high impact on jacobian computation for bin methods
     params.k = args.k  # high impact on jacobian computation for non-bin methods
 
-    assert (params.bins >= (params.k + 1))
+    assert params.k is None or (params.bins >= (params.k + 1))
 
-    params.model_selection = False
-    if params.k == 0:
-        params.model_selection = True
-        params.bins_selection = 5
-        params.k_grid = range(1, 10)
-        assert (params.bins > 21)
-        print('Model selection will be used')
+    params.ks = None
+    params.bins_selection = None
+    if args.ks is not None:
+        assert len(args.ks) >= 2
+        params.ks = args.ks
+        params.bins_selection = int(
+            np.ceil(params.bins * (args.bins_selection / 100) / 2))
+        print("Model selection for k in {0}".format(params.ks))
+
+    assert params.ks is None or (params.bins >= (max(params.ks) + 1))
+    assert params.bins_selection is None or (
+            params.bins_selection >= 0 and params.bins_selection <= 100)
 
     #######################################################
     # background transformation
     #######################################################
     params.rate = args.rate
     params.a = args.a
-    params.b = None if (args.b < 1e-6) else args.b
+    params.b = args.b
     print('Data transformation. Support [{0},{1}] - rate {2} '.format(
         params.a,
         params.b,
@@ -209,6 +200,9 @@ def build_parameters(args):
     #######################################################
     # signal
     #######################################################
+    params.signal = DotDic()
+    params.mixture = DotDic()
+
     params.signal.signal = normal
     match args.signal:
         case 'normal':
@@ -254,26 +248,67 @@ def build_parameters(args):
     #######################################################
     # Background method
     #######################################################
+
+    def fixpoint():
+        params.optimizer += '_{0}'.format(args.fixpoint)
+        match args.fixpoint:
+            case 'normal':
+                params.fixpoint = partial(FixedPointIteration,
+                                          verbose=False,
+                                          jit=True,
+                                          implicit_diff=True,
+                                          tol=params.tol,
+                                          maxiter=params.maxiter)
+            case 'anderson':
+                params.fixpoint = partial(AndersonAcceleration,
+                                          beta=1,
+                                          history_size=5,
+                                          mixing_frequency=1,
+                                          verbose=False,
+                                          jit=True,
+                                          implicit_diff=True,
+                                          tol=params.tol,
+                                          maxiter=params.maxiter)
+            case _:
+                raise ValueError('Fixed point solver not supported')
+
     params.method = args.method
     params.optimizer = args.optimizer
     match params.method:
         case 'bin_mle':
             params.background.fit = bin_mle.fit
             match args.optimizer:
-                case 'poisson':
-                    params.background.optimizer = bin_mle.poisson_opt
+                case 'dagostini':
+                    fixpoint()
+                    params.background.optimizer = partial(
+                        bin_mle.poisson_opt,
+                        fixpoint=params.fixpoint,
+                        _delta=bin_mle.dagostini,
+                        tol=params.tol,
+                        dtype=params.dtype)
+                case 'normalized_dagostini':
+                    fixpoint()
+                    params.background.optimizer = partial(
+                        bin_mle.poisson_opt,
+                        fixpoint=params.fixpoint,
+                        _delta=bin_mle.normalized_dagostini,
+                        tol=params.tol,
+                        dtype=params.dtype)
                 case 'multinomial':
-                    params.background.optimizer = bin_mle.multinomial_opt
+                    params.background.optimizer = partial(
+                        bin_mle.multinomial_opt,
+                        tol=params.tol,
+                        maxiter=params.maxiter,
+                        dtype=params.dtype)
                 case 'mom':
-                    params.background.optimizer = bin_mle.mom_opt
+                    params.background.optimizer = partial(
+                        bin_mle.mom_opt,
+                        tol=params.tol,
+                        maxiter=params.maxiter,
+                        dtype=params.dtype)
                 case _:
                     raise ValueError('Optimizer not supported')
-        # case 'bin_mom':
-        #     params.background = bin_mom
-        # case 'bin_chi2':
-        #     params.background = bin_chi2
-        # case 'mom':
-        #     params.background = mom
+
     print(
         "Method: {0} with {1} optimizer"
         "\n\tnumber of bins {2}"
@@ -281,45 +316,15 @@ def build_parameters(args):
         "\n\tsignal region {4} standard deviations\n"
         .format(
             args.method,
-            args.optimizer,
+            params.optimizer,
             params.bins,
             params.k,
             params.std_signal_region))
-
-    # match args.nnls:
-    #     case 'conic_cvx':
-    #         params.nnls = conic_cvx_nnls
-    #     case 'pg_jaxopt':
-    #         params.nnls = pg_jaxopt_nnls
-    #     case 'pg_jax':
-    #         params.nnls = pg_jax_nnls
-    #     case 'lawson_scipy':
-    #         params.nnls = lawson_scipy_nnls
-    #     case 'lawson_jax':
-    #         params.nnls = lawson_jax_nnls
 
     #######################################################
     # Signal method
     #######################################################
 
     params.signal.fit = signal_mle.fit
-
-    #######################################################
-    # Name
-    #######################################################
-
-    # the name contains the following information
-    # - optimizer
-    # - number of background parameters
-    # - dataset id
-    # - std for signal region
-    # - presence of signal
-    # if args.nnls == 'None':
-    # else:
-    #     params.name = '_'.join([args.method, args.nnls])
-
-    params.name = filename(params)
-
-    print('Filename: {0}'.format(params.name))
 
     return params
