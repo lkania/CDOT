@@ -3,11 +3,8 @@ from jaxopt import ProjectedGradient
 from jaxopt.projection import projection_polyhedron, projection_non_negative
 from jaxopt.objective import least_squares
 from src.opt.error import squared_ls_error
-# from jaxopt import OSQP
-# from jaxopt import CvxpyQP
 from src.normalize import normalize, threshold
-# from functools import partial
-from jax import jit, custom_jvp
+from jax import jit
 
 
 # @partial(jit, static_argnames=['maxiter', 'tol', 'dtype'])

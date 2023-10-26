@@ -4,8 +4,7 @@ from src.background.bin.lambda_hat import estimate_lambda
 
 from jax import jit, numpy as np
 from functools import partial
-from src.opt.jaxopt import normalized_nnls_with_linear_constraint, \
-    nnls_with_linear_constraint
+from src.opt.jaxopt import normalized_nnls_with_linear_constraint
 from jaxopt.projection import projection_polyhedron
 from jaxopt import ProjectedGradient
 

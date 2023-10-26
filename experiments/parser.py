@@ -63,7 +63,7 @@ def parse():
         "--model_signal",
         help='The signal is modelled by a normal distribution with unknown parameters',
         default=False,
-        type=bool)
+        type=lambda x: True if x == 'True' or x == 'true' else False)
 
     ######################################################################
     # Simulation parameters
@@ -83,7 +83,7 @@ def parse():
                         type=int)
 
     parser.add_argument("--data_id",
-                        default='4b',
+                        default='3b',
                         type=str)
 
     parser.add_argument("--std_signal_region",

@@ -38,11 +38,9 @@ def _delta(data0, background_hat, X, lower, upper, signal):
     return np.array([mu_hat, sigma2_hat, lambda_hat])
 
 
-@partial(jit, static_argnames=['signal', 'tol', 'maxiter'])
+# This function cannot be jitted when using jacrev
 def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
                  signal, tol, maxiter):
-    # This function cannot be jitted when using a GPU
-
     # compute initial parameters for EM
     mu_hat0 = np.mean(X_control)
     mu_hat0 = np.minimum(np.maximum(mu_hat0, lower), upper)
