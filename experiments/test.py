@@ -440,13 +440,8 @@ plot_stat(axs[row, 2], 'Poisson negative-nll',
 ###################################################################
 # save figure
 ###################################################################
-path = '{0}/summaries/testing/{1}/{2}/{3}/'.format(
-    params.cwd,
-    params.data_id,
-    params.method,
-    params.optimizer)
-Path(path).mkdir(parents=True, exist_ok=True)
-filename = path + '{0}.pdf'.format(params.lambda_star)
+Path(params.path).mkdir(parents=True, exist_ok=True)
+filename = params.path + '{0}.pdf'.format(params.lambda_star)
 fig.savefig(fname=filename,
             bbox_inches='tight')
 plt.close(fig)

@@ -80,6 +80,7 @@ def preprocess(params, method):
     # to which bin every observation belongs
     method.background.influence = partial(
         influence,
+        grad=params.grad_op,
         empirical_probabilities=empirical_probabilities,
         indicators=indicators)
 

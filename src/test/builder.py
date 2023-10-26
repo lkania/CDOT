@@ -5,8 +5,9 @@ from jax.config import config
 
 config.update("jax_enable_x64", True)
 
-from jax import numpy as np, random, jit
+from jax import numpy as np, random, jit, jacrev, grad
 from jaxopt import AndersonAcceleration, FixedPointIteration
+
 #######################################################
 # Utilities
 #######################################################
@@ -69,7 +70,6 @@ def build(args):
         params.ks = args.ks
         params.bins_selection = int(
             np.ceil(params.bins * (args.bins_selection / 100) / 2))
-        print("Model selection for k in {0}".format(params.ks))
 
         assert (params.bins >= (max(params.ks) + 1))
         assert (params.bins_selection >= 0 and params.bins_selection <= 100)
@@ -80,10 +80,6 @@ def build(args):
     params.rate = args.rate
     params.a = args.a
     params.b = args.b
-    print('Data transformation. Support [{0},{1}] - rate {2} '.format(
-        params.a,
-        params.b,
-        params.rate))
 
     trans, tilt_density, _ = transform(
         a=params.a, b=params.b, rate=params.rate)
@@ -180,23 +176,15 @@ def build(args):
                 case _:
                     raise ValueError('Optimizer not supported')
 
-    print("Method: {0} with {1} optimizer"
-          "\n\tnumber of bins {2}"
-          "\n\tbasis size {3}"
-          "\n\tsignal region [{4},{5}]\n"
-    .format(
-        args.method,
-        params.optimizer,
-        params.bins,
-        params.k,
-        params.lower,
-        params.upper))
-
     #######################################################
     # signal model to be used for gnostic test
     #######################################################
-    params.signal = DotDic()
-    params.signal.signal = normal
-    params.signal.fit = signal_mle.fit
+    params.grad_op = grad
+    params.model_signal = args.model_signal
+    if params.model_signal:
+        params.grad_op = jacrev
+        params.signal = DotDic()
+        params.signal.signal = normal
+        params.signal.fit = signal_mle.fit
 
     return params

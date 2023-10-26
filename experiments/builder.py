@@ -151,4 +151,35 @@ def build(args):
     params.trans = method_params.trans
     params.optimizer = method_params.optimizer
     params.method = method_params.method
+
+    #######################################################
+    # Define path for saving results of simulation
+    #######################################################
+    params.path = '{0}/summaries/testing/{1}/{2}/{3}/{4}/'.format(
+        params.cwd,
+        params.data_id,
+        'model_based' if method_params.model_signal else 'model_free',
+        params.method,
+        params.optimizer)
+
+    #######################################################
+    # Print summary
+    #######################################################
+
+    print("Method: {0} with {1} optimizer"
+          "\n\tData transformation. Support [{2},{3}] - rate {4}"
+          "\n\tNumber of bins {5}"
+          "\n\tSignal region [{6},{7}]"
+          "\n\tModel selection for k in {8}"
+    .format(
+        params.method,
+        params.optimizer,
+        method_params.a,
+        method_params.b,
+        method_params.rate,
+        params.bins,
+        params.lower,
+        params.upper,
+        params.ks))
+
     return params

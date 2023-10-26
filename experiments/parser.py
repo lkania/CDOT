@@ -4,8 +4,11 @@ from argparse import ArgumentParser
 def parse():
     parser = ArgumentParser()
 
+    ######################################################################
+    # Method parameters
+    ######################################################################
+
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--cwd", type=str, default='..')
 
     parser.add_argument("--method",
                         type=str,
@@ -27,6 +30,46 @@ def parse():
                         type=float,
                         default=1e-6)
 
+    parser.add_argument(
+        "--rate", default=0.003, type=float)
+    parser.add_argument(
+        "--a", default=201, type=float)
+    parser.add_argument(
+        '--b',
+        default=None,
+        type=lambda x: None if x == 'None' else float(x))
+    parser.add_argument(
+        "--k",
+        help='Order of basis',
+        default=None,
+        type=lambda x: None if x == 'None' else int(x))
+
+    parser.add_argument(
+        '--ks',
+        nargs='+',
+        help='Order range for model selection',
+        default=[1, 2],
+        type=int)
+
+    parser.add_argument(
+        '--bins_selection',
+        help='Percentage of bins used for model selection',
+        default=20,
+        type=float)
+
+    parser.add_argument("--bins", default=100, type=int)
+
+    parser.add_argument(
+        "--model_signal",
+        help='The signal is modelled by a normal distribution with unknown parameters',
+        default=False,
+        type=bool)
+
+    ######################################################################
+    # Simulation parameters
+    ######################################################################
+    parser.add_argument("--cwd", type=str, default='..')
+
     parser.add_argument("--folds",
                         default=2,
                         type=int)
@@ -43,37 +86,21 @@ def parse():
                         default='4b',
                         type=str)
 
-    parser.add_argument("--k",
-                        help='Order of basis',
-                        default=None,
-                        type=lambda x: None if x == 'None' else int(x))
-
-    parser.add_argument('--ks',
-                        nargs='+',
-                        help='Order range for model selection',
-                        default=[1, 2],
-                        type=int)
-
-    parser.add_argument('--bins_selection',
-                        help='Percentage of bins used for model selection',
-                        default=20,
-                        type=float)
-
-    parser.add_argument("--bins", default=100, type=int)
-
     parser.add_argument("--std_signal_region",
                         default=2.5,
                         type=float)
-    parser.add_argument("--mu_star", default=395.8171, type=float)
-    parser.add_argument("--sigma_star", default=20.33321, type=float)
-    parser.add_argument("--lambda_star", default=0.051, type=float)
-    parser.add_argument("--signal", default='file', type=str)
-
-    parser.add_argument("--rate", default=0.003, type=float)
-    parser.add_argument("--a", default=201, type=float)
-    parser.add_argument('--b',
-                        default=None,
-                        type=lambda x: None if x == 'None' else float(x))
+    parser.add_argument("--mu_star",
+                        default=395.8171,
+                        type=float)
+    parser.add_argument("--sigma_star",
+                        default=20.33321,
+                        type=float)
+    parser.add_argument("--lambda_star",
+                        default=0.051,
+                        type=float)
+    parser.add_argument("--signal",
+                        default='file',
+                        type=str)
 
     args, _ = parser.parse_known_args()
 
