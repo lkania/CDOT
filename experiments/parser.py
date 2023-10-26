@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 def parse():
     parser = ArgumentParser()
 
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--cwd", type=str, default='..')
 
     parser.add_argument("--method",
@@ -27,7 +28,7 @@ def parse():
                         default=1e-6)
 
     parser.add_argument("--folds",
-                        default=3,
+                        default=2,
                         type=int)
 
     parser.add_argument("--sampling_type",
@@ -50,7 +51,7 @@ def parse():
     parser.add_argument('--ks',
                         nargs='+',
                         help='Order range for model selection',
-                        default=[4, 10, 15, 20, 25, 30],
+                        default=[1, 2],
                         type=int)
 
     parser.add_argument('--bins_selection',

@@ -38,10 +38,11 @@ def _delta(data0, background_hat, X, lower, upper, signal):
     return np.array([mu_hat, sigma2_hat, lambda_hat])
 
 
-# Function cannot be jit in GPU
-@partial(jit, static_argnames=['signal'])
+@partial(jit, static_argnames=['signal', 'tol', 'maxiter'])
 def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
                  signal, tol, maxiter):
+    # This function cannot be jitted when using a GPU
+
     # compute initial parameters for EM
     mu_hat0 = np.mean(X_control)
     mu_hat0 = np.minimum(np.maximum(mu_hat0, lower), upper)
@@ -50,7 +51,7 @@ def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
     #  and during optimization
     sigma2_hat0 = np.mean(np.square(X_control - mu_hat0))
 
-    # in order to avoid degenerate solutions,
+    # In order to avoid degenerate solutions,
     # restrict the initial lambda estimate
     lambda_hat0 = np.minimum(np.maximum(lambda_hat0, 0.01), 0.99)
 
@@ -92,7 +93,7 @@ def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
 
 
 def estimate_nu(lambda_hat0, background_hat, params, method):
-    # the following boolean array cannot be jit
+    # The following boolean array cannot be jitted
     idx_control = np.array(
         (method.X <= params.lower) + (method.X >= params.upper), dtype=np.bool_)
     X_control = method.X[idx_control].reshape(-1)

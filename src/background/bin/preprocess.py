@@ -18,9 +18,9 @@ def preprocess(params, method):
                               n_bins=params.bins)
 
     ####################################################################
-    # modifications for model selection
+    # Modifications for model selection
     ####################################################################
-    # we reserve some bins for model selection
+    # Reserve some bins for model selection
     # that is, compute gamma on fewer bins
     # and then predict bins around the signal region
     if method.model_selection.activated:

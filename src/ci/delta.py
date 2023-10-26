@@ -16,6 +16,7 @@ def non_negative(ci):
     return np.maximum(ci, 0)
 
 
+# TODO: replace 1.96 by z-score from alpha
 @jit
 def delta_ci(point_estimate, influence):
     # influence must have shape = (n_parameters,n_obs)

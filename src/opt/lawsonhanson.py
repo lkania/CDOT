@@ -29,7 +29,7 @@ def nnls(A, b, tol=1e-11):
     # init
     L, M = A.shape
     P = np.zeros(M, dtype=np.bool_)  # R = not P = ~P
-    d = np.zeros((M, 1), dtype=nps.float64)  # TODO: change this via params
+    d = np.zeros((M, 1), dtype=np.float64)
     w = A.transpose() @ b
 
     #  utils
