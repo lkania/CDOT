@@ -171,6 +171,7 @@ def build(args):
           "\n\tNumber of bins {5}"
           "\n\tSignal region [{6},{7}]"
           "\n\tModel selection for k in {8}"
+          "\n\t{9}"
     .format(
         params.method,
         params.optimizer,
@@ -180,6 +181,7 @@ def build(args):
         params.bins,
         params.lower,
         params.upper,
-        params.ks))
+        params.ks,
+        'model_based' if method_params.model_signal else 'model_free'))
 
     return params

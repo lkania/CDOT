@@ -5,19 +5,21 @@ from statsmodels.stats.proportion import proportion_confint
 
 def _scipy_cp(n_successes, n_trials, alpha=0.05, alternative='two-sided'):
     confidence_level = 1 - alpha
-    return _binom_exact_conf_int(
-        k=n_successes,  # number of successes
-        n=n_trials,  # number of trials
-        alternative=alternative,
-        confidence_level=confidence_level)
+    return np.array(list(map(
+        lambda k: _binom_exact_conf_int(
+            k=k,  # number of successes
+            n=n_trials,  # number of trials
+            alternative=alternative,
+            confidence_level=confidence_level),
+        n_successes)))
 
 
 def _statsmodels_cp(n_successes, n_trials, alpha=0.05):
-    return proportion_confint(
+    return np.stack(proportion_confint(
         count=n_successes,
         nobs=n_trials,
         alpha=alpha,
-        method="beta")
+        method="beta"), axis=1)
 
 
 def clopper_pearson(n_successes,
@@ -32,10 +34,6 @@ def clopper_pearson(n_successes,
     assert n_trials >= 1, "n_trials must be greater or equal than 1"
 
     # compute confidence intervals
-    cp = np.array(list(map(
-        lambda n: _statsmodels_cp(
-            n_successes=n,
-            n_trials=n_trials,
-            alpha=alpha),
-        n_successes)))
-    return cp
+    return _statsmodels_cp(n_successes=n_successes,
+                           n_trials=n_trials,
+                           alpha=alpha)
