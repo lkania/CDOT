@@ -3,34 +3,39 @@
 ###############################################
 envname <- "delta"
 
-###############################################
-# Installing a preparing python environment
-###############################################
-options(pkgType = "binary")
-install.packages("reticulate", repos = 'http://cran.us.r-project.org')
-library(reticulate)
+is_available <- require("reticulate")
+if (!is_available) {
+  ###############################################
+  # Installing a preparing python environment
+  ###############################################
+  options(pkgType = "binary")
+  install.packages(
+    "reticulate",
+    repos = 'http://cran.us.r-project.org')
+  library(reticulate)
 
-tryCatch({
-  install_miniconda(path = miniconda_path(), update = FALSE, force = FALSE) },
-  error = function(e) {
-    print("Miniconda installed")
-  })
+  tryCatch({
+    install_miniconda(path = miniconda_path(),
+                      update = FALSE,
+                      force = FALSE) },
+    error = function(e) {
+      print("Miniconda installed")
+    })
 
-packages <- c('jax==0.4.16',
-              'jaxopt==0.8.1',
-              'numpy==1.26.0',
-              'scipy==1.11.3',
-              'tqdm==4.66.1')
+  packages <- c('jax==0.4.16',
+                'jaxopt==0.8.1',
+                'numpy==1.26.0',
+                'scipy==1.11.3',
+                'tqdm==4.66.1')
 
-conda_create(envname = envname,
-             packages = packages,
-             python_version = "3.11.6",
-             forge = TRUE)
-
+  conda_create(envname = envname,
+               packages = packages,
+               python_version = "3.11.6",
+               forge = TRUE)
+}
 ###############################################
 # Using python environment
 ###############################################
-library(reticulate)
 use_condaenv(envname)
 
 source_python('./src/test/test.py')

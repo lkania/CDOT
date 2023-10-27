@@ -16,23 +16,8 @@ from src.test.builder import build
 from src.ci.delta import delta_ci
 
 
-@jit
-def _between(ci, lower, upper):
-    return np.minimum(np.maximum(ci, lower), upper)
-
-
-@jit
-def _between_0_and_1(ci):
-    return _between(ci, 0, 1)
-
-
-@jit
-def _non_negative(ci):
-    return np.maximum(ci, 0)
-
-
 def test(args, X):
-    return _test(params=build(args), X=X)
+    return _test(params=build(args), X=np.array(X).reshape(-1))
 
 
 def _test(params, X):
@@ -60,7 +45,7 @@ def _test(params, X):
 
     if not params.model_signal:
         #######################################################
-        # Start of model agnostic estimate
+        # Model free estimate
         #######################################################
 
         def estimate(h_hat):
@@ -71,45 +56,53 @@ def _test(params, X):
         lambda_hat, aux = aux_
         gamma_hat, gamma_aux = aux
 
-        ci, pvalue, zscore = delta_ci(
-            point_estimate=np.array([lambda_hat]),
-            influence=influence_)
-        ci = ci[0]
-        pvalue = pvalue[0]
-        zscore = zscore[0]
     else:
-        # TODO: delta_ci only computes lower bounds now,
-        # hence I need to update this section to only
-        # compute ci for lambda
-        # which makes sense, so that then one can replace the
-        # signal by anything
+        #######################################################
+        # Model based estimate
+        #######################################################
+        # The following function computes all the data necessary to compute
+        # the delta-method confidence intervals for
+        # lambda_hat0 (the model-free point estimate of lambda)
+        # mu_hat (the model-based point estimate of mu)
+        # sigma2_hat (the model-based point estimate of sigma2)
+        # lambda_hat (the model-based point estimate of lambda)
         params.signal.fit(params=params, method=method)
         influence_, aux = method.signal.influence()
         point_estimates, gamma_hat, gamma_aux, signal_aux = aux
         point_estimates = point_estimates.reshape(-1)
-        delta_cis, stds = delta_ci(point_estimate=point_estimates,
-                                   influence=influence_)
 
+        # In the following, we will only compute the CI for lambda_hat
+        # However, if one wants to get the CIs for the other quantities,
+        # Modify the function delta_ci so that it computes two-sided CIs
+        # and execute
+        # delta_cis, stds = delta_ci(point_estimate=point_estimates,
+        #                            influence=influence_)
         # threshold confidence intervals
-        lambda_hat0_ci = delta_cis[0, :]
-        mu_hat_delta = _between(
-            delta_cis[1, :],
-            lower=params.lower,
-            upper=params.upper)
-        sigma2_hat_ci = _non_negative(delta_cis[2, :])
-        lambda_hat_ci = delta_cis[3, :]
-        std = stds[3]
-
+        # lambda_hat0_ci = delta_cis[0, :]
+        # mu_hat_delta = delta_cis[1, :]
+        # sigma2_hat_ci = delta_cis[2, :]
+        # lambda_hat_ci = delta_cis[3, :]
         # point estimates
-        lambda_hat0 = point_estimates[0]
-        mu_hat = point_estimates[1]
-        sigma2_hat = point_estimates[2]
+        # lambda_hat0 = point_estimates[0]
+        # mu_hat = point_estimates[1]
+        # sigma2_hat = point_estimates[2]
+        # lambda_hat = point_estimates[3]
+
         lambda_hat = point_estimates[3]
+        influence_ = influence_[3, :].reshape(1, -1)
+
+    ci, pvalue, zscore = delta_ci(
+        point_estimate=np.array([lambda_hat]),
+        influence=influence_)
+
+    ci = ci[0]
+    pvalue = pvalue[0]
+    zscore = zscore[0]
 
     # pvalue
     method.pvalue = pvalue
     method.zscore = zscore
-    
+
     # Test
     method.ci = ci
     # it returns one if the null hypothesis is rejected

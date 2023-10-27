@@ -1,6 +1,5 @@
 # Let func: R^{n_props} -> R^{p}
 # influence returns R^{p} x n_observations
-# TODO: originally jacrev was used to support non-scalar func
 def influence(func, empirical_probabilities, indicators, grad):
     empirical_probabilities = empirical_probabilities.reshape(-1)
     n_probs = empirical_probabilities.shape[0]

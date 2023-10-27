@@ -62,7 +62,7 @@ def build(args):
     # high impact on jacobian computation for bin methods
     params.bins = int(args.bins)
     # high impact on jacobian computation for non-bin methods
-    params.k = int(args.k)
+    params.k = int(args.k) if args.k is not None else None
 
     assert (params.k is None and args.ks is not None) or (
             params.bins >= (params.k + 1) and args.ks is None)

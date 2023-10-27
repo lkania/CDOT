@@ -62,7 +62,7 @@ def parse():
     parser.add_argument(
         "--model_signal",
         help='The signal is modelled by a normal distribution with unknown parameters',
-        default=False,
+        default=True,
         type=lambda x: True if x == 'True' or x == 'true' else False)
 
     ######################################################################
