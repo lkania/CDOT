@@ -53,14 +53,16 @@ def build(args):
     #######################################################
     # randomness
     #######################################################
-    params.seed = 0
+    params.seed = int(args.seed)
     params.key = random.PRNGKey(seed=params.seed)
 
     #######################################################
     # Background estimation parameters
     #######################################################
-    params.bins = args.bins  # high impact on jacobian computation for bin methods
-    params.k = args.k  # high impact on jacobian computation for non-bin methods
+    # high impact on jacobian computation for bin methods
+    params.bins = int(args.bins)
+    # high impact on jacobian computation for non-bin methods
+    params.k = int(args.k)
 
     assert (params.k is None and args.ks is not None) or (
             params.bins >= (params.k + 1) and args.ks is None)

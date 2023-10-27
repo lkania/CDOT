@@ -71,12 +71,18 @@ def _test(params, X):
         lambda_hat, aux = aux_
         gamma_hat, gamma_aux = aux
 
-        lambda_hat_ci, std = delta_ci(
+        ci, pvalue, zscore = delta_ci(
             point_estimate=np.array([lambda_hat]),
             influence=influence_)
-        lambda_hat_ci = lambda_hat_ci[0]
-        std = std[0]
+        ci = ci[0]
+        pvalue = pvalue[0]
+        zscore = zscore[0]
     else:
+        # TODO: delta_ci only computes lower bounds now,
+        # hence I need to update this section to only
+        # compute ci for lambda
+        # which makes sense, so that then one can replace the
+        # signal by anything
         params.signal.fit(params=params, method=method)
         influence_, aux = method.signal.influence()
         point_estimates, gamma_hat, gamma_aux, signal_aux = aux
@@ -100,14 +106,19 @@ def _test(params, X):
         sigma2_hat = point_estimates[2]
         lambda_hat = point_estimates[3]
 
+    # pvalue
+    method.pvalue = pvalue
+    method.zscore = zscore
+    
     # Test
-    method.delta_ci = lambda_hat_ci
-    method.test = not ((method.delta_ci[0] <= 0) and (0 <= method.delta_ci[1]))
+    method.ci = ci
+    # it returns one if the null hypothesis is rejected
+    # at the alpha elvel, that is, when lower_ci > 0
+    method.test = int(ci > params.tol)
 
     # point estimates
     method.lambda_hat0 = lambda_hat
     method.gamma_hat = gamma_hat
-    method.std = std
 
     # background optimization statistics
     gamma_error, poisson_nll, multinomial_nll = gamma_aux

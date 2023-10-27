@@ -9,6 +9,7 @@ import statsmodels.api as sm
 ######################################################################
 import distinctipy
 import matplotlib
+import seaborn as sns
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -84,7 +85,7 @@ colors = distinctipy.get_colors(len(ks),
                                 rng=0)
 alpha = 0.05
 row = -1
-transparency = 0.1
+transparency = 0.5
 
 
 def plot_series_with_uncertainty(ax, x, mean,
@@ -275,7 +276,7 @@ def plot_stat(ax, title, stat):
     plot_series_with_uncertainty(ax, ks_, means, lowers, uppers)
 
 
-fig, axs = plt.subplots(5, 3,
+fig, axs = plt.subplots(6, 3,
                         sharex='none', sharey='none',
                         figsize=(50, 50))
 
@@ -337,9 +338,7 @@ ax.set_title('Score distribution', fontsize=fontsize)
 ax2 = axs[row, 1]
 ax2.set_title('QQ-Plot of scores', fontsize=fontsize)
 for i, k in enumerate(top_performers):
-    scores = [
-        (results[k][l].lambda_hat0 - params.lambda_star) / results[k][l].std
-        for l in range(params.folds)]
+    scores = [results[k][l].zscore for l in range(params.folds)]
     scores = np.array(scores)
     ax.hist(scores,
             alpha=1,
@@ -349,7 +348,6 @@ for i, k in enumerate(top_performers):
             label='K={0}'.format(k) if k is not None else 'Model selection',
             color=colors[i])
 
-    # sm.qqplot(scores, line='45', ax=ax2, a=0, loc=0, scale=1)
     pp = sm.ProbPlot(scores, fit=False, a=0, loc=0, scale=1)
     qq = pp.qqplot(ax=ax2,
                    marker='.',
@@ -378,7 +376,8 @@ plot_stat(ax,
 ###################################################################
 row += 1
 ax = axs[row, 0]
-ax.set_title('Clopper-Pearson CI for I(Test=1)', fontsize=fontsize)
+ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha=0.05',
+             fontsize=fontsize)
 means = []
 lowers = []
 uppers = []
@@ -398,8 +397,46 @@ plot_series_with_uncertainty(ax, ks_, means,
                              lowers, uppers)
 
 ###################################################################
+# Plot distribution and cdf of pvalues
+###################################################################
+ax = axs[row, 1]
+ax.set_title('pvalue distribution', fontsize=fontsize)
+ax.set_xlim([0, 1])
+ax.set_ylim([0, 1])
+ax2 = axs[row, 2]
+ax2.set_title('CDF of pvalues', fontsize=fontsize)
+ax2.axline([0, 0], [1, 1], color='red')
+ax2.set_ylim([0, 1])
+ax2.set_xlim([0, 1])
+for i, k in enumerate(top_performers):
+    pvalues = np.array([results[k][l].pvalue for l in range(params.folds)])
+    ax.hist(
+        pvalues,
+        alpha=1,
+        bins=30,
+        range=(0, 1),
+        density=True,
+        histtype='step',
+        label='K={0}'.format(k) if k is not None else 'Model selection',
+        color=colors[i])
+
+    sns.ecdfplot(
+        data=pvalues,
+        hue_norm=(0, 1),
+        legend=False,
+        ax=ax2,
+        color=colors[i],
+        alpha=1,
+        label='K={0}'.format(k) if k is not None else 'Model selection')
+
+ax.legend(fontsize=fontsize)
+ax2.legend(fontsize=fontsize)
+
+###################################################################
 # Model selection
 ###################################################################
+row += 1
+
 vals = [results[None][l].model_selection.val_error for l in range(params.folds)]
 vals = np.array(vals)  # folds x dim(ks)
 means = np.mean(vals, axis=0)
