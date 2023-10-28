@@ -20,14 +20,14 @@ def delta_ci(point_estimate, influence, alpha=0.05):
     std = np.sqrt(t2_hat)
 
     #######################################################
-    # p-value
+    # p-value corresponding to the one-sided test
     #######################################################
 
     zscore = np.sqrt(n) * point_estimate / std
     pvalue = cdf(-zscore, loc=0, scale=1)
 
     #######################################################
-    # lower confidence interval
+    # one-sided lower confidence interval
     #######################################################
 
     delta = icdf(1 - alpha, loc=0, scale=1) * std / np.sqrt(n)

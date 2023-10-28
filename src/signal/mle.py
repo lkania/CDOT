@@ -1,6 +1,6 @@
 import jax.numpy as np
 from jax import jit
-from jaxopt import FixedPointIteration, AndersonAcceleration
+from jaxopt import FixedPointIteration
 from functools import partial
 from src.signal.delta import influence, objective
 
@@ -55,9 +55,9 @@ def _estimate_nu(lambda_hat0, background_hat, X, lower, upper, X_control,
 
     data0 = np.array([mu_hat0, sigma2_hat0, lambda_hat0])
 
-    # compute fix point solution
-    # TODO: We are ignoring the randomness of lambda_hat0, mu_hat0 and
-    # sigma2_hat0 but since they
+    # Compute fix point solution
+    # NOTE: We are ignoring the randomness of
+    # lambda_hat0, mu_hat0 and sigma2_hat0 but since they
     # are initial parameters and the EM-optimization has a unique minimum,
     # it's unimportant
     __delta = lambda data0, background_hat: _delta(

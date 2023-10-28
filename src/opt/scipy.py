@@ -16,7 +16,7 @@ def _active_variables(A, b, tol=1e-11):
     return np.array(snnls(A=A, b=b.reshape(-1), maxiter=maxiter)[0] > tol)
 
 
-# TODO: note that the gradient from this function isn't useful since
+# NOTE: the gradient from this function isn't useful since
 # it doesn't take into account the effect of the data on the
 # variable selection step
 def nnls(A, b, tol=1e-11):

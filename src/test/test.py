@@ -5,7 +5,7 @@ from jax.config import config
 
 config.update("jax_enable_x64", True)
 
-from jax import numpy as np, jit
+from jax import numpy as np
 import numpy as onp
 
 ######################################################################
@@ -66,23 +66,30 @@ def _test(params, X):
         # mu_hat (the model-based point estimate of mu)
         # sigma2_hat (the model-based point estimate of sigma2)
         # lambda_hat (the model-based point estimate of lambda)
+        #######################################################
         params.signal.fit(params=params, method=method)
         influence_, aux = method.signal.influence()
         point_estimates, gamma_hat, gamma_aux, signal_aux = aux
         point_estimates = point_estimates.reshape(-1)
 
+        #######################################################
         # In the following, we will only compute the CI for lambda_hat
         # However, if one wants to get the CIs for the other quantities,
         # Modify the function delta_ci so that it computes two-sided CIs
         # and execute
+        #######################################################
         # delta_cis, stds = delta_ci(point_estimate=point_estimates,
         #                            influence=influence_)
+        #######################################################
         # threshold confidence intervals
+        #######################################################
         # lambda_hat0_ci = delta_cis[0, :]
         # mu_hat_delta = delta_cis[1, :]
         # sigma2_hat_ci = delta_cis[2, :]
         # lambda_hat_ci = delta_cis[3, :]
+        #######################################################
         # point estimates
+        #######################################################
         # lambda_hat0 = point_estimates[0]
         # mu_hat = point_estimates[1]
         # sigma2_hat = point_estimates[2]
@@ -91,6 +98,9 @@ def _test(params, X):
         lambda_hat = point_estimates[3]
         influence_ = influence_[3, :].reshape(1, -1)
 
+    #######################################################
+    # compute one-sided confidence interval
+    #######################################################
     ci, pvalue, zscore = delta_ci(
         point_estimate=np.array([lambda_hat]),
         influence=influence_)
@@ -99,15 +109,21 @@ def _test(params, X):
     pvalue = pvalue[0]
     zscore = zscore[0]
 
+    #######################################################
+    # Test the null hypothesis
+    #######################################################
+    method.ci = ci
+    # it returns one if the null hypothesis is rejected
+    # at the alpha level, i.e. when ci > 0
+    method.test = int(method.ci > params.tol)
+
+    #######################################################
+    # Store results
+    #######################################################
+
     # pvalue
     method.pvalue = pvalue
     method.zscore = zscore
-
-    # Test
-    method.ci = ci
-    # it returns one if the null hypothesis is rejected
-    # at the alpha elvel, that is, when lower_ci > 0
-    method.test = int(ci > params.tol)
 
     # point estimates
     method.lambda_hat0 = lambda_hat
