@@ -34,12 +34,10 @@ def clear():
 # local libraries
 ######################################################################
 import localize
-from src.load import load
 from src.dotdic import DotDic
 from experiments.parser import parse
 from experiments.builder import load_background, load_signal, filter
 from src.test.test import test
-from src.bin import uniform_bin as _uniform_bin
 from src.stat.binom import clopper_pearson
 
 ######################################################################
@@ -174,3 +172,216 @@ results = DotDic()
 for classifier in params.classifiers:
     args.classifier = classifier
     results[classifier] = test_(args, params, selected, quantiles, lambdas)
+
+# %%
+import matplotlib.pylab as pylab
+
+config = {'legend.fontsize': 'xx-large',
+          'figure.figsize': (20, 30),
+          'axes.labelsize': 'xx-large',
+          'axes.titlesize': 'xx-large',
+          'xtick.labelsize': 'x-large',
+          'ytick.labelsize': 'x-large'}
+pylab.rcParams.update(config)
+
+colors = distinctipy.get_colors(
+    len(lambdas),
+    exclude_colors=[(0, 0, 0), (1, 1, 1),
+                    (1, 0, 0), (0, 0, 1)],
+    rng=0)
+row = -1
+transparency = 0.5
+
+
+def plot_series_with_uncertainty(ax, x, mean,
+                                 lower=None,
+                                 upper=None,
+                                 label='',
+                                 color='black',
+                                 fmt='',
+                                 markersize=5,
+                                 elinewidth=1,
+                                 capsize=3,
+                                 set_xticks=True):
+    if set_xticks:
+        ax.set_xticks(x)
+
+    mean = np.array(mean).reshape(-1)
+    yerr = None
+    if lower is not None and upper is not None:
+        lower = np.array(lower).reshape(-1)
+        upper = np.array(upper).reshape(-1)
+        l = mean - lower
+        u = upper - mean
+        yerr = np.vstack((l, u)).reshape(2, -1)
+
+    ax.errorbar(x=x,
+                y=mean,
+                yerr=yerr,
+                color=color,
+                capsize=capsize,
+                markersize=markersize,
+                elinewidth=elinewidth,
+                fmt=fmt,
+                label=label)
+
+
+fig, axs = plt.subplots(nrows=3, ncols=2,
+                        sharex='none', sharey='none')
+row = -1
+
+
+###################################################################
+# Model selection
+###################################################################
+
+def plot(ax, selected, args, eps=1e-2):
+    selected = selected[args.classifier]
+
+    ax.set_ylim([0 - eps, 1 + eps])
+    ax.set_xlim([0 - eps, 1 + eps])
+    ax.axline([0, 0], [1, 1], color='red', label='Uniform CDF')
+
+    for i, quantile in enumerate(quantiles):
+        pvalues = selected[quantile].pvalues
+        sns.ecdfplot(
+            data=pvalues,
+            hue_norm=(0, 1),
+            legend=False,
+            ax=ax,
+            color=colors[i],
+            alpha=1,
+            label='BR% ={0}'.format(quantile * 100))
+
+    ax.set_ylabel('Cumulative probability')
+    ax.set_xlabel('pvalue')
+    ax.legend()
+
+
+row += 1
+ax = axs[row, 0]
+ax.set_title('Without Decorrelation', fontsize=30)
+args.classifier = 'class'
+plot(ax=ax, selected=selected, args=args)
+ax = axs[row, 1]
+ax.set_title('With Decorrelation', fontsize=30)
+args.classifier = 'tclass'
+plot(ax=ax, selected=selected, args=args)
+
+
+###################################################################
+# Plot power vs threshold
+###################################################################
+
+def plot(ax, results, args, eps=1e-2, alpha=0.05):
+    ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha=0.05')
+    ax.set_xlabel('Background reject %')
+    ax.set_ylabel('Probability of rejecting $\lambda=0$')
+    ax.set_ylim([0 - eps, 1 + eps])
+
+    ax.axhline(y=alpha, color='red',
+               linestyle='-', label='{0}'.format(alpha))
+    results = results[args.classifier]
+    for i, lambda_ in enumerate(lambdas):
+        means = []
+        lowers = []
+        uppers = []
+        for quantile in quantiles:
+            pvalues = results[lambda_][quantile]
+            tests = np.array(pvalues <= 0.05, dtype=np.int32)
+            cp = clopper_pearson(n_successes=[np.sum(tests)],
+                                 n_trials=args.folds,
+                                 alpha=alpha)[0]
+            means.append(np.mean(tests))
+            lowers.append(cp[0])
+            uppers.append(cp[1])
+        plot_series_with_uncertainty(ax, quantiles, means, lowers, uppers,
+                                     color=colors[i],
+                                     label='$\lambda$={0}'.format(lambda_))
+
+    ax.legend()
+
+
+row += 1
+ax = axs[row, 0]
+args.classifier = 'class'
+plot(ax=ax, results=results, args=args)
+ax = axs[row, 1]
+args.classifier = 'tclass'
+plot(ax=ax, results=results, args=args)
+
+
+###################################################################
+# Plot distribution and cdf of pvalues
+###################################################################
+
+
+def plot(ax, results, args, quantile, eps=1e-2):
+    results = results[args.classifier]
+    ax.set_title(
+        'CDF of pvalues ({0}% Background reject)'.format(quantile * 100))
+    ax.axline([0, 0], [1, 1], color='red', label='Uniform CDF')
+    ax.set_ylim([0 - eps, 1 + eps])
+    ax.set_xlim([0 - eps, 1 + eps])
+
+    for i, lambda_ in enumerate(lambdas):
+        pvalues = results[lambda_][quantile]
+        sns.ecdfplot(
+            data=pvalues,
+            hue_norm=(0, 1),
+            legend=False,
+            ax=ax,
+            color=colors[i],
+            alpha=1,
+            label='$\lambda=${0}'.format(lambda_))
+
+    ax.set_ylabel('Cumulative probability')
+    ax.set_xlabel('pvalue')
+    ax.legend()
+
+
+row += 1
+ax = axs[row, 0]
+args.classifier = 'class'
+plot(ax=ax, results=results, args=args, quantile=0.5)
+ax = axs[row, 1]
+args.classifier = 'tclass'
+plot(ax=ax, results=results, args=args, quantile=0.5)
+
+###################################################################
+# Annotate rows
+# See https://stackoverflow.com/questions/25812255/row-and-column-headers-in-matplotlibs-subplots
+###################################################################
+# fig.tight_layout()
+rows = ['Validation', 'Test', 'Test']
+pad = 15  # in pointspad = 5 # in points
+for ax, row in zip(axs[:, 0], rows):
+    ax.annotate('{}\nData'.format(row), xy=(0, 0.5),
+                xytext=(-ax.yaxis.labelpad - pad, 0),
+                xycoords=ax.yaxis.label,
+                textcoords='offset points',
+                size='xx-large', ha='right', va='center')
+
+###################################################################
+# Change background color per row
+# See https://stackoverflow.com/questions/59751952/python-plot-different-figure-background-color-for-each-row-of-subplots
+###################################################################
+colors = ['blue', 'white', 'white']
+for ax, color in zip(axs[:, 0], colors):
+    bbox = ax.get_position()
+    rect = matplotlib.patches.Rectangle(
+        (0, bbox.y0), 1, bbox.height,
+        alpha=0.05,
+        color=color,
+        zorder=-1)
+    fig.add_artist(rect)
+
+###################################################################
+# save figure
+###################################################################
+path = '{0}/summaries/'.format(params.cwd)
+Path(params.path).mkdir(parents=True, exist_ok=True)
+filename = path + '{0}.pdf'.format(params.data_id)
+fig.savefig(fname=filename, bbox_inches='tight')
+plt.close(fig)
+print('\nSaved to {0}'.format(filename))
