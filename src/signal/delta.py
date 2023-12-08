@@ -93,4 +93,9 @@ def influence(method, params):
                             influence_nu_hat))  # shape = (n_parameters+1,n_obs)
     aux = (np.insert(nu_hat.reshape(-1), obj=0, values=lambda_hat0), gamma_hat,
            gamma_aux, signal_aux)
-    return influence_, aux
+
+    # TODO: doesn't allow for de-bias
+    mean_influence = np.mean(influence_, axis=1).reshape(-1, 1)
+    centred_influence = influence_ - mean_influence  # n_parameters x n_obs
+
+    return centred_influence, aux

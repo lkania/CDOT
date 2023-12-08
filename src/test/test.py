@@ -1,11 +1,4 @@
-#######################################################
-# allow 64 bits
-#######################################################
-from jax.config import config
-
-config.update("jax_enable_x64", True)
-
-from jax import numpy as np
+from jax import numpy as np, random
 import numpy as onp
 
 ######################################################################
@@ -26,6 +19,17 @@ def _test(params, X):
     method.signal = DotDic()
     method.model_selection = DotDic()
     method.k = params.k
+
+    method.X2 = None
+    if params.debias:
+        idx = random.permutation(
+            key=params.key,
+            x=np.arange(X.shape[0]),
+            independent=True)
+        idxs = np.array_split(idx, indices_or_sections=2)
+        X = X[idxs[0]]
+        method.X2 = X[idxs[1]]
+
     method.X = X
 
     if method.k is None:
@@ -52,9 +56,11 @@ def _test(params, X):
             lambda_hat, aux = method.background.estimate_lambda(h_hat)
             return lambda_hat, (lambda_hat, aux)
 
-        influence_, aux_ = method.background.influence(estimate)
+        influence_, aux_ = method.background.influence(
+            estimate, X=method.X2)
         lambda_hat, aux = aux_
         gamma_hat, gamma_aux = aux
+        lambda_hat = lambda_hat + np.mean(influence_)
 
     else:
         #######################################################

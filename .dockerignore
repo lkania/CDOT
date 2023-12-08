@@ -1,7 +1,9 @@
 ### USER ###
 
 ### Ignored folders ###
-utilities
+**/simulation
+**/runners
+**/utilities
 **/presentation
 **/data
 **/results

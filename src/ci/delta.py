@@ -7,14 +7,11 @@ def delta_ci(point_estimate, influence, alpha=0.05):
     # influence must have shape = (n_parameters,n_obs)
     point_estimate = point_estimate.reshape(-1)
     n_parameters = point_estimate.shape[0]
-    assert (n_parameters >= 1)
+    assert n_parameters >= 1
+    assert influence.shape[0] == n_parameters
 
-    mean_influence = np.mean(influence, axis=1).reshape(n_parameters, 1)
-
-    centred_influence = influence - mean_influence  # n_parameters x n_obs
     # compute diagonal elements
-    t2_hat = np.mean(np.square(centred_influence),
-                     axis=1).reshape(-1)  # n_parameters
+    t2_hat = np.mean(np.square(influence), axis=1).reshape(-1)  # n_parameters
 
     n = influence.shape[1]
     std = np.sqrt(t2_hat)

@@ -57,12 +57,32 @@ def parse():
         default=20,
         type=float)
 
-    parser.add_argument("--bins", default=100, type=int)
+    parser.add_argument("--bins",
+                        default=100,
+                        type=int)
 
     parser.add_argument(
         "--model_signal",
         help='The signal is modelled by a normal distribution with unknown parameters',
         default=False,
+        type=lambda x: True if x == 'True' or x == 'true' else False)
+
+    parser.add_argument(
+        "--debias",
+        help='Split the sample and de-bias',
+        default=False,
+        type=lambda x: True if x == 'True' or x == 'true' else False)
+
+    parser.add_argument(
+        "--cutoff",
+        help='Threshold for classifier',
+        default=0.5,
+        type=float)
+
+    parser.add_argument(
+        "--transformed_cutoff",
+        help='Use transformed cutoff',
+        default=True,
         type=lambda x: True if x == 'True' or x == 'true' else False)
 
     ######################################################################
@@ -71,7 +91,7 @@ def parse():
     parser.add_argument("--cwd", type=str, default='..')
 
     parser.add_argument("--folds",
-                        default=2,
+                        default=3,
                         type=int)
 
     parser.add_argument("--sampling_type",
@@ -79,7 +99,7 @@ def parse():
                         type=str)
 
     parser.add_argument("--sampling_size",
-                        default=3000,
+                        default=15000,
                         type=int)
 
     parser.add_argument("--data_id",
@@ -87,21 +107,25 @@ def parse():
                         type=str)
 
     parser.add_argument("--std_signal_region",
-                        default=2.5,
+                        default=1.5,
                         type=float)
     parser.add_argument("--mu_star",
-                        default=395.8171,
+                        default=395,
                         type=float)
     parser.add_argument("--sigma_star",
-                        default=20.33321,
+                        default=20,
                         type=float)
     parser.add_argument("--lambda_star",
-                        default=0.051,
+                        default=0.0,
                         type=float)
     parser.add_argument("--signal",
                         default='file',
                         type=str)
 
     args, _ = parser.parse_known_args()
+
+    args.classifiers = ["tclass", "class"]
+    args.lower = args.mu_star - args.std_signal_region * args.sigma_star
+    args.upper = args.mu_star + args.std_signal_region * args.sigma_star
 
     return args

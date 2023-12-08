@@ -4,4 +4,4 @@ import jax.numpy as jnp
 
 # load data function
 def load(path):
-    return jnp.array(np.loadtxt(path))
+    return jnp.array(np.loadtxt(path)).reshape(-1)

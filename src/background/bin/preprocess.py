@@ -5,6 +5,24 @@ from functools import partial
 from src.background.density import background
 
 
+def _influence(func,
+               empirical_probabilities,
+               indicators,
+               params,
+               from_,
+               to_,
+               X=None):
+    idxs = indicators
+    if X is not None:
+        _, idxs = proportions(X=params.trans(X=X),
+                              from_=from_,
+                              to_=to_)
+    return influence(func=func,
+                     empirical_probabilities=empirical_probabilities,
+                     indicators=idxs,
+                     grad=params.grad_op)
+
+
 def preprocess(params, method):
     assert method.k <= (params.bins + 1)
 
@@ -79,8 +97,10 @@ def preprocess(params, method):
     # indicators is a n_props x n_obs matrix that indicates
     # to which bin every observation belongs
     method.background.influence = partial(
-        influence,
-        grad=params.grad_op,
+        _influence,
+        params=params,
+        from_=from_,
+        to_=to_,
         empirical_probabilities=empirical_probabilities,
         indicators=indicators)
 

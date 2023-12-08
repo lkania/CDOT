@@ -1,10 +1,3 @@
-#######################################################
-# allow 64 bits
-#######################################################
-from jax.config import config
-
-config.update("jax_enable_x64", True)
-
 from jax import numpy as np, random, jit, jacrev, grad
 from jaxopt import AndersonAcceleration, FixedPointIteration
 
@@ -67,6 +60,7 @@ def build(args):
     assert (params.k is None and args.ks is not None) or (
             params.bins >= (params.k + 1) and args.ks is None)
 
+    params.ks = None
     if args.ks is not None:
         assert len(args.ks) >= 2
         params.ks = args.ks
@@ -177,6 +171,11 @@ def build(args):
                         dtype=params.dtype)
                 case _:
                     raise ValueError('Optimizer not supported')
+
+    #######################################################
+    # should we de-bias?
+    #######################################################
+    params.debias = args.debias
 
     #######################################################
     # signal model to be used for gnostic test

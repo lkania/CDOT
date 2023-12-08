@@ -31,7 +31,6 @@ from src.dotdic import DotDic
 from experiments.parser import parse
 from experiments.builder import build
 from src.test.test import test
-from src.random import add_signal
 from src.bin import proportions, adaptive_bin, full_adaptive_bin
 from src.bin import uniform_bin as _uniform_bin
 from src.stat.binom import clopper_pearson
@@ -48,25 +47,14 @@ ks_ = [params.ks[0] - 1 if v is None else v for v in ks]
 
 
 # %%
-def run(data, k):
+def run(X, k):
     args.k = k
     if k is not None:
         args.ks = None
-    return test(args=args, X=data.X)
+    return test(args=args, X=X)
 
 
 # %%
-
-
-# prepare data
-datas = []
-print("\nPreparing datasets\n")
-for i in tqdm(range(params.folds), ncols=40):
-    data = DotDic()
-    data.background = DotDic()
-    X = params.background.X[params.idxs[i]]
-    add_signal(X=X, params=params, method=data)
-    datas.append(data)
 
 # k-dependent code
 results = DotDic()
@@ -74,14 +62,15 @@ for k in ks:
     print("\nTesting K={0}\n".format(k))
     results[k] = []
     for i in tqdm(range(params.folds), ncols=40):
-        results[k].append(run(data=datas[i], k=k))
+        results[k].append(run(X=params.Xs[i], k=k))
 
 # %%
 fontsize = 16
-colors = distinctipy.get_colors(len(ks),
-                                exclude_colors=[(0, 0, 0), (1, 1, 1),
-                                                (1, 0, 0), (0, 0, 1)],
-                                rng=0)
+colors = distinctipy.get_colors(
+    len(ks),
+    exclude_colors=[(0, 0, 0), (1, 1, 1),
+                    (1, 0, 0), (0, 0, 1)],
+    rng=0)
 alpha = 0.05
 row = -1
 transparency = 0.5
@@ -407,12 +396,12 @@ ax2.set_title('CDF of pvalues', fontsize=fontsize)
 ax2.axline([0, 0], [1, 1], color='red')
 ax2.set_ylim([0, 1])
 ax2.set_xlim([0, 1])
-for i, k in enumerate(top_performers):
+for i, k in enumerate(ks):
     pvalues = np.array([results[k][l].pvalue for l in range(params.folds)])
     ax.hist(
         pvalues,
         alpha=1,
-        bins=30,
+        bins=100,
         range=(0, 1),
         density=True,
         histtype='step',
