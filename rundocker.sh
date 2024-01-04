@@ -23,28 +23,24 @@ readonly dest_data=/program/data/:ro
 # Data saved outside the designated directory will
 # be erased when the container is stopped
 #####################################################
-readonly src_results=$PWD/experiments/results/
-readonly dest_results=/program/experiments/results
+readonly src_results=$PWD/experiments/summaries/
+readonly dest_results=/program/experiments/summaries
 
 #####################################################
 # Location of the executable inside the container
 #####################################################
-readonly executable=/program/experiments/runner.py
+readonly executable=/program/experiments/power.py
 
 #####################################################
-# Stop running container
+# Stop running container and clean files
 #####################################################
 docker stop $name
+docker system prune --force
 
 #####################################################
 # 1. Build the container (in case source files were updated)
 #####################################################
 docker build --tag $name .
-
-#####################################################
-# Clean files
-#####################################################
-docker system prune --force
 
 #####################################################
 # Automatically determine if GPUs are available
@@ -56,12 +52,11 @@ gpus=$([ $(ls -la /dev | grep nvidia | wc -l) "==" "0" ] && echo "" || echo "--g
 # Mount a directory data directory as read-only
 # Mount results directory.
 #####################################################
-docker run $gpus -d --name $name -v $src_results:$dest_results -v $src_data:$dest_data -it $name /bin/bash
+docker run $gpus -d --name $name -v $src_results:$dest_results -v $src_data:$dest_data -u $(id -u):$(id -g) -it $name /bin/bash
 
 #####################################################
 # Execute the algorithm in the container 
 # and pass all arguments passed to this script
-
 #####################################################
 docker exec -it $name python $executable "$@"
 

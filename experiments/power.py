@@ -2,7 +2,6 @@
 # Utilities
 ######################################################################
 from tqdm import tqdm
-import statsmodels.api as sm
 ######################################################################
 # Configure matplolib
 ######################################################################
@@ -44,11 +43,15 @@ from src.stat.binom import clopper_pearson
 
 # %%
 args = parse()
-args.folds = 100
+args.folds = 200
+args.bins = 100
 target_data_id = args.data_id
 
 ##################################################
 # Experiment parameters
+# with this selection of parameters, there is already a difference between
+# correlation and non-correlation but there shouldn't be any difference
+# maybe the data is already substiatially different for some reason?
 ##################################################
 lambdas = [0.0, 0.001, 0.005, 0.01, 0.05]
 quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
@@ -69,6 +72,10 @@ def select(args, params, quantiles):
     cutoffs = np.quantile(params.background.c[args.classifier],
                           q=np.array(quantiles),
                           axis=0)
+
+    print("Classifier {0}".format(args.classifier))
+    print(quantiles)
+    print(cutoffs)
 
     selected = DotDic()
     for c, cutoff in enumerate(cutoffs):
@@ -120,15 +127,12 @@ for classifier in params.classifiers:
     args.classifier = classifier
     selected[classifier] = select(args, params, quantiles)
 
+
 # %%
 
 ##################################################
 # Power analysis
 ##################################################
-args.data_id = target_data_id
-
-params = load_background(args)
-params = load_signal(args, params)
 
 
 def test_(args, params, selected, quantiles, lambdas):
@@ -163,11 +167,13 @@ def test_(args, params, selected, quantiles, lambdas):
 
             results[lambda_][quantile] = np.array(results[lambda_][quantile])
 
-        clear()
+            clear()
 
     return results
 
 
+args.data_id = target_data_id
+params = load_background(args)
 results = DotDic()
 for classifier in params.classifiers:
     args.classifier = classifier
@@ -185,12 +191,11 @@ config = {'legend.fontsize': 'xx-large',
 pylab.rcParams.update(config)
 
 colors = distinctipy.get_colors(
-    len(lambdas),
+    max(len(lambdas), len(quantiles)),
     exclude_colors=[(0, 0, 0), (1, 1, 1),
                     (1, 0, 0), (0, 0, 1)],
     rng=0)
 row = -1
-transparency = 0.5
 
 
 def plot_series_with_uncertainty(ax, x, mean,
@@ -251,7 +256,8 @@ def plot(ax, selected, args, eps=1e-2):
             ax=ax,
             color=colors[i],
             alpha=1,
-            label='BR% ={0}'.format(quantile * 100))
+            label='BR%={0} K={1}'.format(quantile * 100,
+                                         selected[quantile].k))
 
     ax.set_ylabel('Cumulative probability')
     ax.set_xlabel('pvalue')
@@ -275,7 +281,7 @@ plot(ax=ax, selected=selected, args=args)
 
 def plot(ax, results, args, eps=1e-2, alpha=0.05):
     ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha=0.05')
-    ax.set_xlabel('Background reject %')
+    ax.set_xlabel('Background reject percentage (BR%)')
     ax.set_ylabel('Probability of rejecting $\lambda=0$')
     ax.set_ylim([0 - eps, 1 + eps])
 
@@ -295,7 +301,8 @@ def plot(ax, results, args, eps=1e-2, alpha=0.05):
             means.append(np.mean(tests))
             lowers.append(cp[0])
             uppers.append(cp[1])
-        plot_series_with_uncertainty(ax, quantiles, means, lowers, uppers,
+        plot_series_with_uncertainty(ax, np.array(quantiles) * 100,
+                                     means, lowers, uppers,
                                      color=colors[i],
                                      label='$\lambda$={0}'.format(lambda_))
 
@@ -319,7 +326,7 @@ plot(ax=ax, results=results, args=args)
 def plot(ax, results, args, quantile, eps=1e-2):
     results = results[args.classifier]
     ax.set_title(
-        'CDF of pvalues ({0}% Background reject)'.format(quantile * 100))
+        'CDF of pvalues (BR%={0})'.format(quantile * 100))
     ax.axline([0, 0], [1, 1], color='red', label='Uniform CDF')
     ax.set_ylim([0 - eps, 1 + eps])
     ax.set_xlim([0 - eps, 1 + eps])
@@ -353,7 +360,7 @@ plot(ax=ax, results=results, args=args, quantile=0.5)
 # See https://stackoverflow.com/questions/25812255/row-and-column-headers-in-matplotlibs-subplots
 ###################################################################
 # fig.tight_layout()
-rows = ['Validation', 'Test', 'Test']
+rows = ['Model\nselection\nwith 3b\nValidation', 'Test', 'Test']
 pad = 15  # in pointspad = 5 # in points
 for ax, row in zip(axs[:, 0], rows):
     ax.annotate('{}\nData'.format(row), xy=(0, 0.5),

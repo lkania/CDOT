@@ -4,15 +4,13 @@ from jax import numpy as np, random
 #######################################################
 from src.dotdic import DotDic
 from src.load import load
-from src.bin import proportions
-from src.test.builder import build as _build
 
 
 #######################################################
 
 def load_background(args):
     params = DotDic()
-    params.seed = args.seed
+    params.seed = int(args.seed)
     params.key = random.PRNGKey(seed=params.seed)
 
     #######################################################
@@ -34,7 +32,8 @@ def load_background(args):
     params.background.c = DotDic()
     for classifier in params.classifiers:
         params.background.c[classifier] = load(
-            path='{0}/background/{1}.txt'.format(params.path, classifier))
+            path='{0}/background/{1}.txt'.format(
+                params.path, classifier))
 
     print('Data source: {0} Size: {1}'.format(
         params.data_id, params.background.X.shape[0]))
@@ -71,19 +70,21 @@ def load_background(args):
         case _:
             raise ValueError('Sampling type not supported')
 
-    params.Xs = []
-    params.cs = DotDic()
-    for classifer in params.classifiers:
-        params.cs[classifer] = []
+    params.background.Xs = []
+    params.background.cs = DotDic()
+    for classifier in params.classifiers:
+        params.background.cs[classifier] = []
     for i in range(params.folds):
-        params.Xs.append(params.background.X[params.background.idxs[i]])
-        for classifer in params.classifiers:
-            params.cs[classifer].append(
+        params.background.Xs.append(
+            params.background.X[params.background.idxs[i]])
+        for classifier in params.classifiers:
+            params.background.cs[classifier].append(
                 params.background.c[classifier][params.background.idxs[i]])
 
     return params
 
 
+# if you reload signal, you need to reload params.Xs
 def load_signal(args, params):
     #######################################################
     # Fake signal parameters
@@ -118,8 +119,12 @@ def load_signal(args, params):
     #     params.mixture.X = params.background.X
     #     params.mixture.c = params.background.c
 
-    if not params.no_signal:
+    if params.no_signal:
 
+        params.Xs = params.background.Xs
+        params.cs = params.background.cs
+
+    else:
         params.signal.X = load(
             path='{0}/signal/mass.txt'.format(params.path))
 
@@ -141,24 +146,32 @@ def load_signal(args, params):
         idx = random.permutation(
             key=params.key,
             x=np.arange(params.signal.X.shape[0]),
-            independent=True)
+            independent=False)
 
         # params.mixture.X, params.mixture.c = add_signal(
         #     X=params.background.X,
         #     c=params.background.c)
 
+        # Init dictionaries and arrays
+        params.Xs = []
+        params.cs = DotDic()
+        for classifier in params.classifiers:
+            params.cs[classifier] = []
+
+        # fill them
         for i in range(params.folds):
-            n = params.Xs[i].shape[0]
+            n = params.background.Xs[i].shape[0]
             n_signal = np.int32(n * params.lambda_star)
             idxs = random.choice(params.key, idx,
                                  shape=(n_signal,))
             signal_X = params.signal.X[idxs].reshape(-1)
-            params.Xs[i] = np.concatenate((params.Xs[i], signal_X))
+            params.Xs.append(
+                np.concatenate((params.background.Xs[i], signal_X)))
 
-            for classifer in params.classifiers:
-                signal_c = params.signal.c[classifer][idxs].reshape(-1)
-                params.cs[classifer][i] = np.concatenate(
-                    (params.cs[classifer][i], signal_c))
+            for classifier in params.classifiers:
+                signal_c = params.signal.c[classifier][idxs].reshape(-1)
+                params.cs[classifier].append(np.concatenate(
+                    (params.background.cs[classifier][i], signal_c)))
 
     return params
 
