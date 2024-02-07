@@ -6,113 +6,117 @@ from src.background.density import background
 
 
 def _influence(func,
-               empirical_probabilities,
-               indicators,
-               params,
-               from_,
-               to_,
-               X=None):
-    idxs = indicators
-    if X is not None:
-        _, idxs = proportions(X=params.trans(X=X),
-                              from_=from_,
-                              to_=to_)
-    return influence(func=func,
-                     empirical_probabilities=empirical_probabilities,
-                     indicators=idxs,
-                     grad=params.grad_op)
+			   empirical_probabilities,
+			   indicators,
+			   params,
+			   from_,
+			   to_,
+			   X=None):
+	idxs = indicators
+	if X is not None:
+		_, idxs = proportions(X=params.trans(X=X),
+							  from_=from_,
+							  to_=to_)
+	return influence(func=func,
+					 empirical_probabilities=empirical_probabilities,
+					 indicators=idxs,
+					 grad=params.grad_op)
 
 
 def preprocess(params, method):
-    assert method.k <= (params.bins + 1)
+	# certify that there will be enough data-points to fit the background density
+	assert method.k <= (params.bins + 1)
 
-    method.tX = params.trans(X=method.X)
+	method.tX = params.trans(X=method.X)
 
-    # TODO: We ignore the randomness of the equal-counts binning,
-    #  it can be fixed by using a fixed binning
-    from_, to_ = adaptive_bin(X=method.tX,
-                              lower=params.tlower,
-                              upper=params.tupper,
-                              n_bins=params.bins)
+	# certify that all observations fall between 0 and 1
+	assert (np.max(method.tX) <= 1) and (np.min(method.tX) >= 0)
 
-    ####################################################################
-    # Modifications for model selection
-    ####################################################################
-    # Reserve some bins for model selection
-    # that is, compute gamma on fewer bins
-    # and then predict bins around the signal region
-    if method.model_selection.activated:
-        n_model_selection = params.bins_selection
-        s_lower, s_upper = _adaptive_bin(
-            X=method.tX,
-            lower=params.tlower,
-            upper=params.tupper,
-            n_bins=params.bins)
+	# TODO: We ignore the randomness of the equal-counts binning,
+	#  it can be fixed by using a fixed binning
+	from_, to_ = adaptive_bin(X=method.tX,
+							  lower=params.tlower,
+							  upper=params.tupper,
+							  n_bins=params.bins)
 
-        # choose bins around the signal region
-        # to check the extrapolation of the model
-        _sel_lower = s_lower[-n_model_selection:]
-        _sel_upper = s_upper[:n_model_selection]
-        _s_lower = s_lower[:-n_model_selection]
-        _s_upper = s_upper[n_model_selection:]
+	####################################################################
+	# Modifications for model selection
+	####################################################################
+	# Reserve some bins for model selection
+	# that is, compute gamma on fewer bins
+	# and then predict bins around the signal region
+	if method.model_selection.activated:
+		n_model_selection = params.bins_selection
+		s_lower, s_upper = _adaptive_bin(
+			X=method.tX,
+			lower=params.tlower,
+			upper=params.tupper,
+			n_bins=params.bins)
 
-        from_ = np.concatenate(
-            (np.array([0]), _s_lower, np.array([_sel_upper[-1]]), _s_upper))
-        to_ = np.concatenate(
-            (_s_lower, np.array([_sel_lower[0]]), _s_upper, np.array([1])))
+		# choose bins around the signal region
+		# to check the extrapolation of the model
+		_sel_lower = s_lower[-n_model_selection:]
+		_sel_upper = s_upper[:n_model_selection]
+		_s_lower = s_lower[:-n_model_selection]
+		_s_upper = s_upper[n_model_selection:]
 
-        sel_from_ = np.concatenate(
-            (_sel_lower, np.array([params.tupper]), _sel_upper[:-1]))
-        sel_to_ = np.concatenate(
-            (_sel_lower[1:], np.array([params.tlower]), _sel_upper))
+		from_ = np.concatenate(
+			(np.array([0]), _s_lower, np.array([_sel_upper[-1]]), _s_upper))
+		to_ = np.concatenate(
+			(_s_lower, np.array([_sel_lower[0]]), _s_upper, np.array([1])))
 
-        method.model_selection.from_ = sel_from_[0]
-        method.model_selection.to_ = sel_to_[-1]
+		sel_from_ = np.concatenate(
+			(_sel_lower, np.array([params.tupper]), _sel_upper[:-1]))
+		sel_to_ = np.concatenate(
+			(_sel_lower[1:], np.array([params.tlower]), _sel_upper))
 
-        props_val = proportions(X=method.tX,
-                                from_=sel_from_,
-                                to_=sel_to_)[0].reshape(-1)
-        basis_val = params.basis.integrate(method.k, sel_from_, sel_to_)
+		method.model_selection.from_ = sel_from_[0]
+		method.model_selection.to_ = sel_to_[-1]
 
-    ####################################################################
-    # bookeeping
-    ####################################################################
-    empirical_probabilities, indicators = proportions(X=method.tX,
-                                                      from_=from_,
-                                                      to_=to_)
-    method.background.empirical_probabilities = empirical_probabilities
+		props_val = proportions(X=method.tX,
+								from_=sel_from_,
+								to_=sel_to_)[0].reshape(-1)
+		basis_val = params.basis.integrate(method.k, sel_from_, sel_to_)
 
-    int_omega = params.basis.int_omega(k=method.k)
-    M = params.basis.integrate(method.k, from_, to_)  # n_bins x n_parameters
-    int_control = np.sum(M, axis=0).reshape(-1, 1)
+	####################################################################
+	# bookeeping
+	####################################################################
+	empirical_probabilities, indicators = proportions(X=method.tX,
+													  from_=from_,
+													  to_=to_)
+	method.background.empirical_probabilities = empirical_probabilities
 
-    method.background.bins = params.bins
-    method.background.from_ = from_
-    method.background.to_ = to_
+	int_omega = params.basis.int_omega(k=method.k)
+	M = params.basis.integrate(method.k, from_, to_)  # n_bins x n_parameters
+	int_control = np.sum(M, axis=0).reshape(-1, 1)
 
-    method.background.int_omega = int_omega
-    method.background.M = M
-    method.background.int_control = int_control
+	method.background.bins = params.bins
+	method.background.from_ = from_
+	method.background.to_ = to_
 
-    # indicators is a n_props x n_obs matrix that indicates
-    # to which bin every observation belongs
-    method.background.influence = partial(
-        _influence,
-        params=params,
-        from_=from_,
-        to_=to_,
-        empirical_probabilities=empirical_probabilities,
-        indicators=indicators)
+	method.background.int_omega = int_omega
+	method.background.M = M
+	method.background.int_control = int_control
 
-    method.background.estimate_background_from_gamma = partial(
-        background,
-        tilt_density=params.tilt_density,
-        k=method.k,
-        basis=params.basis)
+	# indicators is a n_props x n_obs matrix that indicates
+	# to which bin every observation belongs
+	method.background.influence = partial(
+		_influence,
+		params=params,
+		from_=from_,
+		to_=to_,
+		empirical_probabilities=empirical_probabilities,
+		indicators=indicators)
 
-    # for model selection
-    if method.model_selection.activated:
-        method.background.validation = lambda compute_gamma: np.sqrt(np.sum(
-            np.square(
-                (basis_val @ compute_gamma(empirical_probabilities)[0].reshape(
-                    -1, 1)).reshape(-1) - props_val)))
+	method.background.estimate_background_from_gamma = partial(
+		background,
+		tilt_density=params.tilt_density,
+		k=method.k,
+		basis=params.basis)
+
+	# for model selection
+	if method.model_selection.activated:
+		method.background.validation = lambda compute_gamma: np.sqrt(np.sum(
+			np.square(
+				(basis_val @ compute_gamma(empirical_probabilities)[0].reshape(
+					-1, 1)).reshape(-1) - props_val)))
