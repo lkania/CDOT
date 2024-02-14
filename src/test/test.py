@@ -137,4 +137,4 @@ def _test(params, X):
 	results.poisson_nll = poisson_nll
 	results.multinomial_nll = multinomial_nll
 
-	return method
+	return results
