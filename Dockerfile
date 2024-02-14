@@ -17,9 +17,13 @@ FROM nvcr.io/nvdlfwea/jax/jax:23.05-py3
 # Do indicate which version you need so that the script is determistic. 
 # If you do not specify the version, pip will try to install the lastest available
 # version that is compatible with your other packages
-RUN pip install jaxopt==0.7
-RUN pip install pandas==2.0.3
+RUN pip install jaxopt==0.8.1
+RUN pip install pandas==2.1.1
 RUN pip install tqdm==4.65.0
+RUN pip install seaborn==0.13.0
+RUN pip install scipy==1.11.4
+RUN pip install distinctipy==1.2.3
+RUN pip install statsmodels==0.14.0
 
 # We copy the folder containing the source code of our algorithm 
 # into the folder /program/src in the container

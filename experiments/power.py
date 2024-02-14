@@ -1,27 +1,41 @@
-######################################################################
-# Utilities
-######################################################################
-from tqdm import tqdm
+import time
+
+start_time = time.time()
+
 ######################################################################
 # Configure matplolib
 ######################################################################
-import distinctipy
 import matplotlib
 import seaborn as sns
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.pylab as pylab
 
-# quick display when debugging
-# from src.transform import transform
+config = {'figure.dpi': 600,
+		  'legend.fontsize': 'xx-large',
+		  'axes.labelsize': 'xx-large',
+		  'axes.titlesize': 'xx-large',
+		  'xtick.labelsize': 'x-large',
+		  'ytick.labelsize': 'x-large'}
+pylab.rcParams.update(config)
 
-# trans, tilt_density, _ = transform(a=0, b=None, rate=0.1)
-# sns.histplot([params.background.X, trans(params.background.X)])
-# sns.histplot(trans(params.background.X))
-# plt.show()
+colors = ['red',
+		  'limegreen',
+		  'blue',
+		  'magenta',
+		  'cyan',
+		  'darkorange',
+		  'grey',
+		  'tab:pink',
+		  'tab:olive']
 
-plt.rcParams['figure.dpi'] = 600
+######################################################################
+# Utilities
+######################################################################
+from tqdm import tqdm
 from pathlib import Path
+import pickle
 #######################################################
 # allow 64 bits
 #######################################################
@@ -43,43 +57,73 @@ def clear():
 import localize
 from src.dotdic import DotDic
 from experiments.parser import parse
-from experiments.builder import load_background, load_signal, filter
+from experiments.builder import load_background, load_signal
 from src.test.test import test
 from src.stat.binom import clopper_pearson
 from src.load import load
+from src.bin import proportions
+
 
 ######################################################################
 
+
+###################################################################
+# save figure
+###################################################################
+def get_path(params):
+	path = '{0}/results/{1}/'.format(params.cwd, params.data_id)
+	Path(params.path).mkdir(parents=True, exist_ok=True)
+	return path
+
+
+def save_fig(params, fig, name):
+	filename = get_path(params) + '{0}.pdf'.format(name)
+	fig.savefig(fname=filename, bbox_inches='tight')
+	plt.close(fig)
+	print('\nSaved to {0}'.format(filename))
+
+
+def save_obj(params, obj, name):
+	filename = get_path(params) + '{0}.pickle'.format(name)
+	with open(filename, 'wb') as handle:
+		pickle.dump(obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def load_obj(params, name):
+	filename = get_path(params) + '{0}.pickle'.format(name)
+	with open(filename, 'rb') as handle:
+		obj = pickle.load(handle)
+	return obj
+
+
 # %%
+##################################################
+# Experiment parameters
+##################################################
 args = parse()
-args.folds = 100
+args.folds = 100  # 500 gives nice results
 args.bins = 100
 args.method = 'bin_mle'
 args.optimizer = 'dagostini'
 args.maxiter = 1000
-args.sampling_type = 'subsample'
-args.sampling_size = 15000
+args.sample_size = 15000
+args.signal_region = [0.2, 0.8]  # quantiles for signal region
 target_data_id = args.data_id
 
-##################################################
-# Experiment parameters
-# with this selection of parameters, there is already a difference between
-# correlation and non-correlation but there shouldn't be any difference
-# maybe the data is already substiatially different for some reason?
-##################################################
-lambdas = [0.0, 0.001, 0.005, 0.01, 0.02, 0.05]
-quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+lambdas = [0.0, 0.01, 0.02, 0.05]  # add 0.001, 0.005 afterwards
+quantiles = [0.0, 0.1, 0.4,
+			 0.7]  # [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 ks = [5, 10, 15, 20, 25, 30, 35, 40]
 args.ks = None
 args.classifiers = ['class', 'tclass']
+
+assert max(len(lambdas), len(quantiles)) <= len(colors)
 ##################################################
 # Load background data for model selection
 ##################################################
 args.data_id = '{0}/val'.format(target_data_id)
-args.lambda_star = 0.0
 
 params = load_background(args)
-params = load_signal(args, params)
 
 ##################################################
 # Set parameters for transforming background
@@ -91,10 +135,8 @@ match target_data_id:
 	case '3b' | '4b':
 		args.b = None  # i.e. infinity
 		args.rate = 0.003
-		args.std_signal_region = 1.5
 	case 'WTagging':
 		args.rate = 3
-		args.std_signal_region = 0.5
 	case _:
 		raise ValueError('Dataset not supported')
 
@@ -103,31 +145,30 @@ match target_data_id:
 # based on the true mean and standard deviation
 # of the signal
 ##################################################
-s = load(path='{0}/data/{1}/signal/mass.txt'.format(
+s = load(path='{0}/data/{1}/val/signal/mass.txt'.format(
 	params.cwd,
 	target_data_id))
-
-args.mu_star = np.mean(s)
-args.sigma_star = np.std(s)
-args.lower = args.mu_star - args.std_signal_region * args.sigma_star
-args.upper = args.mu_star + args.std_signal_region * args.sigma_star
-
+qs = np.quantile(s, q=np.array(args.signal_region), axis=0)
+args.lower = qs[0]
+args.upper = qs[1]
 
 # Print amount of data outside signal region
+prop, _ = proportions(s, np.array([args.lower]), np.array([args.upper]))
+prop = prop[0]
+print(
+	'{0:.2f}% of the loaded signal is contained in the signal region'
+	.format(prop * 100))
 
 
 ##################################################
 # Run model selection
 ##################################################
 
-def select(args, params, quantiles):
+def select(args, params, classifier, quantiles):
 	cutoffs = np.quantile(
-		params.background.c[args.classifier],
+		params.background.c[classifier],
 		q=np.array(quantiles),
 		axis=0)
-
-	# print("Classifier {0}".format(args.classifier))
-	# print("Cutoffs {0}".format(cutoffs))
 
 	selected = DotDic()
 	for c, cutoff in enumerate(cutoffs):
@@ -135,34 +176,50 @@ def select(args, params, quantiles):
 		selected[quantile] = DotDic()
 		selected[quantile].cutoff = cutoff
 
-		args.cutoff = cutoff
-		Xs = filter(args, params)
-
 		# run test with background complexity K and compute
 		# L2 distance between the CDF of the p-values and
 		# the uniform CDF
 		l2 = []
 		pvaluess = []
-		inc = np.square((np.arange(params.folds) + 1) / params.folds)
+		inc = (np.arange(args.folds) + 1) / args.folds
 		for k in ks:
-
 			args.k = k
 			print("\nValidation Classifier={0} K={1} cutoff={2}\n".format(
-				args.classifier, k, quantile))
+				classifier, k, quantile))
 			pvalues = []
-			for i in tqdm(range(params.folds), ncols=40):
-				pvalues.append(test(args=args, X=Xs[i]).pvalue)
+			for i in tqdm(range(args.folds), ncols=40):
+				X = params.subsample_and_filter(
+					n=args.sample_size,
+					classifier=classifier,
+					lambda_=0,
+					cutoff=cutoff)
+
+				pvalues.append(test(args=args, X=X).pvalue)
 
 			# compute l2 distance proxy
+			# Let F be the CDF of the pvalues
+			# int_0^1 (F(x)-x)^2 dx = A + B + C
+			# where A = int_0^1 F(x)^2 dx
+			# B = int_0^1 x^2 dx
+			# C = - 2 int_0^1 F(x) x dx
+			# For the purpose of minimizing A + B + C w.r.t. K
+			# the B term can be ignored.
+			# Remember that F(x) = n^{-1} \sum_{i=1}^n I(p_i <= x)
+			# Hence, let p_1 <= p_2 <= ... <= p_n <= p_{n+1} = 1
 			pvalues = np.array(pvalues)
 			pvalues = np.sort(pvalues)
-			pvalues_diff = np.concatenate(
-				(pvalues[1:], np.array([1]))) - pvalues
-			l2_ = np.sum(inc * pvalues_diff)
-			l2_ += np.mean(np.square(pvalues)) - 2 / 3
+			ext_pvalues = np.concatenate((pvalues[1:], np.array([1])))
+			# A = \sum_{i=1}^n  (i/n) (p_{i+1} - p_i)
+			pvalues_diff = ext_pvalues - pvalues
+			A = np.sum(np.square(inc) * pvalues_diff)
+			# C = - 2 int_0^1 F(x) x dx
+			# C = - 2 \sum_{i=1}^{n} (i/n) \int_{p_i}^{p_{i+1}} x dx
+			# C = - \sum_{i=1}^{n} (i/n) [(p_{i+1})^2-(p_{i})^2]
+			pvalues_diff = np.square(ext_pvalues) - np.square(pvalues)
+			C = - np.sum(inc * pvalues_diff)
 
 			# save results
-			l2.append(l2_)
+			l2.append(A + C)
 			pvaluess.append(pvalues)
 
 		idx = np.argmin(np.array(l2))
@@ -176,45 +233,91 @@ def select(args, params, quantiles):
 
 selected = DotDic()
 for classifier in params.classifiers:
-	args.classifier = classifier
-	selected[classifier] = select(args, params, quantiles)
+	selected[classifier] = select(args=args,
+								  params=params,
+								  classifier=classifier,
+								  quantiles=quantiles)
+
+##################################################
+# Plot model selection on validation data
+##################################################
+
+print(
+	"--- Runtime until model selection: %s hours ---" % (
+		round((time.time() - start_time) / 3600, 2)))
 
 
-# %%
+def plot(ax, selected, classifier, eps=1e-2):
+	selected = selected[classifier]
+
+	ax.set_ylim([0 - eps, 1 + eps])
+	ax.set_xlim([0 - eps, 1 + eps])
+	ax.axline([0, 0], [1, 1], color='black', label='Uniform CDF')
+
+	for i, quantile in enumerate(quantiles):
+		pvalues = selected[quantile].pvalues
+		sns.ecdfplot(
+			data=pvalues,
+			hue_norm=(0, 1),
+			legend=False,
+			ax=ax,
+			color=colors[i],
+			alpha=1,
+			label='BR%={0} K={1}'.format(quantile * 100,
+										 selected[quantile].k))
+
+	ax.set_ylabel('Cumulative probability')
+	ax.set_xlabel('pvalue')
+	ax.legend()
+
+
+params.data_id = target_data_id
+fig, axs = plt.subplots(nrows=1, ncols=2,
+						figsize=(20, 10),
+						sharex='none',
+						sharey='none')
+ax = axs[0]
+ax.set_title('Without Decorrelation', fontsize=30)
+plot(ax=ax, selected=selected, classifier='class')
+ax = axs[1]
+ax.set_title('With Decorrelation', fontsize=30)
+plot(ax=ax, selected=selected, classifier='tclass')
+save_fig(params, fig, 'selection')
+
 
 ##################################################
 # Power analysis
 ##################################################
 
 
-def test_(args, params, selected, quantiles, lambdas):
+def test_(args, params, classifier, selected, quantiles, lambdas):
 	results = DotDic()
 	for lambda_ in lambdas:
 
-		# Set true signal proportion
-		args.lambda_star = lambda_
 		results[lambda_] = DotDic()
-
-		params = load_signal(args, params)
 
 		for quantile in quantiles:
 
 			# Set cutoff point
-			cutoff = selected[args.classifier][quantile].cutoff
-			args.k = selected[args.classifier][quantile].k
-			args.cutoff = cutoff
+			cutoff = selected[classifier][quantile].cutoff
+			args.k = selected[classifier][quantile].k
 			results[lambda_][quantile] = []
-			Xs = filter(args, params)
 
 			# Run procedures on all datasets
 			print("\nTest Classifier={0} K={1} lambda={2} cutoff={3}\n".format(
-				args.classifier,
+				classifier,
 				args.k,
-				args.lambda_star,
+				lambda_,
 				quantile))
 
-			for i in tqdm(range(params.folds), ncols=40):
-				pvalue = test(args=args, X=Xs[i]).pvalue
+			for i in tqdm(range(args.folds), ncols=40):
+				X = params.subsample_and_filter(
+					n=args.sample_size,
+					classifier=classifier,
+					lambda_=lambda_,
+					cutoff=cutoff)
+
+				pvalue = test(args=args, X=X).pvalue
 				results[lambda_][quantile].append(pvalue)
 
 			results[lambda_][quantile] = np.array(results[lambda_][quantile])
@@ -226,27 +329,18 @@ def test_(args, params, selected, quantiles, lambdas):
 
 args.data_id = target_data_id
 params = load_background(args)
+params = load_signal(params)
 results = DotDic()
 for classifier in params.classifiers:
-	args.classifier = classifier
-	results[classifier] = test_(args, params, selected, quantiles, lambdas)
+	results[classifier] = test_(args=args,
+								params=params,
+								classifier=classifier,
+								selected=selected,
+								quantiles=quantiles,
+								lambdas=lambdas)
 
 # %%
-import matplotlib.pylab as pylab
 
-config = {'legend.fontsize': 'xx-large',
-		  'figure.figsize': (20, 30),
-		  'axes.labelsize': 'xx-large',
-		  'axes.titlesize': 'xx-large',
-		  'xtick.labelsize': 'x-large',
-		  'ytick.labelsize': 'x-large'}
-pylab.rcParams.update(config)
-
-colors = distinctipy.get_colors(
-	max(len(lambdas), len(quantiles)),
-	exclude_colors=[(0, 0, 0), (1, 1, 1),
-					(1, 0, 0), (0, 0, 1)],
-	rng=0)
 row = -1
 
 
@@ -283,63 +377,19 @@ def plot_series_with_uncertainty(ax, x, mean,
 				label=label)
 
 
-fig, axs = plt.subplots(nrows=3, ncols=2,
-						sharex='none', sharey='none')
-row = -1
-
-
-###################################################################
-# Model selection
-###################################################################
-
-def plot(ax, selected, args, eps=1e-2):
-	selected = selected[args.classifier]
-
-	ax.set_ylim([0 - eps, 1 + eps])
-	ax.set_xlim([0 - eps, 1 + eps])
-	ax.axline([0, 0], [1, 1], color='red', label='Uniform CDF')
-
-	for i, quantile in enumerate(quantiles):
-		pvalues = selected[quantile].pvalues
-		sns.ecdfplot(
-			data=pvalues,
-			hue_norm=(0, 1),
-			legend=False,
-			ax=ax,
-			color=colors[i],
-			alpha=1,
-			label='BR%={0} K={1}'.format(quantile * 100,
-										 selected[quantile].k))
-
-	ax.set_ylabel('Cumulative probability')
-	ax.set_xlabel('pvalue')
-	ax.legend()
-
-
-row += 1
-ax = axs[row, 0]
-ax.set_title('Without Decorrelation', fontsize=30)
-args.classifier = 'class'
-plot(ax=ax, selected=selected, args=args)
-ax = axs[row, 1]
-ax.set_title('With Decorrelation', fontsize=30)
-args.classifier = 'tclass'
-plot(ax=ax, selected=selected, args=args)
-
-
 ###################################################################
 # Plot power vs threshold
 ###################################################################
 
-def plot(ax, results, args, eps=1e-2, alpha=0.05):
+def plot(ax, results, classifier, eps=1e-2, alpha=0.05):
 	ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha=0.05')
 	ax.set_xlabel('Background reject percentage (BR%)')
 	ax.set_ylabel('Probability of rejecting $\lambda=0$')
 	ax.set_ylim([0 - eps, 1 + eps])
 
-	ax.axhline(y=alpha, color='red',
+	ax.axhline(y=alpha, color='black',
 			   linestyle='-', label='{0}'.format(alpha))
-	results = results[args.classifier]
+	results = results[classifier]
 	for i, lambda_ in enumerate(lambdas):
 		means = []
 		lowers = []
@@ -348,7 +398,7 @@ def plot(ax, results, args, eps=1e-2, alpha=0.05):
 			pvalues = results[lambda_][quantile]
 			tests = np.array(pvalues <= 0.05, dtype=np.int32)
 			cp = clopper_pearson(n_successes=[np.sum(tests)],
-								 n_trials=args.folds,
+								 n_trials=tests.shape[0],
 								 alpha=alpha)[0]
 			means.append(np.mean(tests))
 			lowers.append(cp[0])
@@ -361,13 +411,17 @@ def plot(ax, results, args, eps=1e-2, alpha=0.05):
 	ax.legend()
 
 
-row += 1
-ax = axs[row, 0]
-args.classifier = 'class'
-plot(ax=ax, results=results, args=args)
-ax = axs[row, 1]
-args.classifier = 'tclass'
-plot(ax=ax, results=results, args=args)
+fig, axs = plt.subplots(nrows=1, ncols=2,
+						figsize=(20, 10),
+						sharex='none',
+						sharey='none')
+ax = axs[0]
+ax.set_title('Without Decorrelation', fontsize=30)
+plot(ax=ax, results=results, classifier='class')
+ax = axs[1]
+ax.set_title('With Decorrelation', fontsize=30)
+plot(ax=ax, results=results, classifier='tclass')
+save_fig(params, fig, 'power')
 
 
 ###################################################################
@@ -375,11 +429,11 @@ plot(ax=ax, results=results, args=args)
 ###################################################################
 
 
-def plot(ax, results, args, quantile, eps=1e-2):
-	results = results[args.classifier]
+def plot(ax, results, classifier, quantile, eps=1e-2):
+	results = results[classifier]
 	ax.set_title(
 		'CDF of pvalues (BR%={0})'.format(quantile * 100))
-	ax.axline([0, 0], [1, 1], color='red', label='Uniform CDF')
+	ax.axline([0, 0], [1, 1], color='black', label='Uniform CDF')
 	ax.set_ylim([0 - eps, 1 + eps])
 	ax.set_xlim([0 - eps, 1 + eps])
 
@@ -399,48 +453,48 @@ def plot(ax, results, args, quantile, eps=1e-2):
 	ax.legend()
 
 
-row += 1
-ax = axs[row, 0]
-args.classifier = 'class'
-plot(ax=ax, results=results, args=args, quantile=0.5)
-ax = axs[row, 1]
-args.classifier = 'tclass'
-plot(ax=ax, results=results, args=args, quantile=0.5)
+fig, axs = plt.subplots(nrows=1, ncols=2,
+						figsize=(20, 10),
+						sharex='none',
+						sharey='none')
+ax = axs[0]
+ax.set_title('Without Decorrelation', fontsize=30)
+plot(ax=ax, results=results, classifier='class', quantile=0.4)
+ax = axs[1]
+ax.set_title('With Decorrelation', fontsize=30)
+plot(ax=ax, results=results, classifier='tclass', quantile=0.4)
+save_fig(params, fig, 'power-CDF')
 
 ###################################################################
 # Annotate rows
 # See https://stackoverflow.com/questions/25812255/row-and-column-headers-in-matplotlibs-subplots
 ###################################################################
 # fig.tight_layout()
-rows = ['Model\nselection\nwith 3b\nValidation', 'Test', 'Test']
-pad = 15  # in pointspad = 5 # in points
-for ax, row in zip(axs[:, 0], rows):
-	ax.annotate('{}\nData'.format(row), xy=(0, 0.5),
-				xytext=(-ax.yaxis.labelpad - pad, 0),
-				xycoords=ax.yaxis.label,
-				textcoords='offset points',
-				size='xx-large', ha='right', va='center')
+# rows = ['Model\nselection\nwith 3b\nValidation', 'Test', 'Test']
+# pad = 15  # in pointspad = 5 # in points
+# for ax, row in zip(axs[:, 0], rows):
+# 	ax.annotate('{}\nData'.format(row), xy=(0, 0.5),
+# 				xytext=(-ax.yaxis.labelpad - pad, 0),
+# 				xycoords=ax.yaxis.label,
+# 				textcoords='offset points',
+# 				size='xx-large', ha='right', va='center')
 
 ###################################################################
 # Change background color per row
 # See https://stackoverflow.com/questions/59751952/python-plot-different-figure-background-color-for-each-row-of-subplots
 ###################################################################
-colors = ['blue', 'white', 'white']
-for ax, color in zip(axs[:, 0], colors):
-	bbox = ax.get_position()
-	rect = matplotlib.patches.Rectangle(
-		(0, bbox.y0), 1, bbox.height,
-		alpha=0.05,
-		color=color,
-		zorder=-1)
-	fig.add_artist(rect)
+# colors = ['blue', 'white', 'white']
+# for ax, color in zip(axs[:, 0], colors):
+# 	bbox = ax.get_position()
+# 	rect = matplotlib.patches.Rectangle(
+# 		(0, bbox.y0), 1, bbox.height,
+# 		alpha=0.05,
+# 		color=color,
+# 		zorder=-1)
+# 	fig.add_artist(rect)
 
 ###################################################################
-# save figure
+# Total time
 ###################################################################
-path = '{0}/summaries/'.format(params.cwd)
-Path(params.path).mkdir(parents=True, exist_ok=True)
-filename = path + '{0}.pdf'.format(params.data_id)
-fig.savefig(fname=filename, bbox_inches='tight')
-plt.close(fig)
-print('\nSaved to {0}'.format(filename))
+print(
+	"--- Runtime: %s hours ---" % (round((time.time() - start_time) / 3600, 2)))

@@ -73,18 +73,6 @@ def parse():
 		default=False,
 		type=lambda x: True if x == 'True' or x == 'true' else False)
 
-	parser.add_argument(
-		"--cutoff",
-		help='Threshold for classifier',
-		default=0.5,
-		type=float)
-
-	parser.add_argument(
-		"--transformed_cutoff",
-		help='Use transformed cutoff',
-		default=True,
-		type=lambda x: True if x == 'True' or x == 'true' else False)
-
 	######################################################################
 	# Simulation parameters
 	######################################################################
@@ -94,32 +82,12 @@ def parse():
 						default=3,
 						type=int)
 
-	parser.add_argument("--sampling_type",
-						default="subsample",
-						type=str)
-
-	parser.add_argument("--sampling_size",
+	parser.add_argument("--sample_size",
 						default=15000,
 						type=int)
 
 	parser.add_argument("--data_id",
-						default='3b',
-						type=str)
-
-	parser.add_argument("--std_signal_region",
-						default=1.5,
-						type=float)
-	parser.add_argument("--mu_star",
-						default=395,
-						type=float)
-	parser.add_argument("--sigma_star",
-						default=20,
-						type=float)
-	parser.add_argument("--lambda_star",
-						default=0.0,
-						type=float)
-	parser.add_argument("--signal",
-						default='file',
+						default='WTagging',
 						type=str)
 
 	args, _ = parser.parse_known_args()

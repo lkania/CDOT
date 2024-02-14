@@ -11,6 +11,7 @@ load(file = "./data/convert/DecorrelatedData.RData")
 export <- function(file, data) {
   write.table(x = data,
               file = file,
+              append = FALSE,
               sep = "",
               col.names = FALSE,
               row.names = FALSE)
@@ -29,10 +30,12 @@ exports <- function(name, data) {
 exports('3b/background', Background.Test.3b)
 exports('3b/signal', Signal.Test)
 exports('3b/val/background', Background.CDOT)
+exports('3b/val/signal', Signal.Classifier)
 
 exports('4b/background', Background.Test.4b)
 exports('4b/signal', Signal.Test)
 exports('4b/val/background', Background.CDOT)
+exports('4b/val/signal', Signal.Classifier)
 #####################################################################
 # W-Tagging Datasets
 #####################################################################
@@ -56,6 +59,7 @@ exports <- function(name, data) {
 exports('WTagging/background', Test[Test$label == 1,])
 exports('WTagging/signal', Test[Test$label == 0,])
 exports('WTagging/val/background', Val[Val$label == 1,])
+exports('WTagging/val/signal', Val[Val$label == 0,])
 
 
 

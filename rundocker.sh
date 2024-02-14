@@ -23,8 +23,8 @@ readonly dest_data=/program/data/:ro
 # Data saved outside the designated directory will
 # be erased when the container is stopped
 #####################################################
-readonly src_results=$PWD/experiments/summaries/
-readonly dest_results=/program/experiments/summaries
+readonly src_results=$PWD/summaries/
+readonly dest_results=/program/summaries
 
 #####################################################
 # Location of the executable inside the container
@@ -38,7 +38,7 @@ docker stop $name
 docker system prune --force
 
 #####################################################
-# 1. Build the container (in case source files were updated)
+# Build the container (in case source files were updated)
 #####################################################
 docker build --tag $name .
 
@@ -51,6 +51,11 @@ gpus=$([ $(ls -la /dev | grep nvidia | wc -l) "==" "0" ] && echo "" || echo "--g
 # Start container
 # Mount a directory data directory as read-only
 # Mount results directory.
+# We specify the user, i.e. "-u $(id -u):$(id -g)"
+# to prevent docker from creating files owned
+# by root in the mounted folder.
+# See:
+#   https://unix.stackexchange.com/questions/627027/files-created-by-docker-container-are-owned-by-root
 #####################################################
 docker run $gpus -d --name $name -v $src_results:$dest_results -v $src_data:$dest_data -u $(id -u):$(id -g) -it $name /bin/bash
 
