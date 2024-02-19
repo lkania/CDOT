@@ -21,19 +21,9 @@ from src.background.bin import mle as bin_mle
 from src.transform import transform
 
 #######################################################
-# signal methods
-#######################################################
-from src.signal import mle as signal_mle
-
-#######################################################
 # signals
 #######################################################
 from jax.scipy.stats.norm import pdf as dnorm  # Gaussian/normal signal
-
-
-@jit
-def normal(X, mu, sigma2):
-	return dnorm(x=X.reshape(-1), loc=mu, scale=np.sqrt(sigma2)).reshape(-1)
 
 
 def build(args):
@@ -172,20 +162,6 @@ def build(args):
 				case _:
 					raise ValueError('Optimizer not supported')
 
-	#######################################################
-	# should we de-bias?
-	#######################################################
-	params.debias = args.debias
-
-	#######################################################
-	# signal model to be used for gnostic test
-	#######################################################
 	params.grad_op = grad
-	params.model_signal = args.model_signal
-	if params.model_signal:
-		params.grad_op = jacrev
-		params.signal = DotDic()
-		params.signal.signal = normal
-		params.signal.fit = signal_mle.fit
 
 	return params
