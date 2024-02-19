@@ -30,12 +30,146 @@ colors = ['red',
 		  'tab:pink',
 		  'tab:olive']
 
+
+def plot_series_with_uncertainty(ax, x, mean,
+								 lower=None,
+								 upper=None,
+								 label='',
+								 color='black',
+								 fmt='',
+								 markersize=5,
+								 elinewidth=1,
+								 capsize=3,
+								 set_xticks=True):
+	if set_xticks:
+		ax.set_xticks(x)
+
+	mean = np.array(mean).reshape(-1)
+	yerr = None
+	if lower is not None and upper is not None:
+		lower = np.array(lower).reshape(-1)
+		upper = np.array(upper).reshape(-1)
+		l = mean - lower
+		u = upper - mean
+		yerr = np.vstack((l, u)).reshape(2, -1)
+
+	ax.errorbar(x=x,
+				y=mean,
+				yerr=yerr,
+				color=color,
+				capsize=capsize,
+				markersize=markersize,
+				elinewidth=elinewidth,
+				fmt=fmt,
+				label=label)
+
+
+def plot_hist_with_uncertainty(ax,
+							   from_,
+							   to_,
+							   mean,
+							   lower=None,
+							   upper=None,
+							   jitter=0,
+							   color='black',
+							   label=''):
+	bin_centers = jitter + (from_ + to_) / 2
+	plot_series_with_uncertainty(ax=ax,
+								 x=bin_centers,
+								 mean=mean,
+								 lower=lower,
+								 upper=upper,
+								 color=color,
+								 label=label,
+								 set_xticks=False,
+								 markersize=2,
+								 elinewidth=1,
+								 capsize=1,
+								 fmt='o')
+
+
+def plot_hists(ax, binning, ks, methods, alpha=0.05, jitter=1e-1):
+	params = methods[0].params
+	from_, to_ = binning(
+		X=methods[0].tX,
+		lower=params.tlower,
+		upper=params.tupper,
+		n_bins=params.bins)
+
+	props = proportions(X=methods[0].tX, from_=from_, to_=to_)[0]
+	counts = props * methods[0].tX.shape[0]
+
+	cis = clopper_pearson(n_successes=counts,
+						  n_trials=methods[0].tX.shape[0],
+						  alpha=alpha)
+
+	ax.set_xlabel('Mass (projected scale)')
+	ax.set_ylabel('Normalized counts')
+	ax.axvline(x=params.tlower,
+			   color='red', linestyle='--')
+	ax.axvline(x=params.tupper,
+			   color='red', linestyle='--',
+			   label='Signal region')
+	plot_hist_with_uncertainty(ax=ax,
+							   from_=from_,
+							   to_=to_,
+							   mean=props,
+							   lower=cis[:, 0].reshape(-1),
+							   upper=cis[:, 1].reshape(-1),
+							   color='black',
+							   label='Data (Clopper-Pearson CI)')
+	for i, k in enumerate(ks):
+		m = methods[i]
+		label = 'Model selection' if k is None else 'K={0}'.format(k)
+		plot_hist_with_uncertainty(
+			ax=ax,
+			from_=from_,
+			to_=to_,
+			mean=params.basis.predict(
+				gamma=m.gamma_hat,
+				k=m.k,
+				from_=from_,
+				to_=to_).reshape(-1),
+			jitter=(i + 1) * jitter * (to_ - from_),
+			color=colors[i],
+			label=label)
+
+		if k is None:
+			ax.axvline(x=m.model_selection.from_,
+					   color='blue', linestyle='--')
+			ax.axvline(x=m.model_selection.to_,
+					   color='blue', linestyle='--',
+					   label='Model selection region')
+
+	ax.legend()
+
+
+def plot_cdfs(ax, df, labels, eps=1e-2):
+	ax.set_ylim([0 - eps, 1 + eps])
+	ax.set_xlim([0 - eps, 1 + eps])
+	ax.axline([0, 0], [1, 1], color='black', label='Uniform CDF')
+
+	for i, d in enumerate(df):
+		sns.ecdfplot(
+			data=d,
+			hue_norm=(0, 1),
+			legend=False,
+			ax=ax,
+			color=colors[i],
+			alpha=1,
+			label=labels[i])
+
+	ax.set_ylabel('Cumulative probability')
+	ax.set_xlabel('pvalue')
+	ax.legend()
+
+
 ######################################################################
 # Utilities
 ######################################################################
 from tqdm import tqdm
 from pathlib import Path
-import pickle
+
 #######################################################
 # allow 64 bits
 #######################################################
@@ -61,7 +195,10 @@ from experiments.builder import load_background, load_signal
 from src.test.test import test
 from src.stat.binom import clopper_pearson
 from src.load import load
-from src.bin import proportions
+from src.bin import proportions, adaptive_bin, full_adaptive_bin, \
+	uniform_bin as _uniform_bin
+
+uniform_bin = lambda X, lower, upper, n_bins: _uniform_bin(n_bins=n_bins)
 
 
 ######################################################################
@@ -70,27 +207,34 @@ from src.bin import proportions
 ###################################################################
 # save figure
 ###################################################################
-def get_path(params):
-	path = '{0}/results/{1}/'.format(params.cwd, params.data_id)
-	Path(params.path).mkdir(parents=True, exist_ok=True)
-	return path
+def get_path(cwd, path):
+	path_ = '{0}/results/{1}/'.format(cwd, path)
+	Path(path_).mkdir(parents=True, exist_ok=True)
+	return path_
 
 
-def save_fig(params, fig, name):
-	filename = get_path(params) + '{0}.pdf'.format(name)
+def save_fig(cwd, path, fig, name):
+	filename = get_path(cwd=cwd, path=path) + '{0}.pdf'.format(name)
 	fig.savefig(fname=filename, bbox_inches='tight')
 	plt.close(fig)
 	print('\nSaved to {0}'.format(filename))
 
 
-def save_obj(params, obj, name):
-	filename = get_path(params) + '{0}.pickle'.format(name)
+###################################################################
+# save results
+###################################################################
+import pickle
+
+
+def save_obj(cwd, data_id, obj, name):
+	filename = get_path(cwd=cwd, path=data_id) + '{0}.pickle'.format(name)
 	with open(filename, 'wb') as handle:
 		pickle.dump(obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
+	print('\nSaved to {0}'.format(filename))
 
 
-def load_obj(params, name):
-	filename = get_path(params) + '{0}.pickle'.format(name)
+def load_obj(cwd, data_id, name):
+	filename = get_path(cwd=cwd, path=data_id) + '{0}.pickle'.format(name)
 	with open(filename, 'rb') as handle:
 		obj = pickle.load(handle)
 	return obj
@@ -101,7 +245,7 @@ def load_obj(params, name):
 # Experiment parameters
 ##################################################
 args = parse()
-args.folds = 100  # 500 gives nice results
+args.folds = 500  # 500 gives nice results
 args.bins = 100
 args.method = 'bin_mle'
 args.optimizer = 'dagostini'
@@ -110,10 +254,10 @@ args.sample_size = 15000
 args.signal_region = [0.2, 0.8]  # quantiles for signal region
 target_data_id = args.data_id
 
-lambdas = [0.0, 0.01, 0.02, 0.05]  # add 0.001, 0.005 afterwards
-quantiles = [0.0, 0.1, 0.4,
-			 0.7]  # [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-ks = [5, 10, 15, 20, 25, 30, 35, 40]
+lambdas = [0.0, 0.01]  # [0.0, 0.01, 0.02, 0.05]  # add 0.001, 0.005 afterwards
+quantiles = [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7]  # [0.0, 0.1, 0.4,
+# 0.7]  # [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+ks = [5, 10, 15, 20, 25]  # , 30, 35, 40]
 args.ks = None
 args.classifiers = ['class', 'tclass']
 
@@ -164,11 +308,67 @@ print(
 # Run model selection
 ##################################################
 
-def select(args, params, classifier, quantiles):
+def select(args, params, classifier, quantiles, alpha=0.05):
 	cutoffs = np.quantile(
 		params.background.c[classifier],
 		q=np.array(quantiles),
 		axis=0)
+
+	##################################################
+	# Plot datasets with classifier filter
+	##################################################
+	fig, axs = plt.subplots(nrows=1,
+							ncols=len(quantiles),
+							figsize=(10 * len(quantiles), 10),
+							sharex='none',
+							sharey='none')
+	fig.suptitle('Uniform binning (One instance) for {0}'.format(classifier),
+				 fontsize=30)
+	for c, cutoff in enumerate(cutoffs):
+		quantile = quantiles[c]
+		X = params.subsample_and_filter(
+			n=args.sample_size,
+			classifier=classifier,
+			lambda_=0,
+			cutoff=cutoff)
+		ax = axs[c]
+		ax.set_title('Quantile={0}'.format(quantile))
+
+		from_, to_ = _uniform_bin(
+			from_=np.min(X),
+			to_=np.max(X),
+			n_bins=args.bins)
+
+		props = proportions(X=X, from_=from_, to_=to_)[0]
+		counts = props * X.shape[0]
+		cis = clopper_pearson(n_successes=counts,
+							  n_trials=X.shape[0],
+							  alpha=alpha)
+
+		ax.set_xlabel('Mass (projected scale)')
+		ax.set_ylabel('Normalized counts')
+		ax.axvline(x=args.lower,
+				   color='red',
+				   linestyle='--')
+		ax.axvline(x=args.upper,
+				   color='red',
+				   linestyle='--',
+				   label='Signal region')
+		plot_hist_with_uncertainty(ax=ax,
+								   from_=from_,
+								   to_=to_,
+								   mean=props,
+								   lower=cis[:, 0].reshape(-1),
+								   upper=cis[:, 1].reshape(-1),
+								   color='black',
+								   label='Data (Clopper-Pearson CI)')
+		ax.legend()
+	save_fig(cwd=args.cwd,
+			 path='{0}/val/{1}'.format(
+				 target_data_id,
+				 classifier),
+			 fig=fig,
+			 name='filtering')
 
 	selected = DotDic()
 	for c, cutoff in enumerate(cutoffs):
@@ -194,9 +394,47 @@ def select(args, params, classifier, quantiles):
 					lambda_=0,
 					cutoff=cutoff)
 
-				pvalues.append(test(args=args, X=X).pvalue)
+				test_ = test(args=args, X=X)
+				pvalues.append(test_.pvalue)
 
-			# compute l2 distance proxy
+				###################################################
+				# Plot first fit for every classifier/quantile/K
+				###################################################
+				if i == 0:
+					fig, axs = plt.subplots(nrows=1,
+											ncols=3,
+											figsize=(30, 10),
+											sharex='none',
+											sharey='none')
+					ax = axs[0]
+					ax.set_title(
+						'Adaptive binning (Control Region) (One instance)')
+					plot_hists(ax, adaptive_bin, ks=[k], methods=[test_],
+							   jitter=0)
+
+					ax = axs[1]
+					ax.set_title('Adaptive binning (One instance)')
+					plot_hists(ax, full_adaptive_bin, ks=[k], methods=[test_],
+							   jitter=0)
+
+					ax = axs[2]
+					ax.set_title('Uniform binning (One instance)')
+					plot_hists(ax, uniform_bin, ks=[k], methods=[test_],
+							   jitter=0)
+
+					save_fig(cwd=args.cwd,
+							 path='{0}/val/{1}/{2}'.format(
+								 target_data_id,
+								 classifier,
+								 quantile),
+							 fig=fig,
+							 name='{0}'.format(k))
+
+			###################################################
+			# select K that minimizes the L_2 distance
+			# between the empirical CDF of the p-values and
+			# uniform CDF
+			###################################################
 			# Let F be the CDF of the pvalues
 			# int_0^1 (F(x)-x)^2 dx = A + B + C
 			# where A = int_0^1 F(x)^2 dx
@@ -222,9 +460,27 @@ def select(args, params, classifier, quantiles):
 			l2.append(A + C)
 			pvaluess.append(pvalues)
 
+		# Select K that produces the most uniform (in L_2 sense)
+		# p-value distribution
 		idx = np.argmin(np.array(l2))
 		selected[quantile].k = ks[idx]
 		selected[quantile].pvalues = pvaluess[idx]
+
+		###################################################
+		# Plot all CDF curves for given quantile
+		###################################################
+		fig, ax = plt.subplots(nrows=1, ncols=1,
+							   figsize=(10, 10),
+							   sharex='none',
+							   sharey='none')
+		plot_cdfs(ax=ax, df=pvaluess, labels=['K={0}'.format(k) for k in ks])
+		save_fig(cwd=args.cwd,
+				 path='{0}/val/{1}/{2}'.format(
+					 target_data_id,
+					 classifier,
+					 quantile),
+				 fig=fig,
+				 name='pvalues')
 
 		clear()
 
@@ -238,6 +494,8 @@ for classifier in params.classifiers:
 								  classifier=classifier,
 								  quantiles=quantiles)
 
+# save_obj(cwd=args.cwd, data_id=target_data_id, obj=selected, name='selected')
+
 ##################################################
 # Plot model selection on validation data
 ##################################################
@@ -246,43 +504,29 @@ print(
 	"--- Runtime until model selection: %s hours ---" % (
 		round((time.time() - start_time) / 3600, 2)))
 
-
-def plot(ax, selected, classifier, eps=1e-2):
-	selected = selected[classifier]
-
-	ax.set_ylim([0 - eps, 1 + eps])
-	ax.set_xlim([0 - eps, 1 + eps])
-	ax.axline([0, 0], [1, 1], color='black', label='Uniform CDF')
-
-	for i, quantile in enumerate(quantiles):
-		pvalues = selected[quantile].pvalues
-		sns.ecdfplot(
-			data=pvalues,
-			hue_norm=(0, 1),
-			legend=False,
-			ax=ax,
-			color=colors[i],
-			alpha=1,
-			label='BR%={0} K={1}'.format(quantile * 100,
-										 selected[quantile].k))
-
-	ax.set_ylabel('Cumulative probability')
-	ax.set_xlabel('pvalue')
-	ax.legend()
-
-
-params.data_id = target_data_id
 fig, axs = plt.subplots(nrows=1, ncols=2,
 						figsize=(20, 10),
 						sharex='none',
 						sharey='none')
+
+plot = lambda classifier: plot_cdfs(
+	ax=ax,
+	df=[selected[classifier][quantile].pvalues
+		for quantile in quantiles],
+	labels=[
+		'BR%={0} K={1}'.format(quantile * 100,
+							   selected[classifier][quantile].k)
+		for quantile in quantiles])
+
 ax = axs[0]
 ax.set_title('Without Decorrelation', fontsize=30)
-plot(ax=ax, selected=selected, classifier='class')
+plot('class')
+
 ax = axs[1]
 ax.set_title('With Decorrelation', fontsize=30)
-plot(ax=ax, selected=selected, classifier='tclass')
-save_fig(params, fig, 'selection')
+plot('tclass')
+
+save_fig(cwd=args.cwd, path=target_data_id, fig=fig, name='selection')
 
 
 ##################################################
@@ -317,8 +561,44 @@ def test_(args, params, classifier, selected, quantiles, lambdas):
 					lambda_=lambda_,
 					cutoff=cutoff)
 
-				pvalue = test(args=args, X=X).pvalue
+				test_ = test(args=args, X=X)
+				pvalue = test_.pvalue
 				results[lambda_][quantile].append(pvalue)
+
+				###################################################
+				# Plot first fit for every classifier/quantile/lambda
+				###################################################
+				if i == 0:
+					fig, axs = plt.subplots(nrows=1,
+											ncols=3,
+											figsize=(30, 10),
+											sharex='none',
+											sharey='none')
+					ax = axs[0]
+					ax.set_title(
+						'Adaptive binning (Control Region) (One instance)')
+					plot_hists(ax, adaptive_bin, ks=[args.k], methods=[test_],
+							   jitter=0)
+
+					ax = axs[1]
+					ax.set_title('Adaptive binning (One instance)')
+					plot_hists(ax, full_adaptive_bin, ks=[args.k],
+							   methods=[test_],
+							   jitter=0)
+
+					ax = axs[2]
+					ax.set_title('Uniform binning (One instance)')
+					plot_hists(ax, uniform_bin, ks=[args.k],
+							   methods=[test_],
+							   jitter=0)
+
+					save_fig(cwd=args.cwd,
+							 path='{0}/test/{1}/{2}'.format(
+								 target_data_id,
+								 classifier,
+								 quantile),
+							 fig=fig,
+							 name='{0}'.format(lambda_))
 
 			results[lambda_][quantile] = np.array(results[lambda_][quantile])
 
@@ -338,43 +618,6 @@ for classifier in params.classifiers:
 								selected=selected,
 								quantiles=quantiles,
 								lambdas=lambdas)
-
-# %%
-
-row = -1
-
-
-def plot_series_with_uncertainty(ax, x, mean,
-								 lower=None,
-								 upper=None,
-								 label='',
-								 color='black',
-								 fmt='',
-								 markersize=5,
-								 elinewidth=1,
-								 capsize=3,
-								 set_xticks=True):
-	if set_xticks:
-		ax.set_xticks(x)
-
-	mean = np.array(mean).reshape(-1)
-	yerr = None
-	if lower is not None and upper is not None:
-		lower = np.array(lower).reshape(-1)
-		upper = np.array(upper).reshape(-1)
-		l = mean - lower
-		u = upper - mean
-		yerr = np.vstack((l, u)).reshape(2, -1)
-
-	ax.errorbar(x=x,
-				y=mean,
-				yerr=yerr,
-				color=color,
-				capsize=capsize,
-				markersize=markersize,
-				elinewidth=elinewidth,
-				fmt=fmt,
-				label=label)
 
 
 ###################################################################
@@ -421,77 +664,42 @@ plot(ax=ax, results=results, classifier='class')
 ax = axs[1]
 ax.set_title('With Decorrelation', fontsize=30)
 plot(ax=ax, results=results, classifier='tclass')
-save_fig(params, fig, 'power')
-
+save_fig(cwd=args.cwd,
+		 path='{0}/test'.format(target_data_id),
+		 fig=fig, name='power')
 
 ###################################################################
-# Plot distribution and cdf of pvalues
+# Plot distribution and cdf of pvalues per quantile
 ###################################################################
 
+plot = lambda classifier, quantile: plot_cdfs(
+	ax=ax,
+	df=[results[classifier][lambda_][quantile] for lambda_ in lambdas],
+	labels=['$\lambda=${0}'.format(lambda_) for lambda_ in lambdas])
 
-def plot(ax, results, classifier, quantile, eps=1e-2):
-	results = results[classifier]
+for quantile in quantiles:
+	fig, axs = plt.subplots(nrows=1, ncols=2,
+							figsize=(20, 10),
+							sharex='none',
+							sharey='none')
+	fig.suptitle('CDF of pvalues (BR%={0})'.format(quantile * 100), fontsize=30)
+
+	ax = axs[0]
+	ax.set_title('Without Decorrelation', fontsize=30)
 	ax.set_title(
 		'CDF of pvalues (BR%={0})'.format(quantile * 100))
-	ax.axline([0, 0], [1, 1], color='black', label='Uniform CDF')
-	ax.set_ylim([0 - eps, 1 + eps])
-	ax.set_xlim([0 - eps, 1 + eps])
+	plot('class', quantile)
 
-	for i, lambda_ in enumerate(lambdas):
-		pvalues = results[lambda_][quantile]
-		sns.ecdfplot(
-			data=pvalues,
-			hue_norm=(0, 1),
-			legend=False,
-			ax=ax,
-			color=colors[i],
-			alpha=1,
-			label='$\lambda=${0}'.format(lambda_))
+	ax = axs[1]
+	ax.set_title('With Decorrelation', fontsize=30)
+	ax.set_title(
+		'CDF of pvalues (BR%={0})'.format(quantile * 100))
+	plot('tclass', quantile)
 
-	ax.set_ylabel('Cumulative probability')
-	ax.set_xlabel('pvalue')
-	ax.legend()
-
-
-fig, axs = plt.subplots(nrows=1, ncols=2,
-						figsize=(20, 10),
-						sharex='none',
-						sharey='none')
-ax = axs[0]
-ax.set_title('Without Decorrelation', fontsize=30)
-plot(ax=ax, results=results, classifier='class', quantile=0.4)
-ax = axs[1]
-ax.set_title('With Decorrelation', fontsize=30)
-plot(ax=ax, results=results, classifier='tclass', quantile=0.4)
-save_fig(params, fig, 'power-CDF')
-
-###################################################################
-# Annotate rows
-# See https://stackoverflow.com/questions/25812255/row-and-column-headers-in-matplotlibs-subplots
-###################################################################
-# fig.tight_layout()
-# rows = ['Model\nselection\nwith 3b\nValidation', 'Test', 'Test']
-# pad = 15  # in pointspad = 5 # in points
-# for ax, row in zip(axs[:, 0], rows):
-# 	ax.annotate('{}\nData'.format(row), xy=(0, 0.5),
-# 				xytext=(-ax.yaxis.labelpad - pad, 0),
-# 				xycoords=ax.yaxis.label,
-# 				textcoords='offset points',
-# 				size='xx-large', ha='right', va='center')
-
-###################################################################
-# Change background color per row
-# See https://stackoverflow.com/questions/59751952/python-plot-different-figure-background-color-for-each-row-of-subplots
-###################################################################
-# colors = ['blue', 'white', 'white']
-# for ax, color in zip(axs[:, 0], colors):
-# 	bbox = ax.get_position()
-# 	rect = matplotlib.patches.Rectangle(
-# 		(0, bbox.y0), 1, bbox.height,
-# 		alpha=0.05,
-# 		color=color,
-# 		zorder=-1)
-# 	fig.add_artist(rect)
+	save_fig(cwd=args.cwd,
+			 path='{0}/test/CDF_per_quantile'.format(target_data_id),
+			 fig=fig,
+			 name='{0}'.format(quantile))
 
 ###################################################################
 # Total time

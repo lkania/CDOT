@@ -87,7 +87,7 @@ def parse():
 						type=int)
 
 	parser.add_argument("--data_id",
-						default='WTagging',
+						default='3b',
 						type=str)
 
 	args, _ = parser.parse_known_args()

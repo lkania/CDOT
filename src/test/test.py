@@ -119,22 +119,22 @@ def _test(params, X):
 	# Store results
 	#######################################################
 
-	results = DotDic()
-	results.k = method.k
+	#
+	method.params = params
 
 	# pvalue
-	results.ci = ci
-	results.pvalue = pvalue
-	results.zscore = zscore
+	method.ci = ci
+	method.pvalue = pvalue
+	method.zscore = zscore
 
 	# point estimates
-	results.lambda_hat = lambda_hat
-	results.gamma_hat = gamma_hat
+	method.lambda_hat = lambda_hat
+	method.gamma_hat = gamma_hat
 
 	# background optimization statistics
 	gamma_error, poisson_nll, multinomial_nll = gamma_aux
-	results.gamma_error = gamma_error
-	results.poisson_nll = poisson_nll
-	results.multinomial_nll = multinomial_nll
+	method.gamma_error = gamma_error
+	method.poisson_nll = poisson_nll
+	method.multinomial_nll = multinomial_nll
 
-	return results
+	return method
