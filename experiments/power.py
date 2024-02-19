@@ -201,9 +201,6 @@ from src.bin import proportions, adaptive_bin, full_adaptive_bin, \
 uniform_bin = lambda X, lower, upper, n_bins: _uniform_bin(n_bins=n_bins)
 
 
-######################################################################
-
-
 ###################################################################
 # save figure
 ###################################################################
@@ -245,7 +242,7 @@ def load_obj(cwd, data_id, name):
 # Experiment parameters
 ##################################################
 args = parse()
-args.folds = 500  # 500 gives nice results
+args.folds = 3  # 500  # 500 gives nice results
 args.bins = 100
 args.method = 'bin_mle'
 args.optimizer = 'dagostini'
@@ -254,8 +251,8 @@ args.sample_size = 15000
 args.signal_region = [0.2, 0.8]  # quantiles for signal region
 target_data_id = args.data_id
 
-lambdas = [0.0, 0.01]  # [0.0, 0.01, 0.02, 0.05]  # add 0.001, 0.005 afterwards
-quantiles = [0.0, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7]  # [0.0, 0.1, 0.4,
+lambdas = [0.0, 0.01, 0.02, 0.05]  # add 0.001, 0.005 afterwards
+quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]  # [0.0, 0.1, 0.4,
 # 0.7]  # [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 ks = [5, 10, 15, 20, 25]  # , 30, 35, 40]
 args.ks = None
@@ -270,19 +267,32 @@ args.data_id = '{0}/val'.format(target_data_id)
 params = load_background(args)
 
 ##################################################
-# Set parameters for transforming background
+# Background transformation parameters
+# Our test assumes that data lies between 0 and 1
+# hence, you must project the data to that scale
 ##################################################
 
-args.a = float(np.round(np.min(params.background.X)))
-args.b = float(np.round(np.max(params.background.X)))
 match target_data_id:
 	case '3b' | '4b':
-		args.b = None  # i.e. infinity
-		args.rate = 0.003
+		from src.background.transform import exponential
+
+		a = float(np.round(np.min(params.background.X)))
+		b = None  # i.e. infinity
+		rate = 0.003
+		trans, tilt_density, _ = exponential.transform(
+			a=a, b=b, rate=rate)
+
 	case 'WTagging':
-		args.rate = 3
+
+		# args.rate = 3, a = min b = max
+		# we use the identity mapping
+		trans = lambda X: X
+		tilt_density = lambda density, X: density(X=X)
+
 	case _:
 		raise ValueError('Dataset not supported')
+args.trans = trans
+args.tilt_density = tilt_density
 
 ##################################################
 # Set lower and upper arguments for signal region

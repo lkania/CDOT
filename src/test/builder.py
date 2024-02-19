@@ -15,10 +15,6 @@ from src.basis import bernstein
 # background methods
 #######################################################
 from src.background.bin import mle as bin_mle
-#######################################################
-# background transform
-#######################################################
-from src.transform import transform
 
 #######################################################
 # signals
@@ -63,14 +59,8 @@ def build(args):
 	#######################################################
 	# background transformation
 	#######################################################
-	params.rate = args.rate
-	params.a = args.a
-	params.b = args.b
-
-	trans, tilt_density, _ = transform(
-		a=params.a, b=params.b, rate=params.rate)
-	params.trans = trans
-	params.tilt_density = tilt_density
+	params.trans = args.trans
+	params.tilt_density = args.tilt_density
 
 	#######################################################
 	# Basis
