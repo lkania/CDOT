@@ -48,10 +48,10 @@ ks_ = [params.ks[0] - 1 if v is None else v for v in ks]
 
 # %%
 def run(X, k):
-    args.k = k
-    if k is not None:
-        args.ks = None
-    return test(args=args, X=X)
+	args.k = k
+	if k is not None:
+		args.ks = None
+	return test(args=args, X=X)
 
 
 # %%
@@ -59,214 +59,214 @@ def run(X, k):
 # k-dependent code
 results = DotDic()
 for k in ks:
-    print("\nTesting K={0}\n".format(k))
-    results[k] = []
-    for i in tqdm(range(params.folds), ncols=40):
-        results[k].append(run(X=params.Xs[i], k=k))
+	print("\nTesting K={0}\n".format(k))
+	results[k] = []
+	for i in tqdm(range(params.folds), ncols=40):
+		results[k].append(run(X=params.Xs[i], k=k))
 
 # %%
 fontsize = 16
 colors = distinctipy.get_colors(
-    len(ks),
-    exclude_colors=[(0, 0, 0), (1, 1, 1),
-                    (1, 0, 0), (0, 0, 1)],
-    rng=0)
+	len(ks),
+	exclude_colors=[(0, 0, 0), (1, 1, 1),
+					(1, 0, 0), (0, 0, 1)],
+	rng=0)
 alpha = 0.05
 row = -1
 transparency = 0.5
 
 
 def plot_series_with_uncertainty(ax, x, mean,
-                                 lower=None,
-                                 upper=None,
-                                 label='',
-                                 color='black',
-                                 fmt='',
-                                 markersize=5,
-                                 elinewidth=1,
-                                 capsize=3,
-                                 set_xticks=True):
-    if set_xticks:
-        ax.set_xticks(x)
+								 lower=None,
+								 upper=None,
+								 label='',
+								 color='black',
+								 fmt='',
+								 markersize=5,
+								 elinewidth=1,
+								 capsize=3,
+								 set_xticks=True):
+	if set_xticks:
+		ax.set_xticks(x)
 
-    mean = np.array(mean).reshape(-1)
-    yerr = None
-    if lower is not None and upper is not None:
-        lower = np.array(lower).reshape(-1)
-        upper = np.array(upper).reshape(-1)
-        l = mean - lower
-        u = upper - mean
-        yerr = np.vstack((l, u)).reshape(2, -1)
+	mean = np.array(mean).reshape(-1)
+	yerr = None
+	if lower is not None and upper is not None:
+		lower = np.array(lower).reshape(-1)
+		upper = np.array(upper).reshape(-1)
+		l = mean - lower
+		u = upper - mean
+		yerr = np.vstack((l, u)).reshape(2, -1)
 
-    ax.errorbar(x=x,
-                y=mean,
-                yerr=yerr,
-                color=color,
-                capsize=capsize,
-                markersize=markersize,
-                elinewidth=elinewidth,
-                fmt=fmt,
-                label=label)
+	ax.errorbar(x=x,
+				y=mean,
+				yerr=yerr,
+				color=color,
+				capsize=capsize,
+				markersize=markersize,
+				elinewidth=elinewidth,
+				fmt=fmt,
+				label=label)
 
 
 def plot_hist_with_uncertainty(ax,
-                               from_,
-                               to_,
-                               mean,
-                               lower=None,
-                               upper=None,
-                               jitter=0,
-                               color='black',
-                               label=''):
-    bin_centers = jitter + (from_ + to_) / 2
-    plot_series_with_uncertainty(ax=ax,
-                                 x=bin_centers,
-                                 mean=mean,
-                                 lower=lower,
-                                 upper=upper,
-                                 color=color,
-                                 label=label,
-                                 set_xticks=False,
-                                 markersize=2,
-                                 elinewidth=1,
-                                 capsize=1,
-                                 fmt='o')
+							   from_,
+							   to_,
+							   mean,
+							   lower=None,
+							   upper=None,
+							   jitter=0,
+							   color='black',
+							   label=''):
+	bin_centers = jitter + (from_ + to_) / 2
+	plot_series_with_uncertainty(ax=ax,
+								 x=bin_centers,
+								 mean=mean,
+								 lower=lower,
+								 upper=upper,
+								 color=color,
+								 label=label,
+								 set_xticks=False,
+								 markersize=2,
+								 elinewidth=1,
+								 capsize=1,
+								 fmt='o')
 
 
 def plot_hists(ax, binning, ks, ms):
-    from_, to_ = binning(
-        X=ms[0].tX,
-        lower=params.tlower,
-        upper=params.tupper,
-        n_bins=params.bins)
+	from_, to_ = binning(
+		X=ms[0].tX,
+		lower=params.tlower,
+		upper=params.tupper,
+		n_bins=params.bins)
 
-    props = proportions(X=ms[0].tX, from_=from_, to_=to_)[0]
-    counts = props * ms[0].tX.shape[0]
+	props = proportions(X=ms[0].tX, from_=from_, to_=to_)[0]
+	counts = props * ms[0].tX.shape[0]
 
-    cis = clopper_pearson(n_successes=counts,
-                          n_trials=ms[0].tX.shape[0],
-                          alpha=alpha)
+	cis = clopper_pearson(n_successes=counts,
+						  n_trials=ms[0].tX.shape[0],
+						  alpha=alpha)
 
-    ax.set_xlabel('Mass (projected scale)', fontsize=fontsize)
-    ax.set_ylabel('Normalized counts', fontsize=fontsize)
-    ax.axvline(x=params.tlower,
-               color='red', linestyle='--')
-    ax.axvline(x=params.tupper,
-               color='red', linestyle='--',
-               label='Signal region')
-    plot_hist_with_uncertainty(ax=ax,
-                               from_=from_,
-                               to_=to_,
-                               mean=props,
-                               lower=cis[:, 0].reshape(-1),
-                               upper=cis[:, 1].reshape(-1),
-                               color='black',
-                               label='Data (Clopper-Pearson CI)')
-    for i, k in enumerate(ks):
-        m = ms[i]
-        label = 'Model selection' if k is None else 'K={0}'.format(k)
-        plot_hist_with_uncertainty(
-            ax=ax,
-            from_=from_,
-            to_=to_,
-            mean=params.basis.predict(
-                gamma=m.gamma_hat,
-                k=m.k,
-                from_=from_,
-                to_=to_).reshape(-1),
-            jitter=(i + 1) * 1e-1 * (to_ - from_),
-            color=colors[i],
-            label=label)
+	ax.set_xlabel('Mass (projected scale)', fontsize=fontsize)
+	ax.set_ylabel('Normalized counts', fontsize=fontsize)
+	ax.axvline(x=params.tlower,
+			   color='red', linestyle='--')
+	ax.axvline(x=params.tupper,
+			   color='red', linestyle='--',
+			   label='Signal region')
+	plot_hist_with_uncertainty(ax=ax,
+							   from_=from_,
+							   to_=to_,
+							   mean=props,
+							   lower=cis[:, 0].reshape(-1),
+							   upper=cis[:, 1].reshape(-1),
+							   color='black',
+							   label='Data (Clopper-Pearson CI)')
+	for i, k in enumerate(ks):
+		m = ms[i]
+		label = 'Model selection' if k is None else 'K={0}'.format(k)
+		plot_hist_with_uncertainty(
+			ax=ax,
+			from_=from_,
+			to_=to_,
+			mean=params.basis.predict(
+				gamma=m.gamma_hat,
+				k=m.k,
+				from_=from_,
+				to_=to_).reshape(-1),
+			jitter=(i + 1) * 1e-1 * (to_ - from_),
+			color=colors[i],
+			label=label)
 
-        if k is None:
-            ax.axvline(x=m.model_selection.from_,
-                       color='blue', linestyle='--')
-            ax.axvline(x=m.model_selection.to_,
-                       color='blue', linestyle='--',
-                       label='Model selection region')
+		if k is None:
+			ax.axvline(x=m.model_selection.from_,
+					   color='blue', linestyle='--')
+			ax.axvline(x=m.model_selection.to_,
+					   color='blue', linestyle='--',
+					   label='Model selection region')
 
-    ax.legend(fontsize=fontsize)
+	ax.legend(fontsize=fontsize)
 
 
 def plot_hists_with_uncertainty(ax, binning, ks):
-    ax.set_xlabel('Mass (projected scale)', fontsize=fontsize)
-    ax.set_ylabel('Normalized counts', fontsize=fontsize)
-    ax.axvline(x=params.tlower,
-               color='red', linestyle='--')
-    ax.axvline(x=params.tupper,
-               color='red', linestyle='--',
-               label='Signal region')
-    tX = params.trans(params.mixture.X)
-    from_, to_ = binning(X=tX,
-                         lower=params.tlower,
-                         upper=params.tupper,
-                         n_bins=params.bins)
+	ax.set_xlabel('Mass (projected scale)', fontsize=fontsize)
+	ax.set_ylabel('Normalized counts', fontsize=fontsize)
+	ax.axvline(x=params.tlower,
+			   color='red', linestyle='--')
+	ax.axvline(x=params.tupper,
+			   color='red', linestyle='--',
+			   label='Signal region')
+	tX = args.trans(params.mixture.X)
+	from_, to_ = binning(X=tX,
+						 lower=params.tlower,
+						 upper=params.tupper,
+						 n_bins=params.bins)
 
-    props = proportions(X=tX, from_=from_, to_=to_)[0]
-    counts = props * tX.shape[0]
-    cis = clopper_pearson(n_successes=counts,
-                          n_trials=tX.shape[0],
-                          alpha=alpha)
+	props = proportions(X=tX, from_=from_, to_=to_)[0]
+	counts = props * tX.shape[0]
+	cis = clopper_pearson(n_successes=counts,
+						  n_trials=tX.shape[0],
+						  alpha=alpha)
 
-    plot_hist_with_uncertainty(ax=ax,
-                               from_=from_,
-                               to_=to_,
-                               mean=props,
-                               lower=cis[:, 0].reshape(-1),
-                               upper=cis[:, 1].reshape(-1),
-                               color='black',
-                               label='Data (Clopper-Pearson CI)')
+	plot_hist_with_uncertainty(ax=ax,
+							   from_=from_,
+							   to_=to_,
+							   mean=props,
+							   lower=cis[:, 0].reshape(-1),
+							   upper=cis[:, 1].reshape(-1),
+							   color='black',
+							   label='Data (Clopper-Pearson CI)')
 
-    for i, k in enumerate(ks):
-        preds = [params.basis.predict(
-            gamma=results[k][l].gamma_hat,
-            k=results[k][l].k,
-            from_=from_,
-            to_=to_).reshape(-1) for l in range(params.folds)]
-        preds = np.array(preds)
-        mean = np.mean(preds, axis=0)
-        lower = np.quantile(preds, q=alpha / 2, axis=0)
-        upper = np.quantile(preds, q=1 - alpha / 2, axis=0)
-        plot_hist_with_uncertainty(
-            ax=ax,
-            from_=from_,
-            to_=to_,
-            mean=mean,
-            lower=lower,
-            upper=upper,
-            jitter=(i + 1) * 1e-1 * (to_ - from_),
-            color=colors[i],
-            label='K={0}'.format(k) if k is not None else 'Model selection')
-        if k is None:
-            froms = np.array([results[k][l].model_selection.from_
-                              for l in range(params.folds)])
-            tos = np.array([results[k][l].model_selection.to_
-                            for l in range(params.folds)])
-            ax.axvline(x=np.mean(froms),
-                       color='blue', linestyle='--')
-            ax.axvline(x=np.mean(tos),
-                       color='blue', linestyle='--',
-                       label='Average model selection region')
-    ax.legend(fontsize=fontsize)
+	for i, k in enumerate(ks):
+		preds = [params.basis.predict(
+			gamma=results[k][l].gamma_hat,
+			k=results[k][l].k,
+			from_=from_,
+			to_=to_).reshape(-1) for l in range(params.folds)]
+		preds = np.array(preds)
+		mean = np.mean(preds, axis=0)
+		lower = np.quantile(preds, q=alpha / 2, axis=0)
+		upper = np.quantile(preds, q=1 - alpha / 2, axis=0)
+		plot_hist_with_uncertainty(
+			ax=ax,
+			from_=from_,
+			to_=to_,
+			mean=mean,
+			lower=lower,
+			upper=upper,
+			jitter=(i + 1) * 1e-1 * (to_ - from_),
+			color=colors[i],
+			label='K={0}'.format(k) if k is not None else 'Model selection')
+		if k is None:
+			froms = np.array([results[k][l].model_selection.from_
+							  for l in range(params.folds)])
+			tos = np.array([results[k][l].model_selection.to_
+							for l in range(params.folds)])
+			ax.axvline(x=np.mean(froms),
+					   color='blue', linestyle='--')
+			ax.axvline(x=np.mean(tos),
+					   color='blue', linestyle='--',
+					   label='Average model selection region')
+	ax.legend(fontsize=fontsize)
 
 
 def plot_stat(ax, title, stat):
-    ax.set_title(title, fontsize=fontsize)
-    means = []
-    lowers = []
-    uppers = []
-    for i, k in enumerate(ks):
-        stats = [stat(results[k][l]) for l in range(params.folds)]
-        stats = np.array(stats)
-        means.append(np.mean(stats))
-        lowers.append(np.quantile(stats, q=alpha / 2))
-        uppers.append(np.quantile(stats, q=1 - alpha / 2))
-    plot_series_with_uncertainty(ax, ks_, means, lowers, uppers)
+	ax.set_title(title, fontsize=fontsize)
+	means = []
+	lowers = []
+	uppers = []
+	for i, k in enumerate(ks):
+		stats = [stat(results[k][l]) for l in range(params.folds)]
+		stats = np.array(stats)
+		means.append(np.mean(stats))
+		lowers.append(np.quantile(stats, q=alpha / 2))
+		uppers.append(np.quantile(stats, q=1 - alpha / 2))
+	plot_series_with_uncertainty(ax, ks_, means, lowers, uppers)
 
 
 fig, axs = plt.subplots(6, 3,
-                        sharex='none', sharey='none',
-                        figsize=(50, 50))
+						sharex='none', sharey='none',
+						figsize=(50, 50))
 
 ##################################################################
 # Find top 3 performers
@@ -274,10 +274,10 @@ fig, axs = plt.subplots(6, 3,
 ###################################################################
 means = []
 for i, k in enumerate(params.ks):
-    estimates = [results[k][l].lambda_hat0 for l in range(params.folds)]
-    estimates = np.array(estimates)
-    bias = estimates - params.lambda_star
-    means.append(np.mean(bias))
+	estimates = [results[k][l].lambda_hat0 for l in range(params.folds)]
+	estimates = np.array(estimates)
+	bias = estimates - params.lambda_star
+	means.append(np.mean(bias))
 means = np.abs(np.array(means))
 selected = (np.array(params.ks)[(np.argsort(means)[:3])]).tolist()
 top_performers = [None] + selected
@@ -289,7 +289,7 @@ row += 1
 ax = axs[row, 0]
 instance = [results[k][0] for k in top_performers]
 ax.set_title('Adaptive binning (Control Region) (One instance)',
-             fontsize=fontsize)
+			 fontsize=fontsize)
 plot_hists(ax, adaptive_bin, ks=top_performers, ms=instance)
 
 ax = axs[row, 1]
@@ -326,24 +326,24 @@ ax.set_title('Score distribution', fontsize=fontsize)
 ax2 = axs[row, 1]
 ax2.set_title('QQ-Plot of scores', fontsize=fontsize)
 for i, k in enumerate(top_performers):
-    scores = [results[k][l].zscore for l in range(params.folds)]
-    scores = np.array(scores)
-    ax.hist(scores,
-            alpha=1,
-            bins=30,
-            density=True,
-            histtype='step',
-            label='K={0}'.format(k) if k is not None else 'Model selection',
-            color=colors[i])
+	scores = [results[k][l].zscore for l in range(params.folds)]
+	scores = np.array(scores)
+	ax.hist(scores,
+			alpha=1,
+			bins=30,
+			density=True,
+			histtype='step',
+			label='K={0}'.format(k) if k is not None else 'Model selection',
+			color=colors[i])
 
-    pp = sm.ProbPlot(scores, fit=False, a=0, loc=0, scale=1)
-    qq = pp.qqplot(ax=ax2,
-                   marker='.',
-                   label='K={0}'.format(
-                       k) if k is not None else 'Model selection',
-                   markerfacecolor=colors[i],
-                   markeredgecolor=colors[i],
-                   alpha=1)
+	pp = sm.ProbPlot(scores, fit=False, a=0, loc=0, scale=1)
+	qq = pp.qqplot(ax=ax2,
+				   marker='.',
+				   label='K={0}'.format(
+					   k) if k is not None else 'Model selection',
+				   markerfacecolor=colors[i],
+				   markeredgecolor=colors[i],
+				   alpha=1)
 
 sm.qqline(ax=ax2, line='45', fmt='r--')
 ax.axvline(x=0, color='red', linestyle='-')
@@ -356,8 +356,8 @@ ax2.legend(fontsize=fontsize)
 ax = axs[row, 2]
 ax.axhline(y=0, color='red', linestyle='-')
 plot_stat(ax,
-          'Empirical bias (lambda_hat - lambda_star)',
-          lambda m: m.lambda_hat0 - params.lambda_star)
+		  'Empirical bias (lambda_hat - lambda_star)',
+		  lambda m: m.lambda_hat0 - params.lambda_star)
 
 ###################################################################
 # Plot P(tests = 1 | under H_0)
@@ -365,24 +365,24 @@ plot_stat(ax,
 row += 1
 ax = axs[row, 0]
 ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha=0.05',
-             fontsize=fontsize)
+			 fontsize=fontsize)
 means = []
 lowers = []
 uppers = []
 for i, k in enumerate(ks):
-    tests = [results[k][l].test for l in range(params.folds)]
-    tests = np.array(tests, dtype=np.int32)
-    cp = clopper_pearson(n_successes=[np.sum(tests)],
-                         n_trials=params.folds,
-                         alpha=alpha)[0]
-    means.append(np.mean(tests))
-    lowers.append(cp[0])
-    uppers.append(cp[1])
+	tests = [results[k][l].test for l in range(params.folds)]
+	tests = np.array(tests, dtype=np.int32)
+	cp = clopper_pearson(n_successes=[np.sum(tests)],
+						 n_trials=params.folds,
+						 alpha=alpha)[0]
+	means.append(np.mean(tests))
+	lowers.append(cp[0])
+	uppers.append(cp[1])
 
 ax.set_ylim([0, 1])
 ax.axhline(y=alpha, color='red', linestyle='-', label='{0}'.format(alpha))
 plot_series_with_uncertainty(ax, ks_, means,
-                             lowers, uppers)
+							 lowers, uppers)
 
 ###################################################################
 # Plot distribution and cdf of pvalues
@@ -397,25 +397,25 @@ ax2.axline([0, 0], [1, 1], color='red')
 ax2.set_ylim([0, 1])
 ax2.set_xlim([0, 1])
 for i, k in enumerate(ks):
-    pvalues = np.array([results[k][l].pvalue for l in range(params.folds)])
-    ax.hist(
-        pvalues,
-        alpha=1,
-        bins=100,
-        range=(0, 1),
-        density=True,
-        histtype='step',
-        label='K={0}'.format(k) if k is not None else 'Model selection',
-        color=colors[i])
+	pvalues = np.array([results[k][l].pvalue for l in range(params.folds)])
+	ax.hist(
+		pvalues,
+		alpha=1,
+		bins=100,
+		range=(0, 1),
+		density=True,
+		histtype='step',
+		label='K={0}'.format(k) if k is not None else 'Model selection',
+		color=colors[i])
 
-    sns.ecdfplot(
-        data=pvalues,
-        hue_norm=(0, 1),
-        legend=False,
-        ax=ax2,
-        color=colors[i],
-        alpha=1,
-        label='K={0}'.format(k) if k is not None else 'Model selection')
+	sns.ecdfplot(
+		data=pvalues,
+		hue_norm=(0, 1),
+		legend=False,
+		ax=ax2,
+		color=colors[i],
+		alpha=1,
+		label='K={0}'.format(k) if k is not None else 'Model selection')
 
 ax.legend(fontsize=fontsize)
 ax2.legend(fontsize=fontsize)
@@ -434,18 +434,18 @@ k_star = [results[None][l].k for l in range(params.folds)]
 
 ax = axs[row, 1]
 ax.set_title('Model selection (loss)'.format(params.folds),
-             fontsize=fontsize)
+			 fontsize=fontsize)
 plot_series_with_uncertainty(ax, params.ks, means, lowers, uppers)
 ax = axs[row, 2]
 ax.set_title('Model selection (choice distribution)'.format(params.folds),
-             fontsize=fontsize)
+			 fontsize=fontsize)
 ax.hist(k_star,
-        alpha=1,
-        bins=np.concatenate((np.array(params.ks) - 0.5,
-                             np.array([params.ks[-1]]))),
-        density=False,
-        label='Selection',
-        color='black')
+		alpha=1,
+		bins=np.concatenate((np.array(params.ks) - 0.5,
+							 np.array([params.ks[-1]]))),
+		density=False,
+		label='Selection',
+		color='black')
 ax.set_xticks(params.ks)
 
 ###################################################################
@@ -456,18 +456,18 @@ ax.set_xticks(params.ks)
 #           lambda m: np.mean(m.gamma_hat < params.tol))
 row += 1
 plot_stat(axs[row, 0],
-          'Fix-point error ({0} optimizer)'.format(params.optimizer),
-          lambda m: m.gamma_error)
+		  'Fix-point error ({0} optimizer)'.format(params.optimizer),
+		  lambda m: m.gamma_error)
 plot_stat(axs[row, 1], 'Multinomial negative-ll',
-          lambda m: m.multinomial_nll)
+		  lambda m: m.multinomial_nll)
 plot_stat(axs[row, 2], 'Poisson negative-nll',
-          lambda m: m.poisson_nll)
+		  lambda m: m.poisson_nll)
 ###################################################################
 # save figure
 ###################################################################
 Path(params.path).mkdir(parents=True, exist_ok=True)
 filename = params.path + '{0}.pdf'.format(params.lambda_star)
 fig.savefig(fname=filename,
-            bbox_inches='tight')
+			bbox_inches='tight')
 plt.close(fig)
 print('\nSaved to {0}'.format(filename))

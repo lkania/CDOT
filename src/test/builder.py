@@ -16,11 +16,6 @@ from src.basis import bernstein
 #######################################################
 from src.background.bin import mle as bin_mle
 
-#######################################################
-# signals
-#######################################################
-from jax.scipy.stats.norm import pdf as dnorm  # Gaussian/normal signal
-
 
 def build(args):
 	#######################################################
@@ -30,37 +25,16 @@ def build(args):
 	params.background = DotDic()
 
 	#######################################################
-	# randomness
-	#######################################################
-	params.seed = int(args.seed)
-	# params.key = random.PRNGKey(seed=params.seed)
-
-	#######################################################
 	# Background estimation parameters
 	#######################################################
 	# high impact on jacobian computation for bin methods
 	params.bins = int(args.bins)
+	params.from_ = args.from_
+	params.to_ = args.to_
+
 	# high impact on jacobian computation for non-bin methods
-	params.k = int(args.k) if args.k is not None else None
-
-	assert (params.k is None and args.ks is not None) or (
-			params.bins >= (params.k + 1) and args.ks is None)
-
-	params.ks = None
-	if args.ks is not None:
-		assert len(args.ks) >= 2
-		params.ks = args.ks
-		params.bins_selection = int(
-			np.ceil(params.bins * (args.bins_selection / 100) / 2))
-
-		assert (params.bins >= (max(params.ks) + 1))
-		assert (params.bins_selection >= 0 and params.bins_selection <= 100)
-
-	#######################################################
-	# background transformation
-	#######################################################
-	params.trans = args.trans
-	params.tilt_density = args.tilt_density
+	assert args.k is not None
+	params.k = int(args.k)
 
 	#######################################################
 	# Basis
@@ -72,8 +46,6 @@ def build(args):
 	#######################################################
 	params.lower = args.lower
 	params.upper = args.upper
-	params.tlower = params.trans(X=params.lower)
-	params.tupper = params.trans(X=params.upper)
 
 	#######################################################
 	# allow 64 bits
@@ -85,8 +57,6 @@ def build(args):
 	#######################################################
 	params.tol = args.tol  # convergence criterion of iterative methods
 	params.maxiter = args.maxiter
-
-	# params.rcond = 1e-6  # thresholding for singular values
 
 	#######################################################
 	# optimizer used in background estimation

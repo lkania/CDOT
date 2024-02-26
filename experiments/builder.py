@@ -60,15 +60,20 @@ def load_background(args):
 
 	params.choice = choice
 
-	def _subsample(n, classifier):
-		idx = params.choice(n=n, n_elements=params.background.X.shape[0])
+	def _subsample(n, classifier=None):
+		idx = params.choice(n=n,
+							n_elements=params.background.X.shape[0])
 		X = params.background.X[idx].reshape(-1)
+		if classifier is None:
+			return X
+
 		c = params.background.c[classifier][idx].reshape(-1)
+
 		return X, c
 
 	params.background.subsample = _subsample
 
-	def subsample(n, classifier, lambda_):
+	def subsample(n, lambda_, classifier=None):
 		if lambda_ > 0:
 			raise ValueError('lambda > 0 but no signal has been loaded')
 		return params.background.subsample(n=n, classifier=classifier)
@@ -105,7 +110,11 @@ def load_signal(params):
 	# Sampling
 	#######################################################
 
-	def subsample(n, classifier, lambda_):
+	def subsample(n, lambda_, classifier=None):
+		if lambda_ == 0:
+			return params.background.subsample(n=n,
+											   classifier=classifier)
+
 		n_signal = np.int32(n * lambda_)
 		X, c = params.background.subsample(classifier=classifier,
 										   n=n - n_signal)

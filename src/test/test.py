@@ -20,6 +20,12 @@ def _test(params, X):
 	method.k = params.k
 	method.X = X
 
+	# Certify that there will be enough data-points to fit the background density
+	assert method.k <= (params.bins + 1)
+	# Certify that all observations fall between 0 and 1
+	# since we are using Bernstein polynomials
+	assert (np.max(method.X) <= 1) and (np.min(method.X) >= 0)
+
 	params.background.fit(params=params, method=method)
 
 	#######################################################
