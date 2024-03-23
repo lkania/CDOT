@@ -9,7 +9,7 @@ def parse():
 	parser.add_argument("--cwd", type=str, default='..')
 
 	parser.add_argument("--data_id",
-						default='3b',
+						default='4b',
 						type=str)
 
 	args, _ = parser.parse_known_args()

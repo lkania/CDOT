@@ -35,6 +35,19 @@ colors = ['red',
 ######################################################################
 from tqdm import tqdm
 from pathlib import Path
+from functools import partial
+#######################################################
+# activate parallelism in CPU for JAX
+# See:
+# - https://github.com/google/jax/issues/3534
+# - https://blackjax-devs.github.io/blackjax/examples/howto_sample_multiple_chains.html
+#######################################################
+# import os
+# import multiprocessing
+#
+# n_jobs = multiprocessing.cpu_count() - 2
+# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
+# 	n_jobs)
 
 #######################################################
 # allow 64 bits
@@ -58,23 +71,74 @@ import localize
 from src.dotdic import DotDic
 from experiments.parser import parse
 from experiments.builder import load_background, load_signal
-from src.test.test import test
-from src.stat.binom import clopper_pearson
+from src.test.test import test as _test
+from src.stat.binom import exact_binomial_ci, exact_poisson_ci
 from src.bin import proportions, adaptive_bin, full_adaptive_bin, \
 	uniform_bin as _uniform_bin
 
 uniform_bin = lambda X, lower, upper, n_bins: _uniform_bin(n_bins=n_bins)
 
 
+###################################################################
+# save figure
+###################################################################
+def get_path(cwd, path):
+	path_ = '{0}/results/{1}/'.format(cwd, path)
+	Path(path_).mkdir(parents=True, exist_ok=True)
+	return path_
+
+
+def save_fig(cwd, path, fig, name):
+	filename = get_path(cwd=cwd, path=path) + '{0}.pdf'.format(name)
+	fig.savefig(fname=filename, bbox_inches='tight')
+	plt.close(fig)
+	print('\nSaved to {0}'.format(filename))
+
+
 ######################################################################
 # plot utilities
 ######################################################################
 
-def binary_rv_uncertainty(values, alpha=0.05):
+# See: https://stackoverflow.com/questions/51717199/how-to-adjust-space-between-every-second-row-of-subplots-in-matplotlib
+def tight_pairs(n_cols, fig=None):
+	"""
+	Stitch vertical pairs together.
+
+	Input:
+	- n_cols: number of columns in the figure
+	- fig: figure to be modified. If None, the current figure is used.
+
+	Assumptions:
+	- fig.axes should be ordered top to bottom (ascending row number).
+	  So make sure the subplots have been added in this order.
+	- The upper-half's first subplot (column 0) should always be present
+
+	Effect:
+	- The spacing between vertical pairs is reduced to zero by moving all lower-half subplots up.
+
+	Returns:
+	- Modified fig
+	"""
+	if fig is None:
+		fig = plt.gcf()
+	for ax in fig.axes:
+		if hasattr(ax, 'get_subplotspec'):
+			ss = ax.get_subplotspec()
+			row, col = ss.num1 // n_cols, ss.num1 % n_cols
+			if (row % 2 == 0) and (col == 0):  # upper-half row (first subplot)
+				y0_upper = ss.get_position(fig).y0
+			elif (row % 2 == 1):  # lower-half row (all subplots)
+				x0_low, _, width_low, height_low = ss.get_position(fig).bounds
+				ax.set_position(
+					pos=[x0_low, y0_upper - height_low, width_low, height_low])
+	return fig
+
+
+def binary_rv_uncertainty(values, alpha):
 	values_ = np.array(values, dtype=np.int32)
-	cp = clopper_pearson(n_successes=[np.sum(values_)],
-						 n_trials=values_.shape[0],
-						 alpha=alpha)[0]
+	cp = exact_binomial_ci(n_successes=[np.sum(values_)],
+						   n_trials=values_.shape[0],
+						   alpha=alpha)[0]
 	mean = np.mean(values_)
 	lower = cp[0]
 	upper = cp[1]
@@ -118,7 +182,7 @@ def plot_series_with_uncertainty(ax, x, mean,
 def plot_binary_series_with_uncertainty(ax,
 										x,
 										values,
-										alpha=0.05,
+										alpha,
 										label='',
 										color='black',
 										fmt='',
@@ -135,7 +199,8 @@ def plot_binary_series_with_uncertainty(ax,
 		lowers.append(lower)
 		uppers.append(upper)
 
-	return plot_series_with_uncertainty(ax, x,
+	return plot_series_with_uncertainty(ax=ax,
+										x=x,
 										mean=means,
 										lower=lowers,
 										upper=uppers,
@@ -176,59 +241,76 @@ def plot_hist_with_uncertainty(ax,
 def plot_hists(ax,
 			   binning,
 			   methods,
-			   alpha=0.05,
+			   alpha,
+			   ax2=None,
 			   jitter=1e-1,
-			   labels=True,
 			   markersize=5):
 	params = methods[0].params
 	from_, to_ = binning(
 		X=methods[0].X,
-		lower=args.lower,
-		upper=args.upper,
-		n_bins=args.bins)
+		lower=methods[0].params.lower,
+		upper=methods[0].params.upper,
+		n_bins=methods[0].params.bins)
 
 	props = proportions(X=methods[0].X, from_=from_, to_=to_)[0]
 	counts = props * methods[0].X.shape[0]
 
-	# TODO: replace by poisson means CI
-	cis = clopper_pearson(n_successes=counts,
-						  n_trials=methods[0].X.shape[0],
-						  alpha=alpha)
+	# Re-scale Poisson CI so that it's in the same scale as the normalized counts
+	cis = exact_poisson_ci(n_events=counts, alpha=alpha) / methods[0].X.shape[0]
 
-	if labels:
-		ax.set_xlabel('Mass (projected scale)')
-		ax.set_ylabel('Normalized counts')
-
-	ax.axvline(x=args.lower,
+	ax.axvline(x=methods[0].params.lower,
 			   color='red', linestyle='--')
-	ax.axvline(x=args.upper,
+	ax.axvline(x=methods[0].params.upper,
 			   color='red', linestyle='--',
 			   label='Signal region')
-	plot_hist_with_uncertainty(ax=ax,
-							   from_=from_,
-							   to_=to_,
-							   mean=props,
-							   lower=cis[:, 0].reshape(-1),
-							   upper=cis[:, 1].reshape(-1),
-							   color='black',
-							   label='Data (Clopper-Pearson CI)',
-							   markersize=2)
+	if ax2 is not None:
+		ax2.axvline(x=methods[0].params.lower,
+					color='red', linestyle='--')
+		ax2.axvline(x=methods[0].params.upper,
+					color='red', linestyle='--',
+					label='Signal region')
+		ax2.axhline(y=1,
+					color='black',
+					linestyle='-')
+
+	plot_hist_with_uncertainty(
+		ax=ax,
+		from_=from_,
+		to_=to_,
+		mean=props,
+		lower=cis[:, 0].reshape(-1),
+		upper=cis[:, 1].reshape(-1),
+		color='black',
+		label='Data (Exact Poisson CI)',
+		markersize=2)
 	for i, method in enumerate(methods):
 		label = 'K={0} p-value={1}'.format(method.k,
 										   round(method.pvalue, 2))
+		prediction = params.basis.predict(
+			gamma=method.gamma_hat,
+			k=method.k,
+			from_=from_,
+			to_=to_).reshape(-1)
 		plot_hist_with_uncertainty(
 			ax=ax,
 			from_=from_,
 			to_=to_,
-			mean=params.basis.predict(
-				gamma=method.gamma_hat,
-				k=method.k,
-				from_=from_,
-				to_=to_).reshape(-1),
+			mean=prediction,
 			jitter=(i + 1) * jitter * (to_ - from_),
 			color=colors[i],
 			markersize=markersize,
 			label=label)
+
+		if ax2 is not None:
+			plot_hist_with_uncertainty(
+				ax=ax2,
+				from_=from_,
+				to_=to_,
+				mean=props / prediction,
+				jitter=(i + 1) * jitter * (to_ - from_),
+				color=colors[i],
+				markersize=markersize - 1,
+				label=label)
 
 	ax.legend()
 
@@ -253,20 +335,169 @@ def plot_cdfs(ax, df, labels, eps=1e-2):
 	ax.legend()
 
 
-###################################################################
-# save figure
-###################################################################
-def get_path(cwd, path):
-	path_ = '{0}/results/{1}/'.format(cwd, path)
-	Path(path_).mkdir(parents=True, exist_ok=True)
-	return path_
+def fits(args,
+		 params,
+		 ks,
+		 path,
+		 filename,
+		 alpha):
+	n_cols = len(ks)
+	fig, axs = plt.subplots(nrows=2,
+							ncols=n_cols,
+							figsize=(10 * len(ks),
+									 10),
+							height_ratios=[2, 1],
+							sharex='all',
+							sharey='row')
+
+	X = params.subsample(n=args.sample_size, lambda_=0)
+
+	axs[0, 0].set_ylabel('$\lambda=0$ Normalized counts')
+	axs[1, 0].set_ylabel('Obs / Pred')
+
+	for i, k in enumerate(ks):
+		ax = axs[0, i]
+		ax2 = axs[1, i]
+		ax2.set_xlabel('K={0}'.format(k))
+		test_args.k = k
+		test_ = test(args=test_args, X=X)
+		plot_hists(ax,
+				   uniform_bin,
+				   ax2=ax2,
+				   methods=[test_],
+				   jitter=0,
+				   markersize=5,
+				   alpha=alpha)
+
+	fig = tight_pairs(n_cols=n_cols, fig=fig)
+	save_fig(cwd=args.cwd,
+			 path=path,
+			 fig=fig,
+			 name=filename)
 
 
-def save_fig(cwd, path, fig, name):
-	filename = get_path(cwd=cwd, path=path) + '{0}.pdf'.format(name)
-	fig.savefig(fname=filename, bbox_inches='tight')
-	plt.close(fig)
-	print('\nSaved to {0}'.format(filename))
+def filtering(args,
+			  params,
+			  classifier,
+			  lambdas,
+			  quantiles,
+			  path,
+			  alpha,
+			  filename,
+			  k,
+			  eps=1e-2):
+	assert k is not None
+
+	cutoffs = np.quantile(
+		params.background.c[classifier],
+		q=np.array(quantiles),
+		axis=0)
+
+	##################################################
+	# Plot datasets with classifier filter
+	##################################################
+	n_cols = len(quantiles)
+	fig, axs = plt.subplots(nrows=len(lambdas) * 2,
+							ncols=n_cols,
+							height_ratios=np.array(
+								[[2, 1]] * len(lambdas)).reshape(-1),
+							figsize=(10 * len(quantiles),
+									 10 * len(lambdas)),
+							sharex='all',
+							sharey='row')
+
+	# fig.suptitle(
+	# 'Uniform binning (One instance) for {0}'.format(classifier),
+	# 			 fontsize=30)
+
+	l = 0
+	for lambda_ in lambdas:
+
+		X_ = params.subsample(
+			n=args.sample_size,
+			classifier=classifier,
+			lambda_=lambda_, )
+
+		for c, cutoff in enumerate(cutoffs):
+
+			quantile = quantiles[c]
+			X = params.filter(X_=X_, cutoff=cutoff)
+
+			ax = axs[l, c]
+			ax2 = axs[l + 1, c]
+			ax.set_xlim([0 - eps, 1 + eps])
+			ax2.set_xlim([0 - eps, 1 + eps])
+			ax2.set_ylim([0 - eps, 4 + eps])
+
+			if l == 0:
+				ax.set_title(
+					'Filtering {0}% of the observations'.format(
+						int(quantile * 100)))
+			if c == 0:
+				ax.set_ylabel('$\lambda={0}$ Normalized counts'.format(lambda_))
+				ax2.set_ylabel('Obs / Pred')
+			if l == len(lambdas):
+				ax2.set_xlabel('Mass (projected scale)')
+
+			args.k = k
+			test_ = test(args=test_args, X=X)
+			plot_hists(ax,
+					   uniform_bin,
+					   methods=[test_],
+					   ax2=ax2,
+					   jitter=0,
+					   markersize=5,
+					   alpha=alpha)
+
+		l += 2
+
+	fig = tight_pairs(n_cols=n_cols, fig=fig)
+	save_fig(cwd=args.cwd, path=path,
+			 fig=fig,
+			 name=filename)
+
+
+def power(ax, results, lambdas, quantiles, alpha, eps=1e-2):
+	ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha={0}'.format(alpha))
+	ax.set_xlabel('Background reject percentage (BR%)')
+	ax.set_ylabel('Empirical probability of rejecting $\lambda=0$')
+	ax.set_ylim([0 - eps, 1 + eps])
+
+	ax.axhline(y=alpha,
+			   color='black',
+			   linestyle='-',
+			   label='{0}'.format(alpha))
+
+	for i, lambda_ in enumerate(lambdas):
+		plot_binary_series_with_uncertainty(
+			ax,
+			x=np.array(quantiles) * 100,
+			values=[
+				np.array(results[lambda_][quantile] <= alpha, dtype=np.int32)
+				for quantile in quantiles],
+			color=colors[i],
+			label='$\lambda$={0}'.format(lambda_),
+			alpha=alpha)
+
+	ax.legend()
+
+
+def power_per_classifier(path, classifiers, labels, results, lambdas,
+						 quantiles):
+	fig, axs = plt.subplots(nrows=1, ncols=2,
+							figsize=(20, 10),
+							sharex='none',
+							sharey='none')
+
+	for c, classifier in enumerate(classifiers):
+		power(ax=axs[c],
+			  results=results[classifier],
+			  lambdas=lambdas,
+			  quantiles=quantiles,
+			  alpha=args.alpha)
+		ax.set_title(labels[c], fontsize=20)
+
+	save_fig(cwd=args.cwd, path=path, fig=fig, name='power')
 
 
 ###################################################################
@@ -275,15 +506,15 @@ def save_fig(cwd, path, fig, name):
 import pickle
 
 
-def save_obj(cwd, data_id, obj, name):
-	filename = get_path(cwd=cwd, path=data_id) + '{0}.pickle'.format(name)
+def save_obj(cwd, path, obj, name):
+	filename = get_path(cwd=cwd, path=path) + '{0}.pickle'.format(name)
 	with open(filename, 'wb') as handle:
 		pickle.dump(obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 	print('\nSaved to {0}'.format(filename))
 
 
-def load_obj(cwd, data_id, name):
-	filename = get_path(cwd=cwd, path=data_id) + '{0}.pickle'.format(name)
+def load_obj(cwd, path, name):
+	filename = get_path(cwd=cwd, path=path) + '{0}.pickle'.format(name)
 	with open(filename, 'rb') as handle:
 		obj = pickle.load(handle)
 	return obj
@@ -291,60 +522,37 @@ def load_obj(cwd, data_id, name):
 
 # %%
 ##################################################
-# Experiment parameters
+# Simulation parameters
 ##################################################
 args = parse()
-
+args.target_data_id = args.data_id
+args.use_cache = False
+args.alpha = 0.05
 args.sample_size = 20000
 args.folds = 500
-
-args.bins = 100
-args.method = 'bin_mle'
-args.optimizer = 'dagostini'
-args.fixpoint = 'normal'
-args.maxiter = 1000
-args.tol = 1e-6
-
-args.signal_region = [0.1, 0.9]  # quantiles for signal region
-target_data_id = args.data_id
-
-lambdas = [0, 0.01, 0.02, 0.05]  # add 0.001, 0.005 afterwards
-quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
-ks = [5, 10, 15, 20, 25, 30, 35]
+args.signal_region = [0.1, 0.9]
+args.lambdas = lambdas = [0, 0.01, 0.02, 0.05]
+args.quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+args.ks = [5, 10, 15, 20, 25, 30, 35]
 args.classifiers = ['class', 'tclass']
 
-assert max(len(lambdas), len(quantiles)) <= len(colors)
+test_args = DotDic()
+test_args.bins = 100
+test_args.method = 'bin_mle'
+test_args.optimizer = 'dagostini'
+test_args.fixpoint = 'normal'
+test_args.maxiter = 1000
+test_args.tol = 1e-6
+test_args.alpha = args.alpha
+
+assert max(len(args.lambdas), len(args.quantiles)) <= len(colors)
 ##################################################
 # Load background data for model selection
 ##################################################
-args.data_id = '{0}/val'.format(target_data_id)
+args.data_id = '{0}/val'.format(args.target_data_id)
 
 params = load_background(args)
 params = load_signal(params)
-
-##################################################
-# Background transformation parameters
-# Our test assumes that data lies between 0 and 1
-# hence, you must project the data to that scale
-##################################################
-
-match target_data_id:
-	case '3b' | '4b':
-		from src.background.transform import exponential
-
-		a = float(np.round(np.min(params.background.X)))
-		trans = lambda X: exponential.trans(X=X,
-											rate=0.003,
-											base=a,
-											scale=1)
-
-	case 'WTagging':
-
-		trans = lambda X: X
-
-	case _:
-		raise ValueError('Dataset not supported')
-args.trans = trans
 
 ##################################################
 # Set lower and upper arguments for signal region
@@ -355,74 +563,64 @@ qs = np.quantile(
 	params.signal.X,
 	q=np.array(args.signal_region),
 	axis=0)
-args.lower = qs[0]
-args.upper = qs[1]
+test_args.lower = qs[0]
+test_args.upper = qs[1]
 
 # Print amount of data outside signal region
 prop, _ = proportions(
 	params.signal.X,
-	np.array([args.lower]),
-	np.array([args.upper]))
+	np.array([test_args.lower]),
+	np.array([test_args.upper]))
 prop = prop[0]
 print(
 	'{0:.2f}% of the loaded signal is contained in the signal region'
 	.format(prop * 100))
 
 ##################################################
-# Fix binning for test statistic
+# Background transformation parameters
+# Our test assumes that data lies between 0 and 1
+# hence, you must project the data to that scale
 ##################################################
-args.lower = args.trans(args.lower)
-args.upper = args.trans(args.upper)
-from_, to_ = adaptive_bin(
-	X=args.trans(params.background.X),
-	lower=args.lower,
-	upper=args.upper,
-	n_bins=args.bins)
-args.from_ = from_
-args.to_ = to_
+
+match args.target_data_id:
+	case '3b' | '4b':
+		from src.background.transform import exponential
+
+		a = float(np.round(np.min(params.background.X)))
+		test_args.trans = lambda X: exponential.trans(X=X,
+													  rate=0.003,
+													  base=a,
+													  scale=1)
+
+	case 'WTagging':
+
+		test_args.trans = lambda X: X
+
+	case _:
+		raise ValueError('Dataset not supported')
+
+test_args.lower = test_args.trans(qs[0])
+test_args.upper = test_args.trans(qs[1])
+
+
+def test(args, X):
+	return _test(args=args, X=test_args.trans(X))
+
+
+##################################################
+# Fix binning for test statistic for validation
+##################################################
+tX = test_args.trans(params.background.X)
+test_args.from_, test_args.to_ = adaptive_bin(
+	X=tX,
+	lower=test_args.lower,
+	upper=test_args.upper,
+	n_bins=test_args.bins)
 
 
 ##################################################
 # Run model selection for base case, i.e. no cutoff
 ##################################################
-
-def fits(args,
-		 params,
-		 ks,
-		 path,
-		 alpha=0.05):
-	fig, axs = plt.subplots(nrows=1,
-							ncols=len(ks),
-							figsize=(10 * len(ks),
-									 10),
-							sharex='none',
-							sharey='none')
-
-	X = params.subsample(n=args.sample_size, lambda_=0)
-
-	for i, k in enumerate(ks):
-		ax = axs[i]
-		args.k = k
-		test_ = test(args=args, X=args.trans(X))
-		plot_hists(ax,
-				   uniform_bin,
-				   methods=[test_],
-				   jitter=0,
-				   labels=False,
-				   markersize=5,
-				   alpha=alpha)
-
-	save_fig(cwd=args.cwd,
-			 path=path,
-			 fig=fig,
-			 name='fits')
-
-
-fits(args=args,
-	 params=params,
-	 ks=ks,
-	 path='{0}/val'.format(target_data_id))
-
 
 def l2_to_uniform(pvalues):
 	inc = (np.arange(args.folds) + 1) / args.folds
@@ -453,24 +651,26 @@ def l2_to_uniform(pvalues):
 	return A + C
 
 
-def target_alpha_level(pvalues, alpha=0.05):
+def target_alpha_level(pvalues, alpha):
 	return np.abs(alpha - np.mean(pvalues <= alpha))
 
 
-def select(args, params, ks, measure, alpha=0.05):
-	# run test with background complexity K and compute
-	# L2 distance between the CDF of the p-values and
-	# the uniform CDF
+def select(args, params, ks, measure):
+	# TODO:
+	#  implement plot_hists_with_uncertainty from test.py
+	# It will have high memory consumption
+
 	results = DotDic()
 	for k in ks:
 		results[k] = DotDic()
 
-		args.k = k
+		test_args.k = k
 		print("\nValidation K={}\n".format(k))
 		pvalues = []
+		# TODO: configure test, jit it, and then run in parallel
 		for i in tqdm(range(args.folds), ncols=40):
 			X = params.subsample(n=args.sample_size, lambda_=0)
-			test_ = test(args=args, X=args.trans(X))
+			test_ = test(args=test_args, X=X)
 			pvalues.append(test_.pvalue)
 
 		# save results
@@ -478,167 +678,157 @@ def select(args, params, ks, measure, alpha=0.05):
 		results[k].pvalues = pvalues
 		results[k].measure = measure(pvalues)
 
-	# Select K that produces the most uniform (in L_2 sense)
-	# p-value distribution
+	###################################################
+	# Model selection based on p-value distribution
+	###################################################
 	idx = np.argmin(np.array([results[k].measure for k in ks]))
 	k_star = ks[idx]
-
-	###################################################
-	# Plot all CDF curves
-	###################################################
-	fig, ax = plt.subplots(nrows=1, ncols=1,
-						   figsize=(10, 10),
-						   sharex='none',
-						   sharey='none')
-	labels = []
-	for i, k in enumerate(ks):
-		labels.append('K={0}'.format(k))
-		if k == k_star:
-			labels[i] += ' (selected)'
-
-	ax.set_title('P-value CDF per K. K={0} selected'.format(k_star))
-	plot_cdfs(ax=ax,
-			  df=[results[k].pvalues for k in ks],
-			  labels=labels)
-	save_fig(cwd=args.cwd,
-			 path='{0}/val'.format(target_data_id),
-			 fig=fig,
-			 name='pvalues')
-
-	###################################################
-	# Plot number of calibration at alpha level
-	###################################################
-	fig, ax = plt.subplots(nrows=1, ncols=1,
-						   figsize=(10, 10),
-						   sharex='none',
-						   sharey='none')
-	ax.set_title('Clopper-Pearson CI for I(pvalue<={0}). K={1} selected'.format(
-		alpha,
-		k_star))
-	ax.axhline(y=alpha,
-			   color='black',
-			   linestyle='-',
-			   label='{0}'.format(alpha))
-	plot_binary_series_with_uncertainty(ax,
-										x=ks,
-										values=[results[k].pvalues for k in ks],
-										color='red')
-	ax.legend()
-	save_fig(cwd=args.cwd,
-			 path='{0}/val'.format(target_data_id),
-			 fig=fig,
-			 name='level')
-
-	###################################################
-	# Plot measure
-	###################################################
-	fig, ax = plt.subplots(nrows=1, ncols=1,
-						   figsize=(10, 10),
-						   sharex='none',
-						   sharey='none')
-	ax.set_title('Selection measure. K={0} selected'.format(alpha, k_star))
-	ax.plot(ks,
-			[results[k].measure for k in ks],
-			color='black')
-	ax.legend()
-	save_fig(cwd=args.cwd,
-			 path='{0}/val'.format(target_data_id),
-			 fig=fig,
-			 name='measure')
+	results.k_star = k_star
 
 	clear()
 
-	return k_star
+	return results
 
 
 ##################################################
 # We find the right complexity for our test statistic
 # without any sort of signal enriched procedure
+# That is, we tune the statistic to be conservative under the null
 ##################################################
 
-# TODO: improve selection for alpha=0.05
-k_star = select(args=args,
-				params=params,
-				ks=ks,
-				measure=target_alpha_level)
-print("\nSelected K={0}\n".format(k_star))
+if args.use_cache:
+	results = load_obj(cwd=args.cwd,
+					   path='{0}/val'.format(args.target_data_id),
+					   name='select')
+else:
+	results = select(args=args,
+					 params=params,
+					 ks=args.ks,
+					 measure=partial(target_alpha_level, alpha=args.alpha))
 
+	save_obj(cwd=args.cwd,
+			 path='{0}/val'.format(args.target_data_id),
+			 obj=results,
+			 name='select')
+
+test_args.k_star = results.k_star
+print("\nSelected K={0}\n".format(test_args.k_star))
+
+###################################################
+# Define test statistic for each classifier x cutoff combination
+###################################################
 selected = DotDic()
 for classifier in args.classifiers:
 
 	cutoffs = np.quantile(
 		params.background.c[classifier],
-		q=np.array(quantiles),
+		q=np.array(args.quantiles),
 		axis=0)
 
 	selected[classifier] = DotDic()
-	for q, quantile in enumerate(quantiles):
+	for q, quantile in enumerate(args.quantiles):
 		selected[classifier][quantile] = DotDic()
+
+		# filtering parameter
 		selected[classifier][quantile].cutoff = cutoffs[q]
-		selected[classifier][quantile].k = k_star
+		cutoff = selected[classifier][quantile].cutoff
+
+		# define test_args for each classifier x quantile
+		selected[classifier][quantile].args = DotDic()
+		dic = selected[classifier][quantile].args
+		dic.update(test_args)
+		c = params.background.c[classifier]
+		dic.from_, dic.to_ = adaptive_bin(
+			X=params.filter(X_=(tX, c), cutoff=cutoff),
+			lower=test_args.lower,
+			upper=test_args.upper,
+			n_bins=test_args.bins)
+
+###################################################
+# Plot fits for different polynomial complexities
+###################################################
+fits(args=args,
+	 params=params,
+	 ks=[5, test_args.k_star, 35],
+	 path='{0}/val'.format(args.target_data_id),
+	 filename='fits',
+	 alpha=args.alpha)
+
+###################################################
+# Plot all CDF curves
+###################################################
+fig, ax = plt.subplots(nrows=1, ncols=1,
+					   figsize=(10, 10),
+					   sharex='none',
+					   sharey='none')
+labels = []
+for i, k in enumerate(args.ks):
+	labels.append('K={0}'.format(k))
+	if k == test_args.k_star:
+		labels[i] += ' (selected)'
+
+ax.set_title('P-value CDF per K'.format(test_args.k_star))
+plot_cdfs(ax=ax,
+		  df=[results[k].pvalues for k in args.ks],
+		  labels=labels)
+save_fig(cwd=args.cwd,
+		 path='{0}/val'.format(args.target_data_id),
+		 fig=fig,
+		 name='pvalues')
+
+ax.set_xlim([0, args.alpha])
+save_fig(cwd=args.cwd,
+		 path='{0}/val'.format(args.target_data_id),
+		 fig=fig,
+		 name='pvalues_restricted')
+
+###################################################
+# Plot CI for I(pvalue <= alpha)
+###################################################
+fig, ax = plt.subplots(nrows=1, ncols=1,
+					   figsize=(10, 10),
+					   sharex='none',
+					   sharey='none')
+ax.set_title(
+	'Clopper-Pearson CI for I(pvalue<={0}). K={1} selected'.format(
+		args.alpha,
+		test_args.k_star))
+ax.axhline(y=args.alpha,
+		   color='black',
+		   linestyle='-',
+		   label='{0}'.format(args.alpha))
+plot_binary_series_with_uncertainty(
+	ax,
+	x=args.ks,
+	values=[results[k].pvalues for k in args.ks],
+	color='red',
+	alpha=args.alpha)
+ax.legend()
+save_fig(cwd=args.cwd,
+		 path='{0}/val'.format(args.target_data_id),
+		 fig=fig,
+		 name='level')
+
+###################################################
+# Plot measure
+###################################################
+fig, ax = plt.subplots(nrows=1, ncols=1,
+					   figsize=(10, 10),
+					   sharex='none',
+					   sharey='none')
+ax.set_title('Selection measure. K={0} selected'.format(test_args.k_star))
+ax.plot(args.ks,
+		[results[k].measure for k in args.ks],
+		color='black',
+		label='Selection measure')
+ax.legend()
+save_fig(cwd=args.cwd,
+		 path='{0}/val'.format(args.target_data_id),
+		 fig=fig,
+		 name='measure')
 
 
-def filtering(args,
-			  params,
-			  classifier,
-			  lambdas,
-			  quantiles,
-			  path,
-			  alpha=0.05,
-			  k=None):
-	assert k is not None
-
-	cutoffs = np.quantile(
-		params.background.c[classifier],
-		q=np.array(quantiles),
-		axis=0)
-
-	##################################################
-	# Plot datasets with classifier filter
-	##################################################
-	fig, axs = plt.subplots(nrows=len(lambdas),
-							ncols=len(quantiles),
-							figsize=(10 * len(quantiles),
-									 10 * len(lambdas)),
-							sharex='none',
-							sharey='none')
-	fig.suptitle('Uniform binning (One instance) for {0}'.format(classifier),
-				 fontsize=30)
-
-	for l, lambda_ in enumerate(lambdas):
-		for c, cutoff in enumerate(cutoffs):
-
-			quantile = quantiles[c]
-
-			X = params.subsample_and_filter(
-				n=args.sample_size,
-				classifier=classifier,
-				lambda_=lambda_,
-				cutoff=cutoff)
-
-			ax = axs[l, c]
-			if l == 0:
-				ax.set_title('Quantile={0}'.format(quantile))
-			if c == 0:
-				ax.set_ylabel('$\lambda={0}$ Normalized counts'.format(lambda_))
-			if c == len(quantiles) - 1:
-				ax.set_xlabel('Mass (projected scale)')
-
-			args.k = k
-			test_ = test(args=args, X=args.trans(X))
-			plot_hists(ax,
-					   uniform_bin,
-					   methods=[test_],
-					   jitter=0,
-					   labels=False,
-					   markersize=5,
-					   alpha=alpha)
-
-	save_fig(cwd=args.cwd, path=path,
-			 fig=fig,
-			 name='{0}_filter'.format(classifier))
-
-
+# %%
 def test_(args, params, classifier, selected, quantiles, lambdas):
 	results = DotDic()
 	for lambda_ in lambdas:
@@ -649,13 +839,13 @@ def test_(args, params, classifier, selected, quantiles, lambdas):
 
 			# Set cutoff point
 			cutoff = selected[classifier][quantile].cutoff
-			args.k = selected[classifier][quantile].k
+			test_args = selected[classifier][quantile].args
 			results[lambda_][quantile] = []
 
 			# Run procedures on all datasets
 			print("\nTest Classifier={0} K={1} lambda={2} cutoff={3}\n".format(
 				classifier,
-				args.k,
+				test_args.k,
 				lambda_,
 				quantile))
 
@@ -666,7 +856,7 @@ def test_(args, params, classifier, selected, quantiles, lambdas):
 					lambda_=lambda_,
 					cutoff=cutoff)
 
-				test_ = test(args=args, X=args.trans(X))
+				test_ = test(args=test_args, X=X)
 				pvalue = test_.pvalue
 				results[lambda_][quantile].append(pvalue)
 
@@ -677,108 +867,63 @@ def test_(args, params, classifier, selected, quantiles, lambdas):
 	return results
 
 
-def power(ax, results, lambdas, quantiles, eps=1e-2, alpha=0.05):
-	ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha=0.05')
-	ax.set_xlabel('Background reject percentage (BR%)')
-	ax.set_ylabel('Probability of rejecting $\lambda=0$')
-	ax.set_ylim([0 - eps, 1 + eps])
+def power_analysis(params, string):
+	path = '{0}/{1}'.format(args.target_data_id, string)
 
-	ax.axhline(y=alpha, color='black',
-			   linestyle='-', label='{0}'.format(alpha))
-	for i, lambda_ in enumerate(lambdas):
-		plot_binary_series_with_uncertainty(
-			ax,
-			x=np.array(quantiles) * 100,
-			values=[
-				np.array(results[lambda_][quantile] <= alpha, dtype=np.int32)
-				for lambda_ in lambdas],
-			color=colors[i],
-			label='$\lambda$={0}'.format(lambda_))
+	for classifier in params.classifiers:
+		filtering(args=args,
+				  params=params,
+				  classifier=classifier,
+				  lambdas=[0, args.alpha],
+				  quantiles=[0.0, 0.5, 0.7],
+				  path=path,
+				  filename='{0}_filter_restricted'.format(classifier),
+				  alpha=args.alpha,
+				  k=test_args.k_star)
 
-	ax.legend()
+	if args.use_cache:
+		results = load_obj(cwd=args.cwd,
+						   path=path,
+						   name='power')
+	else:
+		results = DotDic()
+		for classifier in params.classifiers:
+			results[classifier] = test_(args=args,
+										params=params,
+										classifier=classifier,
+										selected=selected,
+										quantiles=args.quantiles,
+										lambdas=lambdas)
+		save_obj(cwd=args.cwd,
+				 path=path,
+				 obj=results,
+				 name='power')
 
+	power_per_classifier(
+		path=path,
+		results=results,
+		lambdas=lambdas,
+		quantiles=args.quantiles,
+		classifiers=args.classifiers,
+		labels=['Without Decorrelation',
+				'With Decorrelation'])
 
-def power_per_classifier(path, results, lambdas, quantiles):
-	fig, axs = plt.subplots(nrows=1, ncols=2,
-							figsize=(20, 10),
-							sharex='none',
-							sharey='none')
-	ax = axs[0]
-	ax.set_title('Without Decorrelation', fontsize=30)
-	classifier = 'class'
-	power(ax=ax,
-		  results=results[classifier],
-		  lambdas=lambdas,
-		  quantiles=quantiles)
-	ax = axs[1]
-	ax.set_title('With Decorrelation', fontsize=30)
-	classifier = 'tclass'
-	power(ax=ax,
-		  results=results[classifier],
-		  lambdas=lambdas,
-		  quantiles=quantiles)
-	save_fig(cwd=args.cwd, path=path, fig=fig, name='power')
+	clear()
+
+	return results
 
 
 ##################################################
 # Validation data analysis
 ##################################################
-
-for classifier in params.classifiers:
-	filtering(args=args,
-			  params=params,
-			  classifier=classifier,
-			  lambdas=lambdas,
-			  quantiles=quantiles,
-			  path='{0}/val'.format(target_data_id),
-			  alpha=0.05,
-			  k=k_star)
-
-results = DotDic()
-for classifier in params.classifiers:
-	results[classifier] = test_(args=args,
-								params=params,
-								classifier=classifier,
-								selected=selected,
-								quantiles=quantiles,
-								lambdas=lambdas)
-
-power_per_classifier(path='{0}/val'.format(target_data_id),
-					 results=results,
-					 lambdas=lambdas,
-					 quantiles=quantiles)
-
+results = power_analysis(params=params, string='val')
 ##################################################
 # Test data analysis
 ##################################################
-
-args.data_id = target_data_id
+args.data_id = args.target_data_id
 params = load_background(args)
 params = load_signal(params)
-
-for classifier in params.classifiers:
-	filtering(args=args,
-			  params=params,
-			  classifier=classifier,
-			  lambdas=lambdas,
-			  quantiles=quantiles,
-			  path='{0}/test'.format(target_data_id),
-			  alpha=0.05,
-			  k=k_star)
-
-results = DotDic()
-for classifier in params.classifiers:
-	results[classifier] = test_(args=args,
-								params=params,
-								classifier=classifier,
-								selected=selected,
-								quantiles=quantiles,
-								lambdas=lambdas)
-
-power_per_classifier(path='{0}/test'.format(target_data_id),
-					 results=results,
-					 lambdas=lambdas,
-					 quantiles=quantiles)
+results = power_analysis(params=params, string='test')
 
 ###################################################################
 # Plot distribution and cdf of pvalues per quantile
@@ -789,12 +934,13 @@ plot = lambda classifier, quantile: plot_cdfs(
 	df=[results[classifier][lambda_][quantile] for lambda_ in lambdas],
 	labels=['$\lambda=${0}'.format(lambda_) for lambda_ in lambdas])
 
-for quantile in quantiles:
+for quantile in args.quantiles:
 	fig, axs = plt.subplots(nrows=1, ncols=2,
 							figsize=(20, 10),
 							sharex='none',
 							sharey='none')
-	fig.suptitle('CDF of pvalues (BR%={0})'.format(quantile * 100), fontsize=30)
+	fig.suptitle('CDF of pvalues (BR%={0})'.format(quantile * 100),
+				 fontsize=30)
 
 	ax = axs[0]
 	ax.set_title('Without Decorrelation', fontsize=30)
@@ -809,7 +955,7 @@ for quantile in quantiles:
 	plot('tclass', quantile)
 
 	save_fig(cwd=args.cwd,
-			 path='{0}/test/CDF_per_quantile'.format(target_data_id),
+			 path='{0}/test/CDF_per_quantile'.format(args.target_data_id),
 			 fig=fig,
 			 name='{0}'.format(quantile))
 

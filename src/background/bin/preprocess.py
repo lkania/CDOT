@@ -1,6 +1,6 @@
 import jax.numpy as np
 from src.bin import proportions
-from src.background.bin.delta import influence
+from src.background.bin.delta import influence, t2_hat
 from functools import partial
 
 
@@ -27,4 +27,9 @@ def preprocess(params, method):
 		influence,
 		empirical_probabilities=empirical_probabilities,
 		indicators=indicators,
+		grad=params.grad_op)
+
+	method.background.t2_hat = partial(
+		t2_hat,
+		empirical_probabilities=empirical_probabilities,
 		grad=params.grad_op)

@@ -33,7 +33,7 @@ from experiments.builder import build
 from src.test.test import test
 from src.bin import proportions, adaptive_bin, full_adaptive_bin
 from src.bin import uniform_bin as _uniform_bin
-from src.stat.binom import clopper_pearson
+from src.stat.binom import exact_binomial_ci
 
 uniform_bin = lambda X, lower, upper, n_bins: _uniform_bin(n_bins=n_bins)
 
@@ -143,9 +143,9 @@ def plot_hists(ax, binning, ks, ms):
 	props = proportions(X=ms[0].tX, from_=from_, to_=to_)[0]
 	counts = props * ms[0].tX.shape[0]
 
-	cis = clopper_pearson(n_successes=counts,
-						  n_trials=ms[0].tX.shape[0],
-						  alpha=alpha)
+	cis = exact_binomial_ci(n_successes=counts,
+							n_trials=ms[0].tX.shape[0],
+							alpha=alpha)
 
 	ax.set_xlabel('Mass (projected scale)', fontsize=fontsize)
 	ax.set_ylabel('Normalized counts', fontsize=fontsize)
@@ -204,9 +204,9 @@ def plot_hists_with_uncertainty(ax, binning, ks):
 
 	props = proportions(X=tX, from_=from_, to_=to_)[0]
 	counts = props * tX.shape[0]
-	cis = clopper_pearson(n_successes=counts,
-						  n_trials=tX.shape[0],
-						  alpha=alpha)
+	cis = exact_binomial_ci(n_successes=counts,
+							n_trials=tX.shape[0],
+							alpha=alpha)
 
 	plot_hist_with_uncertainty(ax=ax,
 							   from_=from_,
@@ -372,9 +372,9 @@ uppers = []
 for i, k in enumerate(ks):
 	tests = [results[k][l].test for l in range(params.folds)]
 	tests = np.array(tests, dtype=np.int32)
-	cp = clopper_pearson(n_successes=[np.sum(tests)],
-						 n_trials=params.folds,
-						 alpha=alpha)[0]
+	cp = exact_binomial_ci(n_successes=[np.sum(tests)],
+						   n_trials=params.folds,
+						   alpha=alpha)[0]
 	means.append(np.mean(tests))
 	lowers.append(cp[0])
 	uppers.append(cp[1])

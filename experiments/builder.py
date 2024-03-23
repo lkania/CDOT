@@ -80,14 +80,22 @@ def load_background(args):
 
 	params.subsample = subsample
 
-	def subsample_and_filter(n, classifier, lambda_, cutoff):
-		X, c = params.subsample(n=n, classifier=classifier, lambda_=lambda_)
+	def filter(X_, cutoff):
+		X, c = X_
 		X = X[c > cutoff]
 		X = random.permutation(
 			key=params.new_key(),
 			x=X,
 			independent=False)
 		return X
+
+	params.filter = filter
+
+	def subsample_and_filter(n, classifier, lambda_, cutoff):
+		return params.filter(X_=params.subsample(n=n,
+												 classifier=classifier,
+												 lambda_=lambda_),
+							 cutoff=cutoff)
 
 	params.subsample_and_filter = subsample_and_filter
 
@@ -115,10 +123,13 @@ def load_signal(params):
 			return params.background.subsample(n=n,
 											   classifier=classifier)
 
+		assert classifier is not None
+
 		n_signal = np.int32(n * lambda_)
 		X, c = params.background.subsample(classifier=classifier,
 										   n=n - n_signal)
-		idx = params.choice(n=n_signal, n_elements=params.signal.X.shape[0])
+		idx = params.choice(n=n_signal,
+							n_elements=params.signal.X.shape[0])
 		signal_X = params.signal.X[idx].reshape(-1)
 		signal_c = params.signal.c[classifier][idx].reshape(-1)
 

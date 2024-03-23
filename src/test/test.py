@@ -6,7 +6,7 @@ import numpy as onp
 ######################################################################
 from src.dotdic import DotDic
 from src.test.builder import build
-from src.ci.delta import delta_ci
+from src.ci.delta import delta_ci, _delta_ci
 
 
 def test(args, X):
@@ -36,17 +36,26 @@ def _test(params, X):
 		lambda_hat, aux = method.background.estimate_lambda(h_hat)
 		return lambda_hat, (lambda_hat, aux)
 
-	influence_, aux_ = method.background.influence(estimate)
+	t2_hat, aux_ = method.background.t2_hat(estimate)
 	lambda_hat, aux = aux_
 	gamma_hat, gamma_aux = aux
-	lambda_hat = lambda_hat + np.mean(influence_)
 
 	#######################################################
 	# compute one-sided confidence interval
 	#######################################################
-	ci, pvalue, zscore = delta_ci(
+	ci, pvalue, zscore = _delta_ci(
 		point_estimate=np.array([lambda_hat]),
-		influence=influence_)
+		t2_hat=t2_hat,
+		n=method.X.shape[0])
+
+	# Slower method. Useful if further processing of Hadamard
+	# derivatives is needed
+	# if params.DEBUG:
+	# 	influence_, _ = method.background.influence(estimate)
+	# 	_, pvalue2, _ = delta_ci(
+	# 		point_estimate=np.array([lambda_hat]),
+	# 		influence=influence_)
+	# 	assert pvalue == pvalue2
 
 	ci = ci[0]
 	pvalue = pvalue[0]
