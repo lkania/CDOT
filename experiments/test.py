@@ -32,7 +32,7 @@ from experiments.parser import parse
 from experiments.builder import build
 from src.test.test import test
 from src.bin import proportions, adaptive_bin, full_adaptive_bin
-from src.bin import uniform_bin as _uniform_bin
+from src.bin import full_uniform_bin as _uniform_bin
 from src.stat.binom import exact_binomial_ci
 
 uniform_bin = lambda X, lower, upper, n_bins: _uniform_bin(n_bins=n_bins)

@@ -82,7 +82,7 @@ def load_background(args):
 
 	def filter(X_, cutoff):
 		X, c = X_
-		X = X[c > cutoff]
+		X = X[c >= cutoff]
 		X = random.permutation(
 			key=params.new_key(),
 			x=X,

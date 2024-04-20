@@ -28,9 +28,10 @@ def build(args):
 	# Background estimation parameters
 	#######################################################
 	# high impact on jacobian computation for bin methods
-	params.bins = int(args.bins)
 	params.from_ = args.from_
 	params.to_ = args.to_
+	assert params.from_.shape[0] == params.to_.shape[0]
+	params.bins = len(params.from_)
 
 	# high impact on jacobian computation for non-bin methods
 	assert args.k is not None

@@ -4,15 +4,27 @@ from scipy.stats import chi2
 from statsmodels.stats.proportion import proportion_confint
 
 
-# See: https://en.wikipedia.org/wiki/Poisson_distribution#Confidence_interval
-def exact_poisson_ci(n_events, alpha=0.05):
+# See:
+# - https://en.wikipedia.org/wiki/Poisson_distribution#Confidence_interval
+# - https://stackoverflow.com/questions/14813530/poisson-confidence-interval-with-numpy
+def _exact_poisson_ci(n_events, alpha=0.05):
 	n_events = n_events.reshape(-1)
 	assert np.sum(n_events < 0) == 0, "negative value found in n_events"
 
 	L = chi2.ppf(alpha / 2, 2 * n_events) / 2
-	U = chi2.ppf(1 - alpha / 2, 2 * n_events + 2) / 2
+	U = chi2.ppf(1 - alpha / 2, 2 * (n_events + 1)) / 2
 	ci = np.stack([L, U], axis=1)
 	return ci
+
+
+def exact_poisson_ci(n_events, alpha=0.05):
+	if n_events.ndim == 1 or n_events.shape[0] == 1:
+		return _exact_poisson_ci(n_events=n_events, alpha=alpha)
+
+	# We will compute the CI using the sum of the observed events
+	n_observations = n_events.shape[0]
+	ci = _exact_poisson_ci(n_events=np.sum(n_events, axis=0), alpha=alpha)
+	return ci / n_observations
 
 
 def _scipy_cp(n_successes, n_trials, alpha=0.05, alternative='two-sided'):
@@ -42,7 +54,7 @@ def exact_binomial_ci(n_successes,
 	n_successes = np.array(n_successes)
 	# check that n_successes and n_trials
 	# contain no negative values
-	assert np.sum(n_successes < 0) == 0, "negative value found in n_successes"
+	assert np.any(n_successes >= 0), "negative value found in n_successes"
 	assert n_trials >= 1, "n_trials must be greater or equal than 1"
 
 	# compute confidence intervals
