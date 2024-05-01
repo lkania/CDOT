@@ -1,4 +1,5 @@
 from jax import numpy as np
+from src.normalize import threshold
 
 
 # Let func: R^{n_props} -> R^{p}
@@ -34,6 +35,11 @@ def t2_hat(func, empirical_probabilities, grad):
 	grad_op = grad(fun=func, argnums=0, has_aux=True)
 	jac, aux = grad_op(empirical_probabilities)
 	jac = jac.reshape(-1, n_probs)  # n_params x n_probs
+
+	# Note: a nan-gradient corresponds to a bin that had
+	# no influence in the optimization, hence we must zero it
+	jac = np.nan_to_num(jac, nan=0.0)
+	assert not np.isnan(jac).any()
 
 	D_hat = - np.outer(props, props)
 	mask = 1 - np.eye(D_hat.shape[0])

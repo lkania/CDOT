@@ -1,4 +1,3 @@
-from src.background.bin.preprocess import preprocess
 from src.normalize import normalize, threshold
 from src.background.bin.lambda_hat import estimate_lambda
 
@@ -7,16 +6,27 @@ from functools import partial
 from src.opt.jaxopt import normalized_nnls_with_linear_constraint
 from jaxopt.projection import projection_polyhedron
 from jaxopt import ProjectedGradient
+from src.bin import proportions
+from src.background.bin.delta import influence, t2_hat
+from functools import partial
 
 
 #########################################################################
 # Update rules for poisson nll
 #########################################################################
 
+# Note that thresholding small predictions seems to
+# severely affect the delta method.
 @jit
 def dagostini(gamma0, props, M, int_control, int_omega):
-	pred = props.reshape(-1, 1) / (M @ gamma0.reshape(-1, 1))
+	pred0 = M @ gamma0.reshape(-1, 1)
+	# If the mean prediction is zero, we leave it at zero
+	# we use the double-where trick to handle zero values
+	# see: https://github.com/google/jax/issues/5039
+	pred = np.where(pred0 != 0.0, pred0, 0.0)
+	pred = np.where(pred0 != 0.0, props.reshape(-1, 1) / pred, 0.0)
 	gamma = (M.transpose() @ pred) / int_control.reshape(-1, 1)
+
 	return gamma
 
 
@@ -36,20 +46,20 @@ def _update(gamma0, props, M, int_control, int_omega, _delta):
 						   int_control=int_control, int_omega=int_omega)
 
 
-@partial(jit, static_argnames=['dtype', 'tol', 'dtype', '_delta', 'fixpoint'])
-def poisson_opt(props, M, int_control, int_omega,
-				tol, dtype, _delta, fixpoint):
+@partial(jit, static_argnames=['tol', '_delta', 'fixpoint'])
+def poisson_opt(props, M, int_control, int_omega, tol, _delta, fixpoint):
 	sol = fixpoint(fixed_point_fun=partial(_update, _delta=_delta)).run(
 		# we initialize gamma so that int_Omega B_gamma(x) = 1
 		# the fixed point method cannot be differentiated w.r.t
 		# the init parameters
-		np.full_like(int_control, 1, dtype=dtype) / np.sum(int_omega),
+		np.full_like(int_control, 1, dtype=int_control.dtype) / np.sum(
+			int_omega),
 		# the fixed point method can be differentiated w.r.t
 		# the following auxiliary parameters
 		props, M, int_control, int_omega)
 
 	gamma = normalize(
-		gamma=threshold(sol[0], tol=tol, dtype=dtype),
+		gamma=threshold(sol[0], tol=tol),
 		int_omega=int_omega)
 
 	gamma_error = np.max(np.abs(_delta(gamma0=gamma,
@@ -99,8 +109,7 @@ def multinomial_opt(props, M, int_control, int_omega,
 		hyperparams_proj=(A_, b_, G, h))
 	x = pg_sol.params
 
-	gamma = normalize(
-		threshold(x, tol=tol, dtype=dtype), int_omega=int_omega)
+	gamma = normalize(threshold(x, tol=tol), int_omega=int_omega)
 
 	gamma_error = 0
 	gamma_aux = (gamma_error,
@@ -128,8 +137,21 @@ def mom_opt(props, M, int_control, int_omega,
 	return gamma, gamma_aux
 
 
-def fit(params, method):
-	preprocess(params=params, method=method)
+def preprocess(params, method):
+	int_omega = params.basis.int_omega(k=method.k)
+	assert not np.isnan(int_omega).any()
+
+	M = params.basis.integrate(method.k,
+							   params.from_,
+							   params.to_)  # n_bins x n_parameters
+	assert not np.isnan(M).any()
+
+	int_control = np.sum(M, axis=0).reshape(-1, 1)
+	assert not np.isnan(int_control).any()
+
+	method.background.int_omega = int_omega
+	method.background.M = M
+	method.background.int_control = int_control
 
 	method.background.estimate_gamma = partial(
 		params.background.optimizer,
@@ -141,6 +163,30 @@ def fit(params, method):
 		estimate_lambda,
 		compute_gamma=method.background.estimate_gamma,
 		int_control=method.background.int_control)
+
+	# indicators is a n_props x n_obs matrix that indicates
+	# to which bin every observation belongs
+	method.background.influence = partial(
+		influence,
+		empirical_probabilities=method.background.empirical_probabilities,
+		indicators=method.background.indicators,
+		grad=params.grad_op)
+
+	method.background.t2_hat = partial(
+		t2_hat,
+		empirical_probabilities=method.background.empirical_probabilities,
+		grad=params.grad_op)
+
+
+def fit(params, method):
+	empirical_probabilities, indicators = proportions(
+		X=method.X,
+		from_=params.from_,
+		to_=params.to_)
+	assert not np.isnan(empirical_probabilities).any()
+
+	method.background.empirical_probabilities = empirical_probabilities
+	method.background.indicators = indicators
 
 
 @jit

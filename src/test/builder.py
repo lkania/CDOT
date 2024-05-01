@@ -37,6 +37,9 @@ def build(args):
 	assert args.k is not None
 	params.k = int(args.k)
 
+	# Certify that there will be enough data-points to fit the background density
+	assert params.k <= (params.bins + 1)
+
 	#######################################################
 	# Basis
 	#######################################################
@@ -63,28 +66,24 @@ def build(args):
 	# optimizer used in background estimation
 	#######################################################
 
-	def fixpoint():
-		params.optimizer += '_{0}'.format(args.fixpoint)
-		match args.fixpoint:
-			case 'normal':
-				params.fixpoint = partial(FixedPointIteration,
-										  verbose=False,
-										  jit=True,
-										  implicit_diff=True,
-										  tol=params.tol,
-										  maxiter=params.maxiter)
-			case 'anderson':
-				params.fixpoint = partial(AndersonAcceleration,
-										  beta=1,
-										  history_size=5,
-										  mixing_frequency=1,
-										  verbose=False,
-										  jit=True,
-										  implicit_diff=True,
-										  tol=params.tol,
-										  maxiter=params.maxiter)
-			case _:
-				raise ValueError('Fixed point solver not supported')
+	match args.fixpoint:
+		case 'anderson':
+			params.fixpoint = partial(AndersonAcceleration,
+									  beta=1,
+									  history_size=5,
+									  mixing_frequency=1,
+									  verbose=False,
+									  jit=True,
+									  implicit_diff=True,
+									  tol=params.tol,
+									  maxiter=params.maxiter)
+		case 'normal' | _:  # default choice
+			params.fixpoint = partial(FixedPointIteration,
+									  verbose=False,
+									  jit=True,
+									  implicit_diff=True,
+									  tol=params.tol,
+									  maxiter=params.maxiter)
 
 	params.method = args.method
 	params.optimizer = args.optimizer
@@ -93,21 +92,17 @@ def build(args):
 			params.background.fit = bin_mle.fit
 			match args.optimizer:
 				case 'dagostini':
-					fixpoint()
 					params.background.optimizer = partial(
 						bin_mle.poisson_opt,
 						fixpoint=params.fixpoint,
 						_delta=bin_mle.dagostini,
-						tol=params.tol,
-						dtype=params.dtype)
+						tol=params.tol)
 				case 'normalized_dagostini':
-					fixpoint()
 					params.background.optimizer = partial(
 						bin_mle.poisson_opt,
 						fixpoint=params.fixpoint,
 						_delta=bin_mle.normalized_dagostini,
-						tol=params.tol,
-						dtype=params.dtype)
+						tol=params.tol)
 				case 'multinomial':
 					params.background.optimizer = partial(
 						bin_mle.multinomial_opt,

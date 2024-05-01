@@ -1,10 +1,3 @@
-#######################################################
-# Load Jax
-#######################################################
-from jax.config import config
-
-config.update("jax_enable_x64", True)
-
 from jax import numpy as np
 
 ######################################################################
@@ -41,6 +34,7 @@ colors = ['red',
 from src import bin
 from src.stat.binom import exact_binomial_ci, exact_poisson_ci
 from experiments import storage
+from src.normalize import threshold
 
 
 def binomial_ci(values, alpha):
@@ -55,13 +49,22 @@ def binomial_ci(values, alpha):
 	return lower, mean, upper
 
 
-# implement bootstrap confidence interval
-def quantile_interval(values, alpha):
+# TODO: replace mean by refit to all data
+def boostrap_pivotal_ci(values, alpha):
 	values = np.array(values)
 	mean = np.mean(values, axis=0)
+	lower = 2 * mean - np.quantile(values, q=1 - alpha / 2, axis=0)
+	upper = 2 * mean - np.quantile(values, q=alpha / 2, axis=0)
+	midpoint = (lower + upper) / 2
+	return lower, midpoint, upper
+
+
+def bootstrap_percentile_ci(values, alpha):
+	values = np.array(values)
 	lower = np.quantile(values, q=alpha / 2, axis=0)
 	upper = np.quantile(values, q=1 - alpha / 2, axis=0)
-	return lower, mean, upper
+	midpoint = (lower + upper) / 2
+	return lower, midpoint, upper
 
 
 # See: https://stackoverflow.com/questions/51717199/how-to-adjust-space-between-every-second-row-of-subplots-in-matplotlib
@@ -191,8 +194,6 @@ def hist_with_uncertainty(ax,
 							fmt='o')
 
 
-# TODO: implement boostrap confidence interval
-# for p-value and predictive means
 # TODO: produce plots restricting the ax2 axis and not
 # restricting it (ax2 and ax3) global and local picture
 def hists(ax,
@@ -217,28 +218,31 @@ def hists(ax,
 
 	for i, method in enumerate(methods):
 		sample_size = methods[0].X.shape[0]
-		predictions.append(method.params.basis.predict(
-			gamma=method.gamma_hat,
-			k=method.k,
-			from_=from_,
-			to_=to_).reshape(-1) * sample_size)
+		p = method.background.predict(
+			from_=from_, to_=to_).reshape(-1) * sample_size
+		assert not np.isnan(p).any()
+		predictions.append(p)
+
 		pvalues.append(method.pvalue)
-		count.append(bin.counts(X=method.X, from_=from_, to_=to_)[0])
+
+		c = bin.counts(X=method.X, from_=from_, to_=to_)[0]
+		assert not np.isnan(c).any()
+		count.append(c)
 
 	predictions = np.array(predictions)
 	count = np.array(count, dtype=np.int32)
 
 	if len(methods) > 1:
 
-		pred_lower, pred_mean, pred_upper = quantile_interval(
+		pred_lower, pred_mid, pred_upper = bootstrap_percentile_ci(
 			values=predictions,
 			alpha=alpha)
-		pvalue_lower, _, pvalue_upper = quantile_interval(
+		pvalue_lower, _, pvalue_upper = bootstrap_percentile_ci(
 			values=pvalues,
 			alpha=alpha)
 
 	else:
-		pred_mean = predictions.reshape(-1)
+		pred_mid = predictions.reshape(-1)
 		pred_lower = None
 		pred_upper = None
 		pvalue_lower = pvalues[0]
@@ -267,7 +271,7 @@ def hists(ax,
 		label='Data (Exact Poisson CI)',
 		markersize=2)
 
-	label = 'K={0} p-value=[{1},{2}]'.format(
+	label = 'K={0} p-value=[{1:g},{2:g}]'.format(
 		methods[0].k,
 		round(pvalue_lower, 2),
 		round(pvalue_upper, 2))
@@ -276,7 +280,7 @@ def hists(ax,
 		ax=ax,
 		from_=from_,
 		to_=to_,
-		mean=pred_mean,
+		mean=pred_mid,
 		lower=pred_lower,
 		upper=pred_upper,
 		jitter=0,
@@ -293,19 +297,24 @@ def hists(ax,
 		ax2.axhline(y=1,
 					color='black',
 					linestyle='-')
+		# ax2.set_ylim(bottom=0)
 
 		if pred_lower is not None and pred_upper is not None:
-			pred_lower, pred_mean, pred_upper = quantile_interval(
+			pred_lower, pred_mid, pred_upper = bootstrap_percentile_ci(
 				values=count_pred_ratio,
 				alpha=alpha)
+
+			pred_upper = threshold(pred_upper, tol=0.0)
+			pred_mid = threshold(pred_mid, tol=0.0)
+			pred_lower = threshold(pred_lower, tol=0.0)
 		else:
-			pred_mean = count_pred_ratio.reshape(-1)
+			pred_mid = count_pred_ratio.reshape(-1)
 
 		hist_with_uncertainty(
 			ax=ax2,
 			from_=from_,
 			to_=to_,
-			mean=pred_mean,
+			mean=pred_mid,
 			lower=pred_lower,
 			upper=pred_upper,
 			jitter=0,
@@ -313,15 +322,15 @@ def hists(ax,
 			markersize=2,
 			label=label)
 
-		# We don't display large outliers
-		# We check that our proposed new upper limit
-		# is smaller than the current upper limit in
-		# order to not overwrite other upper limits
-		# when sharing y axes with other plots
-		l, u = ax2.get_ylim()
-		u_proposal = quantile_interval(values=pred_upper, alpha=alpha)[2]
-		ax2.set_ylim(bottom=np.maximum(l, 0 - eps),
-					 top=np.maximum(np.maximum(u, u_proposal), 1 + eps))
+	# We don't display large outliers
+	# We check that our proposed new upper limit
+	# is smaller than the current upper limit in
+	# order to not overwrite other upper limits
+	# when sharing y axes with other plots
+	# l, u = ax2.get_ylim()
+	# u_proposal = quantile_interval(values=pred_upper, alpha=alpha)[2]
+	# ax2.set_ylim(bottom=np.maximum(l, 0 - eps),
+	# 			 top=np.maximum(np.maximum(u, u_proposal), 1 + eps))
 
 	ax.legend()
 

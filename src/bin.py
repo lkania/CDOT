@@ -124,8 +124,9 @@ def full_adaptive_bin(X, lower, upper, n_bins):
 
 
 def uniform_bin(lower, upper, n_bins):
-	l = np.linspace(start=0, stop=lower, num=int(n_bins / 2))
-	u = np.linspace(start=upper, stop=1, num=int(n_bins / 2))
+	assert lower >= 0 and upper <= 1
+	l = np.linspace(start=0, stop=lower, num=int(n_bins * lower))
+	u = np.linspace(start=upper, stop=1, num=int(n_bins * (1 - upper)))
 	from_ = np.concatenate((l[:-1], u[:-1]))
 	to_ = np.concatenate((l[1:], u[1:]))
 
