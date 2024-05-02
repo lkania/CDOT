@@ -1,5 +1,5 @@
 from jax import numpy as np
-
+from src import normalize
 ######################################################################
 # Configure matplolib
 ######################################################################
@@ -34,7 +34,7 @@ colors = ['red',
 from src import bin
 from src.stat.binom import exact_binomial_ci, exact_poisson_ci
 from experiments import storage
-from src.normalize import threshold
+from src.normalize import threshold_non_neg
 
 
 def binomial_ci(values, alpha):
@@ -55,15 +55,24 @@ def boostrap_pivotal_ci(values, alpha):
 	mean = np.mean(values, axis=0)
 	lower = 2 * mean - np.quantile(values, q=1 - alpha / 2, axis=0)
 	upper = 2 * mean - np.quantile(values, q=alpha / 2, axis=0)
+
 	midpoint = (lower + upper) / 2
+
 	return lower, midpoint, upper
 
 
-def bootstrap_percentile_ci(values, alpha):
+def bootstrap_percentile_ci(values, alpha, tol=1e-12):
 	values = np.array(values)
+
 	lower = np.quantile(values, q=alpha / 2, axis=0)
+	lower = normalize.threshold(lower, tol=tol)
+
 	upper = np.quantile(values, q=1 - alpha / 2, axis=0)
-	midpoint = (lower + upper) / 2
+	upper = normalize.threshold(upper, tol=tol)
+
+	midpoint = np.quantile(values, q=0.5, axis=0)
+	midpoint = normalize.threshold(midpoint, tol=tol)
+
 	return lower, midpoint, upper
 
 
@@ -205,12 +214,15 @@ def hists(ax,
 	if binning is not None:
 		from_, to_ = binning(
 			X=methods[0].X,
-			lower=methods[0].params.lower,
-			upper=methods[0].params.upper,
-			n_bins=methods[0].params.bins)
+			lower=methods[0].test.args.lower,
+			upper=methods[0].test.args.upper,
+			n_bins=methods[0].test.args.bins)
 	else:
-		from_ = methods[0].params.from_
-		to_ = methods[0].params.to_
+		from_ = methods[0].test.args.from_
+		to_ = methods[0].test.args.to_
+
+	lower = methods[0].test.args.lower
+	upper = methods[0].test.args.upper
 
 	predictions = []
 	pvalues = []
@@ -218,8 +230,7 @@ def hists(ax,
 
 	for i, method in enumerate(methods):
 		sample_size = methods[0].X.shape[0]
-		p = method.background.predict(
-			from_=from_, to_=to_).reshape(-1) * sample_size
+		p = method.predict(from_=from_, to_=to_).reshape(-1) * sample_size
 		assert not np.isnan(p).any()
 		predictions.append(p)
 
@@ -254,11 +265,8 @@ def hists(ax,
 	count_lower = cis[:, 0].reshape(-1)
 	count_upper = cis[:, 1].reshape(-1)
 
-	ax.axvline(x=methods[0].params.lower,
-			   color='red', linestyle='--')
-	ax.axvline(x=methods[0].params.upper,
-			   color='red', linestyle='--',
-			   label='Signal region')
+	ax.axvline(x=lower, color='red', linestyle='--')
+	ax.axvline(x=upper, color='red', linestyle='--', label='Signal region')
 
 	hist_with_uncertainty(
 		ax=ax,
@@ -272,7 +280,7 @@ def hists(ax,
 		markersize=2)
 
 	label = 'K={0} p-value=[{1:g},{2:g}]'.format(
-		methods[0].k,
+		methods[0].test.args.k,
 		round(pvalue_lower, 2),
 		round(pvalue_upper, 2))
 
@@ -289,9 +297,9 @@ def hists(ax,
 		label=label)
 
 	if ax2 is not None:
-		ax2.axvline(x=methods[0].params.lower,
+		ax2.axvline(x=lower,
 					color='red', linestyle='--')
-		ax2.axvline(x=methods[0].params.upper,
+		ax2.axvline(x=upper,
 					color='red', linestyle='--',
 					label='Signal region')
 		ax2.axhline(y=1,
@@ -304,9 +312,9 @@ def hists(ax,
 				values=count_pred_ratio,
 				alpha=alpha)
 
-			pred_upper = threshold(pred_upper, tol=0.0)
-			pred_mid = threshold(pred_mid, tol=0.0)
-			pred_lower = threshold(pred_lower, tol=0.0)
+			pred_upper = threshold_non_neg(pred_upper, tol=0.0)
+			pred_mid = threshold_non_neg(pred_mid, tol=0.0)
+			pred_lower = threshold_non_neg(pred_lower, tol=0.0)
 		else:
 			pred_mid = count_pred_ratio.reshape(-1)
 

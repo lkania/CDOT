@@ -7,18 +7,22 @@ start_time = time.time()
 ######################################################################
 from tqdm import tqdm
 from functools import partial
+import hashlib
+
 #######################################################
 # activate parallelism in CPU for JAX
 # See:
 # - https://github.com/google/jax/issues/3534
 # - https://blackjax-devs.github.io/blackjax/examples/howto_sample_multiple_chains.html
 #######################################################
-# import os
+import os
+
 # import multiprocessing
 #
 # n_jobs = multiprocessing.cpu_count() - 2
-# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
-# 	n_jobs)
+n_jobs = 4
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
+	n_jobs)
 
 #######################################################
 # Load Jax
@@ -44,8 +48,9 @@ from src.dotdic import DotDic
 from experiments.parser import parse
 from experiments import plot, storage, selection, plots
 from experiments.builder import load_background, load_signal
-from src.test.test import test as _test
+from src.test.test import build as build_test
 from src import bin
+from src.basis import bernstein
 
 uniform_bin = lambda X, lower, upper, n_bins: bin.full_uniform_bin(
 	n_bins=n_bins)
@@ -54,13 +59,14 @@ uniform_bin = lambda X, lower, upper, n_bins: bin.full_uniform_bin(
 # Simulation parameters
 ##################################################
 args = parse()
+args.n_jobs = n_jobs
 args.target_data_id = args.data_id
-args.use_cache = True
+args.use_cache = False
 args.alpha = 0.05
 args.sample_size = 20000
-args.folds = 250
+args.folds = 8  # 250
 args.signal_region = [0.1, 0.9]  # the signal region contains 80% of the signal
-args.ks = [5, 10, 15, 20, 25, 30, 35, 40, 45]
+args.ks = [5, 10]  # [5, 10, 15, 20, 25, 30, 35, 40, 45]
 args.classifiers = ['class', 'tclass']
 # Subsets are used for plotting while
 # the full range is used for power curve computations
@@ -70,15 +76,8 @@ args.quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
 args.quantiles_subset = [0.0, 0.5, 0.7]
 
 assert args.folds > 1
-
-test_args = DotDic()
-test_args.bins = 100
-test_args.method = 'bin_mle'
-test_args.optimizer = 'dagostini'
-test_args.fixpoint = 'normal'
-test_args.maxiter = 5000
-test_args.tol = 1e-10
-test_args.alpha = args.alpha
+assert args.n_jobs >= 1
+assert args.folds % args.n_jobs == 0
 
 assert max(len(args.lambdas), len(args.quantiles)) <= len(plot.colors)
 ##################################################
@@ -111,16 +110,19 @@ def get_trans(args, min_):
 
 
 # Produce a dataset, filter it, transform it and test it
-def random_test(args, cutoff, trans, classifier, params, sample_size, lambda_):
-	return _test(
-		args=args,
-		X=trans(
-			params.subsample_and_filter(
-				n=sample_size,
-				classifier=classifier,
-				lambda_=lambda_,
-				cutoff=cutoff)
-		))
+def transform_and_test(test, trans, X):
+	return test(X=trans(X))
+
+
+def generate_dataset(cutoff,
+					 classifier,
+					 params,
+					 sample_size,
+					 lambda_):
+	return params.subsample_and_filter(n=sample_size,
+									   classifier=classifier,
+									   lambda_=lambda_,
+									   cutoff=cutoff)
 
 
 selected = DotDic()
@@ -147,37 +149,43 @@ for classifier in args.classifiers:
 						  axis=0)
 
 	for q, quantile in enumerate(args.quantiles):
-		selected[classifier][quantile] = DotDic()
 
-		selected[classifier][quantile].name = '{0}_{1}'.format(classifier,
-															   quantile)
+		test = DotDic()
+		test.name = '{0}_{1}'.format(classifier, quantile)
 
 		# filtering parameter
-		selected[classifier][quantile].cutoff = cutoffs[q]
+		test.cutoff = cutoffs[q]
 
 		# Note: modify here to change the data transformation after thresholding
 		# Note that if you do that, there is a high change of
 		# test data being below the threshold
 		# specify data transformation
-		selected[classifier][quantile].trans = get_trans(
+		test.trans = get_trans(
 			args=args,
 			min_=int(np.floor(np.min(params.background.X)))
 		)
 
-		selected[classifier][quantile].args = test_args.copy()
-		dic = selected[classifier][quantile].args
+		test.args = DotDic()
+		test.args.bins = 100
+		test.args.method = 'bin_mle'
+		test.args.optimizer = 'dagostini'
+		test.args.fixpoint = 'normal'
+		test.args.maxiter = 5000
+		test.args.tol = 1e-10
+		test.args.alpha = args.alpha
 
 		# Note: modify here to set signal region after thresholding
 		qs = np.quantile(params.signal.X,
 						 q=np.array(args.signal_region),
 						 axis=0)
-		dic.lower = selected[classifier][quantile].trans(qs[0])
-		dic.upper = selected[classifier][quantile].trans(qs[1])
+		test.args.lower = test.trans(qs[0])
+		test.args.upper = test.trans(qs[1])
 
 		# Note: uniform binning fails with asymptotic test
-		dic.from_, dic.to_ = bin.uniform_bin(lower=dic.lower,
-											 upper=dic.upper,
-											 n_bins=dic.bins)
+		test.args.from_, test.args.to_ = bin.uniform_bin(
+			lower=test.args.lower,
+			upper=test.args.upper,
+			n_bins=test.args.bins)
 
 		# Code for doing equal-frequency bins
 		# Get expected number of bins to the
@@ -228,22 +236,27 @@ for classifier in args.classifiers:
 		# 		dic.from_ = dic.from_[1:-1]
 		# 		dic.to_ = dic.to_[1:-1]
 
-		selected[classifier][quantile].random_test = partial(
-			random_test,
-			classifier=classifier,
-			args=selected[classifier][quantile].args,
-			trans=selected[classifier][quantile].trans,
-			cutoff=selected[classifier][quantile].cutoff)
-
 		# TODO: separate building the test from testing,
 		# that is, you can ammortize most of the preprocessing steps
 		# create a build function that returns an object with test
 		# function
 		tests = []
 		for i, k in enumerate(args.ks):
-			tests.append(selected[classifier][quantile].copy())
+			tests.append(test.copy())
 			tests[i].args.k = k
 			tests[i].name = '{0}_{1}'.format(tests[i].name, k)
+			tests[i].args.hash = int(
+				hashlib.sha1(tests[i].name.encode("utf-8")).hexdigest(), 16)
+			tests[i].args.basis = bernstein
+			tests[i].generate_dataset = partial(
+				generate_dataset,
+				classifier=classifier,
+				cutoff=tests[i].cutoff)
+			tests[i].test = partial(
+				transform_and_test,
+				trans=tests[i].trans,
+				test=build_test(args=tests[i].args))
+
 			all[k][classifier][quantile] = tests[i]
 
 		###################################################
@@ -258,9 +271,7 @@ for classifier in args.classifiers:
 			path=path,
 			params=params,
 			tests=tests,
-			measure=partial(
-				selection.target_alpha_level,
-				alpha=args.alpha))
+			measure=partial(selection.target_alpha_level, alpha=args.alpha))
 
 		selected[classifier][quantile] = selection_results.test_star
 		del selection_results['test_star']

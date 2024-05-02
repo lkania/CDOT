@@ -6,10 +6,6 @@ from jaxopt import AndersonAcceleration, FixedPointIteration
 #######################################################
 from functools import partial
 from src.dotdic import DotDic
-#######################################################
-# Basis
-#######################################################
-from src.basis import bernstein
 
 #######################################################
 # background methods
@@ -22,6 +18,7 @@ def build(args):
 	# init sub-dictionaries
 	#######################################################
 	params = DotDic()
+	params.hash = args.hash
 	params.background = DotDic()
 
 	#######################################################
@@ -43,18 +40,13 @@ def build(args):
 	#######################################################
 	# Basis
 	#######################################################
-	params.basis = bernstein
+	params.basis = args.basis
 
 	#######################################################
 	# signal region
 	#######################################################
 	params.lower = args.lower
 	params.upper = args.upper
-
-	#######################################################
-	# allow 64 bits
-	#######################################################
-	params.dtype = np.float64
 
 	#######################################################
 	# numerical methods
@@ -66,58 +58,60 @@ def build(args):
 	# optimizer used in background estimation
 	#######################################################
 
-	match args.fixpoint:
+	params.fixpoint = args.fixpoint
+	match params.fixpoint:
 		case 'anderson':
-			params.fixpoint = partial(AndersonAcceleration,
-									  beta=1,
-									  history_size=5,
-									  mixing_frequency=1,
-									  verbose=False,
-									  jit=True,
-									  implicit_diff=True,
-									  tol=params.tol,
-									  maxiter=params.maxiter)
+			fixpoint = partial(AndersonAcceleration,
+							   beta=1,
+							   history_size=5,
+							   mixing_frequency=1,
+							   verbose=False,
+							   jit=True,
+							   implicit_diff=True,
+							   tol=params.tol,
+							   maxiter=params.maxiter)
 		case 'normal' | _:  # default choice
-			params.fixpoint = partial(FixedPointIteration,
-									  verbose=False,
-									  jit=True,
-									  implicit_diff=True,
-									  tol=params.tol,
-									  maxiter=params.maxiter)
+			fixpoint = partial(FixedPointIteration,
+							   verbose=False,
+							   jit=True,
+							   implicit_diff=True,
+							   tol=params.tol,
+							   maxiter=params.maxiter)
 
+	params.grad_op = grad
 	params.method = args.method
 	params.optimizer = args.optimizer
 	match params.method:
 		case 'bin_mle':
-			params.background.fit = bin_mle.fit
 			match args.optimizer:
-				case 'dagostini':
+				# case 'normalized_dagostini':
+				# params.background.optimizer = partial(
+				# 	bin_mle.poisson_opt,
+				# 	fixpoint=fixpoint,
+				# 	_delta=bin_mle.normalized_dagostini,
+				# 	tol=params.tol)
+				case 'dagostini' | _:  # default choice
 					params.background.optimizer = partial(
 						bin_mle.poisson_opt,
-						fixpoint=params.fixpoint,
+						fixpoint=fixpoint,
 						_delta=bin_mle.dagostini,
 						tol=params.tol)
-				case 'normalized_dagostini':
-					params.background.optimizer = partial(
-						bin_mle.poisson_opt,
-						fixpoint=params.fixpoint,
-						_delta=bin_mle.normalized_dagostini,
-						tol=params.tol)
-				case 'multinomial':
-					params.background.optimizer = partial(
-						bin_mle.multinomial_opt,
-						tol=params.tol,
-						maxiter=params.maxiter,
-						dtype=params.dtype)
-				case 'mom':
-					params.background.optimizer = partial(
-						bin_mle.mom_opt,
-						tol=params.tol,
-						maxiter=params.maxiter,
-						dtype=params.dtype)
-				case _:
-					raise ValueError('Optimizer not supported')
 
-	params.grad_op = grad
+			bin_mle.preprocess(params)
+
+		# case 'multinomial':
+		# 	params.background.optimizer = partial(
+		# 		bin_mle.multinomial_opt,
+		# 		tol=params.tol,
+		# 		maxiter=params.maxiter,
+		# 		dtype=params.dtype)
+		# case 'mom':
+		# 	params.background.optimizer = partial(
+		# 		bin_mle.mom_opt,
+		# 		tol=params.tol,
+		# 		maxiter=params.maxiter,
+		# 		dtype=params.dtype)
+		# case _:
+		# 	raise ValueError('Optimizer not supported')
 
 	return params

@@ -11,5 +11,9 @@ class DotDic(dict):
 		except KeyError:
 			raise AttributeError(name)
 
+	# Note that we define hashes manually
+	def __hash__(self):
+		return self.hash
+
 	def copy(self):
 		return copy.deepcopy(self)

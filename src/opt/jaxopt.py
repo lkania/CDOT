@@ -3,7 +3,7 @@ from jaxopt import ProjectedGradient
 from jaxopt.projection import projection_polyhedron, projection_non_negative
 from jaxopt.objective import least_squares
 from src.opt.error import squared_ls_error
-from src.normalize import normalize, threshold
+from src.normalize import normalize, threshold_non_neg
 from jax import jit
 
 
@@ -36,7 +36,7 @@ def nnls_with_linear_constraint(A, b, c, maxiter, tol, dtype):
 					hyperparams_proj=(A_, b_, G, h))
 	x = pg_sol.params
 
-	x = normalize(threshold(x, tol=tol), int_omega=c)
+	x = normalize(threshold_non_neg(x, tol=tol), int_omega=c)
 
 	return x, squared_ls_error(A=A, b=b, x=x)
 
@@ -80,6 +80,6 @@ def normalized_nnls_with_linear_constraint(A, b, c, maxiter, tol, dtype):
 					hyperparams_proj=(A_, b_, G, h))
 	x = pg_sol.params
 
-	x = normalize(threshold(x, tol=tol), int_omega=c)
+	x = normalize(threshold_non_neg(x, tol=tol), int_omega=c)
 
 	return x, _normalized_ls_objective(x=x, data=data)

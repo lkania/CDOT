@@ -9,5 +9,10 @@ def normalize(gamma, int_omega):
 
 
 @partial(jit, static_argnames=['tol'])
-def threshold(x, tol):
+def threshold_non_neg(x, tol):
 	return x * np.array(x > tol, dtype=x.dtype)
+
+
+@partial(jit, static_argnames=['tol'])
+def threshold(x, tol):
+	return x * np.array(np.abs(x) > tol, dtype=x.dtype)
