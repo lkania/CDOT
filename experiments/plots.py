@@ -122,7 +122,8 @@ def power(ax, results, lambdas, quantiles, alpha, eps=1e-2):
 			ax,
 			x=np.array(quantiles) * 100,
 			values=[
-				np.array(results[lambda_][quantile].pvalues <= alpha,
+				np.array(results[lambda_][quantile].pvalues <= results[lambda_][
+					quantile].test.threshold,
 						 dtype=np.int32)
 				for quantile in quantiles],
 			color=plot.colors[i],
@@ -155,7 +156,8 @@ def power_per_quantile(args, path, results, lambdas, quantiles):
 		ax=ax,
 		df=[results[classifier][lambda_][quantile].pvalues for lambda_ in
 			lambdas],
-		labels=['$\lambda=${0}'.format(lambda_) for lambda_ in lambdas])
+		labels=['$\lambda=${0}'.format(lambda_) for lambda_ in lambdas],
+		alpha=args.alpha)
 
 	for quantile in quantiles:
 		fig, axs = plot.plt.subplots(nrows=1, ncols=2,

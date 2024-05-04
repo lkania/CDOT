@@ -343,7 +343,7 @@ def hists(ax,
 	ax.legend()
 
 
-def cdfs(ax, df, labels, eps=1e-2):
+def cdfs(ax, df, labels, alpha, eps=1e-2):
 	ax.set_ylim([0 - eps, 1 + eps])
 	ax.set_xlim([0 - eps, 1 + eps])
 	ax.axline([0, 0], [1, 1], color='black', label='Uniform CDF')
@@ -356,7 +356,11 @@ def cdfs(ax, df, labels, eps=1e-2):
 			ax=ax,
 			color=colors[i],
 			alpha=1,
-			label=labels[i])
+			label='{0} {1}-qtile={2}'.format(labels[i],
+											 alpha,
+											 round(np.quantile(d, q=alpha), 2)
+											 )
+		)
 
 	ax.set_ylabel('Cumulative probability')
 	ax.set_xlabel('pvalue')

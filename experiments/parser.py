@@ -4,8 +4,6 @@ from argparse import ArgumentParser
 def parse():
 	parser = ArgumentParser()
 
-	parser.add_argument("--seed", type=int, default=0)
-
 	parser.add_argument("--cwd", type=str, default='..')
 
 	parser.add_argument("--data_id",

@@ -1,24 +1,19 @@
-from jax import numpy as np, random
-#######################################################
-# Utilities
-#######################################################
+from jax import numpy as np, random, jit
+from functools import partial
 from src.dotdic import DotDic
 from src.load import load
 
 
 #######################################################
 
-def load_background(args):
+def load_background_and_signal(args):
 	params = DotDic()
-	params.seed = int(args.seed)
-	params.key = random.PRNGKey(seed=params.seed)
 
 	#######################################################
 	# Data parameters
 	#######################################################
 	params.cwd = args.cwd
 	params.data_id = args.data_id
-
 	params.classifiers = args.classifiers
 
 	#######################################################
@@ -44,25 +39,20 @@ def load_background(args):
 	#######################################################
 	# Sampling
 	#######################################################
+	@partial(jit, static_argnames=['n', 'n_elements'])
+	def choice(n, n_elements, key):
+		return random.randint(key=key,
+							  minval=0,
+							  maxval=n_elements,
+							  shape=(n,)).reshape(-1)
 
-	def new_key():
-		key, subkey = random.split(params.key)
-		params.key = subkey
-		return params.key
+	# params.choice = choice
 
-	params.new_key = new_key
-
-	def choice(n, n_elements):
-		return random.choice(
-			params.new_key(),
-			np.arange(n_elements),
-			shape=(n,)).reshape(-1)
-
-	params.choice = choice
-
-	def _subsample(n, classifier=None):
-		idx = params.choice(n=n,
-							n_elements=params.background.X.shape[0])
+	@partial(jit, static_argnames=['n', 'classifier'])
+	def background_subsample(n, key, classifier=None):
+		idx = choice(n=n,
+					 n_elements=params.background.X.shape[0],
+					 key=key)
 		X = params.background.X[idx].reshape(-1)
 		if classifier is None:
 			return X
@@ -71,38 +61,35 @@ def load_background(args):
 
 		return X, c
 
-	params.background.subsample = _subsample
+	# params.background.subsample = _subsample
 
-	def subsample(n, lambda_, classifier=None):
-		if lambda_ > 0:
-			raise ValueError('lambda > 0 but no signal has been loaded')
-		return params.background.subsample(n=n, classifier=classifier)
+	# def subsample(n, lambda_, key, classifier=None):
+	# 	# if lambda_ > 0:
+	# 	# 	raise ValueError('lambda > 0 but no signal has been loaded')
+	# 	return params.background.subsample(n=n,
+	# 									   classifier=classifier,
+	# 									   key=key)
+	#
+	# params.subsample = subsample
 
-	params.subsample = subsample
+	# def filter(X_, cutoff):
+	# 	X, c = X_
+	# 	X = X[c >= cutoff]
+	# 	# X = random.permutation(
+	# 	# 	key=params.new_key(),
+	# 	# 	x=X,
+	# 	# 	independent=False)
+	# 	return X
+	#
+	# def subsample_and_filter(n, classifier, lambda_, cutoff, key):
+	# 	return filter(X_=params.subsample(n=n,
+	# 									  classifier=classifier,
+	# 									  lambda_=lambda_,
+	# 									  key=key),
+	# 				  cutoff=cutoff)
+	#
+	# params.subsample_and_filter = subsample_and_filter
 
-	def filter(X_, cutoff):
-		X, c = X_
-		X = X[c >= cutoff]
-		X = random.permutation(
-			key=params.new_key(),
-			x=X,
-			independent=False)
-		return X
-
-	params.filter = filter
-
-	def subsample_and_filter(n, classifier, lambda_, cutoff):
-		return params.filter(X_=params.subsample(n=n,
-												 classifier=classifier,
-												 lambda_=lambda_),
-							 cutoff=cutoff)
-
-	params.subsample_and_filter = subsample_and_filter
-
-	return params
-
-
-def load_signal(params):
 	params.signal = DotDic()
 
 	params.signal.X = load(
@@ -118,18 +105,26 @@ def load_signal(params):
 	# Sampling
 	#######################################################
 
-	def subsample(n, lambda_, classifier=None):
+	# Note that this function will generate an array
+	# whose size depends on n and lambda_
+	@partial(jit, static_argnames=['n', 'lambda_', 'classifier'])
+	def subsample(n, lambda_, key, classifier=None):
 		if lambda_ == 0:
-			return params.background.subsample(n=n,
-											   classifier=classifier)
+			return background_subsample(
+				n=n,
+				classifier=classifier,
+				key=key)
 
-		assert classifier is not None
+		# assert classifier is not None
 
-		n_signal = np.int32(n * lambda_)
-		X, c = params.background.subsample(classifier=classifier,
-										   n=n - n_signal)
-		idx = params.choice(n=n_signal,
-							n_elements=params.signal.X.shape[0])
+		key1, key2 = random.split(key, num=2)
+		n_signal = int(n * lambda_)
+		X, c = background_subsample(classifier=classifier,
+									n=n - n_signal,
+									key=key1)
+		idx = choice(n=n_signal,
+					 n_elements=params.signal.X.shape[0],
+					 key=key2)
 		signal_X = params.signal.X[idx].reshape(-1)
 		signal_c = params.signal.c[classifier][idx].reshape(-1)
 
@@ -138,6 +133,27 @@ def load_signal(params):
 
 		return X, c
 
-	params.subsample = subsample
+	# params.subsample = subsample
+
+	def filter(X_, cutoff):
+		X, c = X_
+		X = X[c >= cutoff]
+		return X
+
+	params.filter = filter
+
+	def mask(X_, cutoff):
+		X, c = X_
+		return X, (c >= cutoff)
+
+	@partial(jit, static_argnames=['n', 'classifier', 'lambda_'])
+	def subsample_and_mask(n, classifier, lambda_, cutoff, key):
+		X_ = subsample(n=n,
+					   classifier=classifier,
+					   lambda_=lambda_,
+					   key=key)
+		return mask(X_=X_, cutoff=cutoff)
+
+	params.subsample_and_mask = subsample_and_mask
 
 	return params

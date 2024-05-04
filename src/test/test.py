@@ -16,19 +16,19 @@ def build(args):
 	return partial(_test, params=params)
 
 
-# TODO: implement assert checks post running it, probability in the run
 @partial(jit, static_argnames=['params'])
 def _test(params, X):
 	# Certify that all observations fall between 0 and 1
 	# since we are using Bernstein polynomials
-
-	X = np.array(X).reshape(-1)
+	probs = X[:-1]
+	n = X[-1]
+	# X = np.array(X).reshape(-1)
 	# assert (np.max(method.X) <= 1) and (np.min(method.X) >= 0)
 
-	empirical_probabilities, _ = proportions(
-		X=X,
-		from_=params.from_,
-		to_=params.to_)
+	# empirical_probabilities, _ = proportions(
+	# 	X=X,
+	# 	from_=params.from_,
+	# 	to_=params.to_)
 	# assert not np.isnan(empirical_probabilities).any()
 
 	#######################################################
@@ -37,7 +37,7 @@ def _test(params, X):
 
 	t2_hat, aux_ = params.background.t2_hat(
 		func=params.background.estimate_lambda,
-		empirical_probabilities=empirical_probabilities)
+		empirical_probabilities=probs)
 
 	lambda_hat, gamma_hat, gamma_aux = aux_
 
@@ -51,7 +51,7 @@ def _test(params, X):
 	ci, pvalue, zscore = _delta_ci(
 		point_estimate=np.array([lambda_hat]),
 		t2_hat=t2_hat,
-		n=X.shape[0])
+		n=n)  # X.shape[0]
 
 	# Slower method. Useful if further processing of Hadamard
 	# derivatives is needed
@@ -76,7 +76,7 @@ def _test(params, X):
 	method = dict()
 	# method['params'] = params
 	# data
-	method['X'] = X
+	# method['X'] = X
 
 	# # pvalue
 	method['ci'] = ci
@@ -88,10 +88,10 @@ def _test(params, X):
 	method['gamma_hat'] = gamma_hat
 	#
 	# # background optimization statistics
-	gamma_error, poisson_nll, multinomial_nll = gamma_aux
-	method['gamma_error'] = gamma_error
-	method['poisson_nll'] = poisson_nll
-	method['multinomial_nll'] = multinomial_nll
+	# gamma_error, poisson_nll, multinomial_nll = gamma_aux
+	# method['gamma_error'] = gamma_error
+	# method['poisson_nll'] = poisson_nll
+	# method['multinomial_nll'] = multinomial_nll
 	#
 	# # set helper method
 	# method.predict = partial(
