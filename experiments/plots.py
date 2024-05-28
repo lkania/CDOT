@@ -11,31 +11,32 @@ def fits(args,
 		 eps=1e-2):
 	keys = results.keys()
 	n_cols = len(keys)
-	fig, axs = plot.plt.subplots(nrows=2,
+	height_ratios = [2, 1, 1.5]
+	n_rows = 3
+	height = np.sum(np.array(height_ratios)) / n_rows
+	fig, axs = plot.plt.subplots(nrows=n_rows,
 								 ncols=n_cols,
 								 figsize=(10 * n_cols,
-										  10),
-								 height_ratios=[2, 1],
-								 sharex='all',
+										  10 * height),
+								 height_ratios=height_ratios,
+								 sharex='row',
 								 sharey='row')
-
-	axs[0, 0].set_ylabel('Counts ($\lambda=0$)')
-	axs[1, 0].set_ylabel('Obs / Pred')
+	if n_cols == 1:
+		axs = axs.reshape(-1, 1)
 
 	for i, k in enumerate(keys):
-		test = results[k].test
 		ax = axs[0, i]
 		ax2 = axs[1, i]
-		ax.set_xlim([0 - eps, 1 + eps])
-		ax2.set_xlim([0 - eps, 1 + eps])
-
-		runs = results[test.name].runs
+		ax3 = axs[2, i]
 
 		plot.hists(ax,
+				   lambda_=0,
 				   binning=binning,
 				   ax2=ax2,
-				   methods=runs,
-				   alpha=alpha)
+				   ax3=ax3,
+				   info=results[k],
+				   alpha=alpha,
+				   tol=args.tol)
 
 	fig = plot.tight_pairs(n_cols=n_cols, fig=fig)
 	plot.save_fig(cwd=args.cwd,
@@ -57,18 +58,17 @@ def filtering(args,
 	# Plot datasets with classifier filter
 	##################################################
 	n_cols = len(quantiles)
-	fig, axs = plot.plt.subplots(nrows=len(lambdas) * 2,
+	height_ratios = [2, 1, 1.5]
+	height_ratios = np.array([height_ratios] * len(lambdas)).reshape(-1)
+	n_rows = len(lambdas) * 3
+	height = np.sum(np.array(height_ratios)) / n_rows
+	fig, axs = plot.plt.subplots(nrows=n_rows,
 								 ncols=n_cols,
-								 height_ratios=np.array(
-									 [[2, 1]] * len(lambdas)).reshape(-1),
+								 height_ratios=height_ratios,
 								 figsize=(10 * n_cols,
-										  10 * len(lambdas)),
-								 sharex='all',
+										  10 * height),
+								 sharex='row',
 								 sharey='row')
-
-	# fig.suptitle(
-	# 'Uniform binning (One instance) for {0}'.format(classifier),
-	# 			 fontsize=30)
 
 	l = 0
 	for lambda_ in lambdas:
@@ -77,28 +77,23 @@ def filtering(args,
 
 			ax = axs[l, q]
 			ax2 = axs[l + 1, q]
-			ax.set_xlim([0 - eps, 1 + eps])
-			ax2.set_xlim([0 - eps, 1 + eps])
+			ax3 = axs[l + 2, q]
 
 			if l == 0:
 				ax.set_title(
 					'Filtering {0}% of the observations'.format(
 						int(quantile * 100)))
-			if q == 0:
-				ax.set_ylabel('Counts ($\lambda={0}$)'.format(lambda_))
-				ax2.set_ylabel('Obs / Pred')
-			if l == len(lambdas):
-				ax2.set_xlabel('Mass (projected scale)')
-
-			tests = results[lambda_][quantile].runs
 
 			plot.hists(ax,
+					   lambda_=lambda_,
 					   binning=binning,
-					   methods=tests,
+					   info=results[lambda_][quantile],
 					   ax2=ax2,
-					   alpha=alpha)
+					   ax3=ax3,
+					   alpha=alpha,
+					   tol=args.tol)
 
-		l += 2
+		l += 3
 
 	fig = plot.tight_pairs(n_cols=n_cols, fig=fig)
 	plot.save_fig(cwd=args.cwd, path=path,
@@ -118,14 +113,12 @@ def power(ax, results, lambdas, quantiles, alpha, eps=1e-2):
 			   label='{0}'.format(alpha))
 
 	for i, lambda_ in enumerate(lambdas):
+		tests = [results[lambda_][quantile].tests for quantile in quantiles]
+
 		plot.binary_series_with_uncertainty(
 			ax,
 			x=np.array(quantiles) * 100,
-			values=[
-				np.array(results[lambda_][quantile].pvalues <= results[lambda_][
-					quantile].test.threshold,
-						 dtype=np.int32)
-				for quantile in quantiles],
+			values=tests,
 			color=plot.colors[i],
 			label='$\lambda$={0}'.format(lambda_),
 			alpha=alpha)
@@ -154,7 +147,7 @@ def power_per_classifier(args, path, classifiers, labels, results, lambdas,
 def power_per_quantile(args, path, results, lambdas, quantiles):
 	plot_ = lambda classifier, quantile: plot.cdfs(
 		ax=ax,
-		df=[results[classifier][lambda_][quantile].pvalues for lambda_ in
+		df=[results[classifier][lambda_][quantile].stats for lambda_ in
 			lambdas],
 		labels=['$\lambda=${0}'.format(lambda_) for lambda_ in lambdas],
 		alpha=args.alpha)

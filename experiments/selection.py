@@ -1,11 +1,7 @@
-from jax import numpy as np, clear_caches, clear_backends, pmap, jit
+from jax import numpy as np
 from src.dotdic import DotDic
 from experiments.parallel import run
-
-
-# def clear():
-# 	clear_caches()
-# 	clear_backends()
+from jax.scipy.stats.norm import cdf, ppf as icdf
 
 
 def l2_to_uniform(args, pvalues):
@@ -38,7 +34,7 @@ def l2_to_uniform(args, pvalues):
 
 
 def target_alpha_level(pvalues, alpha):
-	return np.abs(alpha - np.mean(pvalues <= alpha))
+	return np.abs(np.quantile(pvalues, q=alpha) - alpha)
 
 
 def select(args, path, params, tests, measure):
@@ -53,10 +49,16 @@ def select(args, path, params, tests, measure):
 								 path=path,
 								 lambda_=0)
 
-		results[test.name].measure = measure(results[test.name].pvalues)
+		results[test.name].measure = measure(results[test.name].stats)
 
-		# TODO: set to 0.05
-		test.threshold = np.quantile(results[test.name].pvalues, q=args.alpha)
+		# TODO: set to args.alpha
+		# The empirical threshold is np.quantile(results[test.name].pvalues, q=args.alpha)
+		# test.threshold = args.alpha
+		# test.pvalue_quantile = np.quantile(
+		# 	results[test.name].pvalues,
+		# 	q=args.alpha)
+		test.threshold = args.alpha  # icdf(1 - args.alpha)
+	# np.quantile(results[test.name].stats,q=1 - args.alpha)
 
 	# clear()
 

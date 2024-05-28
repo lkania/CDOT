@@ -26,58 +26,20 @@ colors = ['red',
 		  'darkorange',
 		  'grey',
 		  'tab:pink',
-		  'tab:olive']
+		  'tab:olive',
+		  'purple',
+		  'peru']
 
 ######################################################################
 # Load utilities
 ######################################################################
 from src import bin
-from src.stat.binom import exact_binomial_ci, exact_poisson_ci
+from src.stat import binom
 from experiments import storage
-from src.normalize import threshold_non_neg
-
-
-def binomial_ci(values, alpha):
-	values_ = np.array(values, dtype=np.int32)
-	cp = exact_binomial_ci(n_successes=[np.sum(values_)],
-						   n_trials=values_.shape[0],
-						   alpha=alpha)[0]
-	mean = np.mean(values_)
-	lower = cp[0]
-	upper = cp[1]
-
-	return lower, mean, upper
-
-
-# TODO: replace mean by refit to all data
-def boostrap_pivotal_ci(values, alpha):
-	values = np.array(values)
-	mean = np.mean(values, axis=0)
-	lower = 2 * mean - np.quantile(values, q=1 - alpha / 2, axis=0)
-	upper = 2 * mean - np.quantile(values, q=alpha / 2, axis=0)
-
-	midpoint = (lower + upper) / 2
-
-	return lower, midpoint, upper
-
-
-def bootstrap_percentile_ci(values, alpha, tol=1e-12):
-	values = np.array(values)
-
-	lower = np.quantile(values, q=alpha / 2, axis=0)
-	lower = normalize.threshold(lower, tol=tol)
-
-	upper = np.quantile(values, q=1 - alpha / 2, axis=0)
-	upper = normalize.threshold(upper, tol=tol)
-
-	midpoint = np.quantile(values, q=0.5, axis=0)
-	midpoint = normalize.threshold(midpoint, tol=tol)
-
-	return lower, midpoint, upper
 
 
 # See: https://stackoverflow.com/questions/51717199/how-to-adjust-space-between-every-second-row-of-subplots-in-matplotlib
-def tight_pairs(n_cols, fig=None):
+def tight_pairs(n_cols, fig):
 	"""
 	Stitch vertical pairs together.
 
@@ -96,18 +58,28 @@ def tight_pairs(n_cols, fig=None):
 	Returns:
 	- Modified fig
 	"""
-	if fig is None:
-		fig = plt.gcf()
+	# for ax in fig.axes:
+	# 	if hasattr(ax, 'get_subplotspec'):
+	# 		ss = ax.get_subplotspec()
+	# 		row, col = ss.num1 // n_cols, ss.num1 % n_cols
+	# 		if (row % 2 == 0) and (col == 0):  # upper-half row (first subplot)
+	# 			y0_upper = ss.get_position(fig).y0
+	# 		elif (row % 2 == 1):  # lower-half row (all subplots)
+	# 			x0_low, _, width_low, height_low = ss.get_position(fig).bounds
+	# 			ax.set_position(
+	# 				pos=[x0_low, y0_upper - height_low, width_low, height_low])
+
 	for ax in fig.axes:
 		if hasattr(ax, 'get_subplotspec'):
 			ss = ax.get_subplotspec()
 			row, col = ss.num1 // n_cols, ss.num1 % n_cols
-			if (row % 2 == 0) and (col == 0):  # upper-half row (first subplot)
+			if (row % 3 == 0) and (col == 0):  # upper-half row (first subplot)
 				y0_upper = ss.get_position(fig).y0
-			elif (row % 2 == 1):  # lower-half row (all subplots)
+			elif (row % 3 == 1):  # lower-half row (all subplots)
 				x0_low, _, width_low, height_low = ss.get_position(fig).bounds
 				ax.set_position(
 					pos=[x0_low, y0_upper - height_low, width_low, height_low])
+
 	return fig
 
 
@@ -159,7 +131,9 @@ def binary_series_with_uncertainty(ax,
 	lowers = []
 	uppers = []
 	for v in values:
-		lower, mean, upper = binomial_ci(values=v, alpha=alpha)
+		lower, mean, upper = binom.clopper_pearson_binomial_ci(
+			values=v,
+			alpha=alpha)
 		means.append(mean)
 		lowers.append(lower)
 		uppers.append(upper)
@@ -203,14 +177,20 @@ def hist_with_uncertainty(ax,
 							fmt='o')
 
 
-# TODO: produce plots restricting the ax2 axis and not
-# restricting it (ax2 and ax3) global and local picture
 def hists(ax,
-		  methods,
+		  info,
 		  alpha,
+		  tol,
+		  lambda_,
 		  binning=None,
 		  ax2=None,
+		  ax3=None,
 		  eps=1e-2):
+	methods = info.runs
+	ax.set_xlim([0 - eps, 1 + eps])
+	ax.set_ylabel('Counts ($\lambda={0}$)'.format(lambda_))
+	ax.set_xlabel('Mass (projected scale)')
+
 	if binning is not None:
 		from_, to_ = binning(
 			X=methods[0].X,
@@ -224,49 +204,36 @@ def hists(ax,
 	lower = methods[0].test.args.lower
 	upper = methods[0].test.args.upper
 
-	predictions = []
-	pvalues = []
+	predictions = info.predict_counts(from_=from_, to_=to_)
 	count = []
 
+	# TODO: do counts in parallel
 	for i, method in enumerate(methods):
-		sample_size = methods[0].X.shape[0]
-		p = method.predict(from_=from_, to_=to_).reshape(-1) * sample_size
-		assert not np.isnan(p).any()
-		predictions.append(p)
-
-		pvalues.append(method.pvalue)
-
 		c = bin.counts(X=method.X, from_=from_, to_=to_)[0]
 		assert not np.isnan(c).any()
 		count.append(c)
 
 	predictions = np.array(predictions)
-	count = np.array(count, dtype=np.int32)
+	predictions = normalize.threshold_non_neg(predictions, tol=tol)
+	count = np.array(count, dtype=np.int64)
 
 	if len(methods) > 1:
 
-		pred_lower, pred_mid, pred_upper = bootstrap_percentile_ci(
-			values=predictions,
-			alpha=alpha)
-		pvalue_lower, _, pvalue_upper = bootstrap_percentile_ci(
-			values=pvalues,
-			alpha=alpha)
+		pred_lower, pred_mid, pred_upper = binom.garwood_poisson_ci(
+			n_events=predictions,
+			alpha=alpha / predictions.shape[1])
 
 	else:
 		pred_mid = predictions.reshape(-1)
 		pred_lower = None
 		pred_upper = None
-		pvalue_lower = pvalues[0]
-		pvalue_upper = pvalues[0]
 
-	count_mean = np.mean(count, axis=0)
-	count_pred_ratio = count / predictions
-	cis = exact_poisson_ci(n_events=count, alpha=alpha)
-	count_lower = cis[:, 0].reshape(-1)
-	count_upper = cis[:, 1].reshape(-1)
+	count_lower, count_mean, count_upper = binom.garwood_poisson_ci(
+		n_events=count,
+		alpha=alpha / count.shape[1])
 
-	ax.axvline(x=lower, color='red', linestyle='--')
-	ax.axvline(x=upper, color='red', linestyle='--', label='Signal region')
+	ax.axvline(x=lower, color='blue', linestyle='--')
+	ax.axvline(x=upper, color='blue', linestyle='--', label='Signal region')
 
 	hist_with_uncertainty(
 		ax=ax,
@@ -276,13 +243,10 @@ def hists(ax,
 		lower=count_lower,
 		upper=count_upper,
 		color='black',
-		label='Data (Exact Poisson CI)',
+		label='Data (Garwood CI)',
 		markersize=2)
 
-	label = 'K={0} p-value=[{1:g},{2:g}]'.format(
-		methods[0].test.args.k,
-		round(pvalue_lower, 2),
-		round(pvalue_upper, 2))
+	label = 'K={0} (Garwood CI)'.format(methods[0].test.args.k)
 
 	hist_with_uncertainty(
 		ax=ax,
@@ -297,10 +261,19 @@ def hists(ax,
 		label=label)
 
 	if ax2 is not None:
+		ax.set_xlabel('')
+		ax.set_xticks([])
+		ax.set_xticks([], minor=True)
+
+		ax2.set_ylabel('Obs / Pred')
+		ax2.set_xlabel('Mass (projected scale)')
+		ax2.set_xlim([0 - eps, 1 + eps])
+		ax2.set_ylim([1 - 0.2, 1 + 0.2])
+
 		ax2.axvline(x=lower,
-					color='red', linestyle='--')
+					color='blue', linestyle='--')
 		ax2.axvline(x=upper,
-					color='red', linestyle='--',
+					color='blue', linestyle='--',
 					label='Signal region')
 		ax2.axhline(y=1,
 					color='black',
@@ -308,15 +281,17 @@ def hists(ax,
 		# ax2.set_ylim(bottom=0)
 
 		if pred_lower is not None and pred_upper is not None:
-			pred_lower, pred_mid, pred_upper = bootstrap_percentile_ci(
-				values=count_pred_ratio,
-				alpha=alpha)
 
-			pred_upper = threshold_non_neg(pred_upper, tol=0.0)
-			pred_mid = threshold_non_neg(pred_mid, tol=0.0)
-			pred_lower = threshold_non_neg(pred_lower, tol=0.0)
+			pred_lower, pred_mid, pred_upper = binom.normal_approximation_poisson_ratio_ci(
+				X=count,
+				Y=predictions,
+				alpha=alpha,
+				tol=tol)
+
 		else:
-			pred_mid = count_pred_ratio.reshape(-1)
+			pred_mid = np.where(np.abs(count - predictions) <= tol,
+								1.0,
+								count / predictions).reshape(-1)
 
 		hist_with_uncertainty(
 			ax=ax2,
@@ -328,17 +303,34 @@ def hists(ax,
 			jitter=0,
 			color='red',
 			markersize=2,
-			label=label)
+			label='Normal CI')
+		ax2.legend()
 
-	# We don't display large outliers
-	# We check that our proposed new upper limit
-	# is smaller than the current upper limit in
-	# order to not overwrite other upper limits
-	# when sharing y axes with other plots
-	# l, u = ax2.get_ylim()
-	# u_proposal = quantile_interval(values=pred_upper, alpha=alpha)[2]
-	# ax2.set_ylim(bottom=np.maximum(l, 0 - eps),
-	# 			 top=np.maximum(np.maximum(u, u_proposal), 1 + eps))
+	###################################################################
+	# Plot estimates histogram
+	###################################################################
+	if ax3 is not None:
+		ax3.set_ylabel('Stat (log scale)')
+		ax3.set_yscale('log')
+
+		threshold_ = info.test.threshold
+		data_after_threshold = np.mean(
+			np.array(info.stats >= threshold_,
+					 dtype=np.int32))
+		ax3.axvline(x=threshold_,
+					color='red',
+					linestyle='--',
+					label='value={0:.5f} %data-below={1:.3f}'.format(
+						round(threshold_, 5),
+						round(1 - data_after_threshold, 3)
+					))
+		ax3.hist(info.stats,
+				 alpha=1,
+				 bins=int(info.stats.shape[0] / 10),
+				 density=False,
+				 histtype='step',
+				 color='black')
+		ax3.legend()
 
 	ax.legend()
 
@@ -363,7 +355,7 @@ def cdfs(ax, df, labels, alpha, eps=1e-2):
 		)
 
 	ax.set_ylabel('Cumulative probability')
-	ax.set_xlabel('pvalue')
+	# ax.set_xlabel('pvalue')
 	ax.legend()
 
 

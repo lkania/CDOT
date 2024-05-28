@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as np
 from jax import jit
 from functools import partial
@@ -5,7 +6,11 @@ from functools import partial
 
 @jit
 def normalize(gamma, int_omega):
-	return gamma / np.dot(gamma.reshape(-1), int_omega.reshape(-1))
+	dot = np.dot(gamma.reshape(-1), int_omega.reshape(-1))
+	# jax.debug.print('DOT {dot}', dot=dot)
+	# dot_ = np.where(dot != 0.0, dot, 0.0)
+	# np.where(dot != 0.0, gamma / dot, 0.0)
+	return gamma / dot
 
 
 @partial(jit, static_argnames=['tol'])

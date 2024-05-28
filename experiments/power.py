@@ -32,6 +32,8 @@ match multiprocessing.cpu_count():
 		n_jobs = 25
 	case 12:
 		n_jobs = 10
+	case 4:
+		n_jobs = 2
 
 # n_jobs = 20
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
@@ -42,14 +44,12 @@ os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
 #######################################################
 from jax.config import config
 
+# config.update("jax_disable_jit", True)
+# config.update("jax_debug_nans", True)
 config.update("jax_enable_x64", True)
 
-from jax import numpy as np, clear_backends, random
-
-# def clear():
-# 	clear_caches()
-# 	clear_backends()
-
+from jax import numpy as np, jit, random as _random
+import numpy as onp
 
 ######################################################################
 # local libraries
@@ -63,30 +63,37 @@ from experiments.builder import load_background_and_signal
 from src.test.test import build as build_test
 from src import bin
 from src.basis import bernstein
-from experiments.parallel import run
+from experiments import parallel
+from experiments import key_management
 
 uniform_bin = lambda X, lower, upper, n_bins: bin.full_uniform_bin(
 	n_bins=n_bins)
 
+# TODO: plot the distribution of gamma_hat per K
+# to observe the sparsity of the polynomials
 ##################################################
 # Simulation parameters
 ##################################################
 args = parse()
 args.seed = 0
-args.key = random.key(seed=args.seed)
+args.random = _random
+args.key = key_management.init(args=args)
 args.dtype = np.float64
-args.n_jobs = n_jobs
+args.float = np.float64
+args.int = np.int64
+args.tol = 1e-15
 args.target_data_id = args.data_id
 args.use_cache = True
 args.alpha = 0.05
 args.sample_size = 20000
 args.folds = 1000
+args.n_jobs = min(args.folds, n_jobs)
 args.signal_region = [0.1, 0.9]  # the signal region contains 80% of the signal
-args.ks = [5, 10, 15, 20, 25, 30, 35, 40, 45]
+args.ks = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
 args.classifiers = ['class', 'tclass']
 # Subsets are used for plotting while
 # the full range is used for power curve computations
-args.lambdas_subset = [0, 0.05]
+args.lambdas_subset = [0, 0.02, 0.05]
 args.lambdas = [0, 0.01, 0.02, 0.05]
 
 args.quantiles_subset = [0.0, 0.5, 0.7]
@@ -96,17 +103,27 @@ args.quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
 # predicted by any classifier
 args.zero_cut = 0
 
+assert np.all(np.array(args.lambdas[1:]) > args.tol)
 assert args.folds > 1
 assert args.n_jobs > 1
 assert args.folds % args.n_jobs == 0
 assert max([len(args.lambdas),
 			len(args.quantiles),
 			len(args.ks)]) <= len(plot.colors)
+
+
+##
+# Define hash function
+#
+def hash_(string):
+	return int(hashlib.sha1(string.encode("utf-8")).hexdigest(), 16)
+
+
 ##################################################
 # Load background data for model selection
 ##################################################
 args.data_id = '{0}/val'.format(args.target_data_id)
-
+args.hash = hash_(args.data_id)
 params = load_background_and_signal(args)
 
 
@@ -122,6 +139,7 @@ def check_no_filtering(args, params):
 			X_ = params.filter(X_=d, cutoff=args.zero_cut)
 			assert X_.shape[0] == d[0].shape[0]
 			assert np.all((X_ - d[0]) == 0)
+			assert np.all(d[1] >= args.zero_cut)
 
 
 check_no_filtering(args, params)
@@ -149,7 +167,12 @@ def get_trans(args, min_):
 
 # Produce a dataset, filter it, transform it and test it
 
-
+@partial(jit, static_argnames=['cutoff',
+							   'trans',
+							   'classifier',
+							   'params',
+							   'sample_size',
+							   'lambda_'])
 def generate_dataset(cutoff,
 					 classifier,
 					 params,
@@ -162,18 +185,60 @@ def generate_dataset(cutoff,
 										lambda_=lambda_,
 										key=key,
 										cutoff=cutoff)
-	return np.stack((trans(X), mask), axis=0)
+	X = X.reshape(-1)
+	mask = np.array(mask.reshape(-1), dtype=np.int32)
+	n = np.sum(mask)
+	return trans(X), mask, n
+
+
+@partial(jit, static_argnames=['cutoff',
+							   'trans',
+							   'classifier',
+							   'params',
+							   'sample_size',
+							   'lambda_'])
+def generate_counts(cutoff,
+					classifier,
+					params,
+					sample_size,
+					lambda_,
+					key,
+					trans,
+					from_,
+					to_):
+	X, mask, n = generate_dataset(cutoff=cutoff,
+								  classifier=classifier,
+								  params=params,
+								  sample_size=sample_size,
+								  lambda_=lambda_,
+								  key=key,
+								  trans=trans)
+
+	# We mask the filtered values by assigning them
+	# negative values. Any value outside [0,1] would work
+	X_masked = X * mask + (-1) * (1 - mask)
+
+	counts = bin.counts(X=X_masked, from_=from_, to_=to_)[0]
+
+	return X, mask, counts, n
+
+
+# return np.stack((trans(X), mask), axis=0)
 
 
 selected = DotDic()
 for classifier in args.classifiers:
 	selected[classifier] = DotDic()
 	for quantile in args.quantiles:
-		selected[quantile] = None
+		selected[classifier][quantile] = None
 
 all = DotDic()
 for k in args.ks:
-	all[k] = selected.copy()
+	all[k] = DotDic()
+	for classifier in args.classifiers:
+		all[k][classifier] = DotDic()
+		for quantile in args.quantiles:
+			all[k][classifier][quantile] = None
 
 for classifier in args.classifiers:
 	print('Configure {0} classifer'.format(classifier))
@@ -184,10 +249,10 @@ for classifier in args.classifiers:
 								 sharex='all',
 								 sharey='all')
 
-	cutoffs = np.quantile(params.background.c[classifier],
-						  q=np.array(args.quantiles),
-						  axis=0)
-	cutoffs = cutoffs.at[0].set(args.zero_cut)
+	cutoffs = onp.quantile(params.background.c[classifier],
+						   q=args.quantiles,
+						   axis=0)
+	cutoffs[0] = args.zero_cut
 
 	for q, quantile in enumerate(args.quantiles):
 
@@ -207,13 +272,15 @@ for classifier in args.classifiers:
 		)
 
 		test.args = DotDic()
-		test.args.bins = 100
+		test.args.bins = 500  # TODO: increase to 1000
 		test.args.method = 'bin_mle'
 		test.args.optimizer = 'dagostini'
 		test.args.fixpoint = 'normal'
 		test.args.maxiter = 5000
-		test.args.tol = 1e-10
+		test.args.tol = args.tol
 		test.args.alpha = args.alpha
+		test.args.float = np.float64
+		test.args.int = np.int64
 
 		# Note: modify here to set signal region after thresholding
 		qs = np.quantile(params.signal.X,
@@ -222,62 +289,11 @@ for classifier in args.classifiers:
 		test.args.lower = test.trans(qs[0])
 		test.args.upper = test.trans(qs[1])
 
-		# Note: uniform binning fails with asymptotic test
-		# test.args.from_, test.args.to_ = bin.uniform_bin(
-		# 	lower=test.args.lower,
-		# 	upper=test.args.upper,
-		# 	n_bins=test.args.bins)
-
-		# TODO: switch to equal frequency binning
-		# Code for doing equal-frequency bins
-		# Get expected number of bins to the
-		# left and right of the signal region
-		# print('Estimating average equal-frequency binning')
-		fs, ts = [], []
-
-		for r in tqdm(range(args.folds), ncols=40):
-			X_ = test.trans(
-				params.subsample_and_filter(
-					n=args.sample_size,
-					classifier=classifier,
-					lambda_=0,
-					cutoff=selected[classifier][quantile].cutoff)
-			)
-			bins_lower, bins_upper = bin._adaptive_n_bins(
-				X=X_,
-				lower=dic.lower,
-				upper=dic.upper,
-				n_bins=dic.bins)
-			fs.append(bins_lower)
-			ts.append(bins_upper)
-		bins_lower = int(np.mean(np.array(fs), axis=0))
-		bins_upper = int(np.mean(np.array(ts), axis=0))
-		# Get average bins location for the above
-		fs, ts = [], []
-		for r in tqdm(range(args.folds), ncols=40):
-			X_ = selected[classifier][quantile].trans(
-				params.subsample_and_filter(
-					n=args.sample_size,
-					classifier=classifier,
-					lambda_=0,
-					cutoff=selected[classifier][quantile].cutoff))
-			f, t = bin.adaptive_bin(
-				X=X_,
-				lower=test.args.lower,
-				upper=test.args.upper,
-				n_bins=(bins_lower, bins_upper))
-			fs.append(f)
-			ts.append(t)
-		test.args.from_ = np.mean(np.array(fs), axis=0)
-		test.args.to_ = np.mean(np.array(ts), axis=0)
-
-		# Note: if using equal-frequency bins
-		# remove last and first bin for 3b/4b datasets
-		match args.target_data_id:
-			case '3b' | '4b':
-				# remove first and last bin
-				test.args.from_ = test.args.from_[1:-1]
-				test.args.to_ = test.args.to_[1:-1]
+		# Uniform binning
+		test.args.from_, test.args.to_ = bin.uniform_bin(
+			lower=test.args.lower,
+			upper=test.args.upper,
+			n_bins=test.args.bins)
 
 		assert test.args.from_.shape[0] == test.args.to_.shape[0]
 		test.args.bins = len(test.args.from_)
@@ -287,12 +303,89 @@ for classifier in args.classifiers:
 			tests.append(test.copy())
 			tests[i].args.k = k
 			tests[i].name = '{0}_{1}'.format(tests[i].name, k)
-			tests[i].args.hash = int(
-				hashlib.sha1(tests[i].name.encode("utf-8")).hexdigest(), 16)
+			tests[i].args.hash = hash_(tests[i].name)
 			tests[i].args.basis = bernstein
 			tests[i].generate_dataset = partial(
 				generate_dataset,
 				trans=tests[i].trans,
+				classifier=classifier,
+				cutoff=tests[i].cutoff)
+
+			print('Configure {0} test'.format(tests[i].name))
+
+			# Code for doing equal-frequency bins
+			# Get expected number of bins to the
+			# left and right of the signal region
+			# print('Estimating average equal-frequency binning')
+			# keys = key_management.keys(args=args, num=args.folds)
+			# print('Generating datasets in parallel')
+			# data, masks, sample_sizes = parallel.generate_datasets(
+			# 	args=args,
+			# 	keys=keys,
+			# 	test=tests[i],
+			# 	params=params,
+			# 	lambda_=0)
+
+			# print('Estimating number of bins')
+			# fs, ts = [], []
+			# for r in tqdm(range(args.folds), ncols=40):
+			# 	X_masked = data[r, :] * masks[r, :] + (-1) * (1 - masks[r, :])
+			# 	bins_lower, bins_upper = bin._adaptive_n_bins(
+			# 		X=X_masked,
+			# 		lower=tests[i].args.lower,
+			# 		upper=tests[i].args.upper,
+			# 		n_bins=tests[i].args.bins)
+			# 	fs.append(bins_lower)
+			# 	ts.append(bins_upper)
+			# bins_lower = int(np.mean(np.array(fs), axis=0))
+			# bins_upper = int(np.mean(np.array(ts), axis=0))
+			# Get average bins location for the above
+			# keys = key_management.keys(args=args, num=args.folds)
+			# print('Generating datasets in parallel')
+			# data, masks, sample_sizes = parallel.generate_datasets(
+			# 	args=args,
+			# 	keys=keys,
+			# 	test=tests[i],
+			# 	params=params,
+			# 	lambda_=0)
+
+			# print('Estimating equal-frequency binning')
+			# fs, ts = [], []
+			# for r in tqdm(range(args.folds), ncols=40):
+			# 	X_masked = data[r, :] * masks[r, :] + (-1) * (1 - masks[r, :])
+			# 	f, t = bin.adaptive_bin(
+			# 		X=X_masked,
+			# 		lower=tests[i].args.lower,
+			# 		upper=tests[i].args.upper,
+			# 		bins_lower=bins_lower,
+			# 		bins_upper=bins_upper)
+			# 	fs.append(f)
+			# 	ts.append(t)
+			#
+			# tests[i].args.from_ = np.mean(np.array(fs), axis=0)
+			# tests[i].args.to_ = np.mean(np.array(ts), axis=0)
+
+			# Note: if using equal-frequency bins
+			# remove last and first bin for 3b/4b datasets
+			# match args.target_data_id:
+			# 	case '3b' | '4b':
+			# 		# remove first and last bin
+			# 		tests[i].args.from_ = tests[i].args.from_[1:-1]
+			# 		tests[i].args.to_ = tests[i].args.to_[1:-1]
+
+			assert not np.isnan(tests[i].args.from_).any()
+			assert not np.isnan(tests[i].args.to_).any()
+			assert np.all(tests[i].args.from_ >= 0)
+			assert np.all(tests[i].args.to_ >= 0)
+
+			assert tests[i].args.from_.shape[0] == tests[i].args.to_.shape[0]
+			tests[i].args.bins = len(tests[i].args.from_)
+
+			tests[i].generate_counts = partial(
+				generate_counts,
+				trans=tests[i].trans,
+				from_=tests[i].args.from_,
+				to_=tests[i].args.to_,
 				classifier=classifier,
 				cutoff=tests[i].cutoff)
 			tests[i].test = build_test(args=tests[i].args)
@@ -311,7 +404,8 @@ for classifier in args.classifiers:
 			path=path,
 			params=params,
 			tests=tests,
-			measure=partial(selection.target_alpha_level, alpha=args.alpha))
+			measure=partial(selection.target_alpha_level,
+							alpha=args.alpha))
 
 		selected[classifier][quantile] = selection_results.test_star
 		del selection_results['test_star']
@@ -350,13 +444,13 @@ for classifier in args.classifiers:
 
 		# Prepare data
 		labels = []
-		pvalues = []
+		stats = []
 		measure = []
 		for i, k in enumerate(selection_results.keys()):
 			labels.append(k)
 			if k == selected[classifier][quantile].name:
 				labels[i] += ' (*)'
-			pvalues.append(selection_results[k].pvalues)
+			stats.append(selection_results[k].stats)
 			measure.append(selection_results[k].measure)
 
 		###################################################
@@ -369,7 +463,7 @@ for classifier in args.classifiers:
 
 		ax.set_title('P-value CDF')
 		plot.cdfs(ax=ax,
-				  df=pvalues,
+				  df=stats,
 				  labels=labels,
 				  alpha=args.alpha)
 		plot.save_fig(cwd=args.cwd,
@@ -377,8 +471,8 @@ for classifier in args.classifiers:
 					  fig=fig,
 					  name='pvalues')
 
-		ax.set_xlim([0, args.alpha])
-		ax.set_ylim([0, args.alpha])
+		ax.set_xlim([0, 2 * args.alpha])
+		ax.set_ylim([0, 2 * args.alpha])
 		plot.save_fig(cwd=args.cwd,
 					  path=path,
 					  fig=fig,
@@ -400,7 +494,7 @@ for classifier in args.classifiers:
 		plot.binary_series_with_uncertainty(
 			ax,
 			x=args.ks,
-			values=pvalues,
+			values=stats,
 			color='red',
 			alpha=args.alpha)
 		ax.legend()
@@ -425,6 +519,24 @@ for classifier in args.classifiers:
 					  fig=fig,
 					  name='measure')
 
+# Sanity check
+# Assert that for the zero quantile,
+# any classifier produces exactly the
+# same dataset if the same key is used
+for k in args.ks:
+	for lambda_ in args.lambdas:
+		d1 = all[k][args.classifiers[0]][0.0].generate_dataset(
+			params=params,
+			sample_size=args.sample_size,
+			lambda_=lambda_,
+			key=args.key)[0]
+		d2 = all[k][args.classifiers[1]][0.0].generate_dataset(
+			params=params,
+			sample_size=args.sample_size,
+			lambda_=lambda_,
+			key=args.key)[0]
+		assert np.all(d1 - d2 == 0)
+
 
 def empirical_power(args, path, params, classifier, selected, quantiles,
 					lambdas):
@@ -439,14 +551,19 @@ def empirical_power(args, path, params, classifier, selected, quantiles,
 				lambda_,
 				quantile))
 
-			results[lambda_][quantile] = run(
+			results[lambda_][quantile] = parallel.run(
 				args=args,
 				params=params,
 				test=selected[classifier][quantile],
 				path='{0}/storage/{1}/{2}'.format(path, lambda_, quantile),
 				lambda_=lambda_)
 
-	# clear()
+			stats = results[lambda_][quantile].stats
+			t = results[lambda_][quantile].test.threshold
+
+			# TODO: careful here, stat vs pvalue
+			results[lambda_][quantile].tests = np.array(stats <= t,
+														dtype=np.int32)
 
 	return results
 
@@ -530,6 +647,7 @@ runtime('Finished power analysis on validation data')
 # Test data analysis
 ##################################################
 args.data_id = args.target_data_id
+args.hash = hash_(args.data_id)
 params = load_background_and_signal(args)
 
 check_no_filtering(args, params)

@@ -1,11 +1,10 @@
 from src.normalize import normalize, threshold_non_neg
-from src.background.bin.lambda_hat import estimate_lambda
 
-from jax import jit, numpy as np
-from functools import partial
-from src.opt.jaxopt import normalized_nnls_with_linear_constraint
-from jaxopt.projection import projection_polyhedron
-from jaxopt import ProjectedGradient
+import jax
+from jax import jit, numpy as np, vmap
+# from src.opt.jaxopt import normalized_nnls_with_linear_constraint
+from jaxopt.projection import projection_polyhedron, projection_box_section
+from jaxopt import ProjectedGradient, GradientDescent
 from src.background.bin.delta import influence, t2_hat
 from functools import partial
 
@@ -14,28 +13,59 @@ from functools import partial
 # Update rules for poisson nll
 #########################################################################
 
-# Note that thresholding small predictions seems to
-# severely affect the delta method.
 @jit
-def dagostini(gamma0, props, M, int_control, int_omega):
-	pred0 = M @ gamma0.reshape(-1, 1)
-	# If the mean prediction is zero, we leave it at zero
-	# we use the double-where trick to handle zero values
-	# see: https://github.com/google/jax/issues/5039
-	pred = np.where(pred0 != 0.0, pred0, 0.0)
-	pred = np.where(pred0 != 0.0, props.reshape(-1, 1) / pred, 0.0)
-	gamma = (M.transpose() @ pred) / int_control.reshape(-1, 1)
-
-	return gamma
+def _lambda_hat(props, gamma, int_control):
+	F_over_control = np.sum(props)
+	B_over_control = np.dot(gamma.reshape(-1),
+							int_control.reshape(-1))
+	return 1 - F_over_control / B_over_control
 
 
-@jit
-def normalized_dagostini(gamma0, props, M, int_control, int_omega):
+@partial(jit, static_argnames=['tol'])
+def dagostini(gamma0, props, M, int_control, int_omega, tol):
+	pred0 = (M @ gamma0.reshape(-1, 1)).reshape(-1)
+	props = props.reshape(-1)
+
+	# In the following, we implement this decision tree
+	# 	if props <= tol:
+	# 		return 0.0
+	# 	elif np.abs(props - pred0) <= tol:
+	# 		return 1.0
+	# 	elif pred0 <= tol:
+	# 		return props / tol
+	# 	return props / pred0
+	c1 = props <= tol
+	c2 = np.abs(props - pred0) <= tol
+	c3 = pred0 <= tol
+	pred = np.where(c1, 0.0, props)
+	pred = np.where(np.logical_and(np.logical_not(c1), c2),
+					1.0,
+					pred)
+	c1_or_c2 = np.logical_or(c1, c2)
+	pred = np.where(np.logical_and(np.logical_not(c1_or_c2), c3),
+					props / tol,
+					pred)
+	c1_or_c2_or_c3 = np.logical_or(c1_or_c2, c3)
+	safe_denominator = np.where(np.logical_not(c1_or_c2_or_c3),
+								pred0,
+								1.0)
+	pred = np.where(np.logical_not(c1_or_c2_or_c3),
+					props / safe_denominator,
+					pred)
+
+	gamma = (M.transpose() @ pred.reshape(-1, 1)) / int_control.reshape(-1, 1)
+
+	return gamma.reshape(-1)
+
+
+@partial(jit, static_argnames=['tol'])
+def normalized_dagostini(gamma0, props, M, int_control, int_omega, tol):
 	return normalize(gamma=dagostini(gamma0=gamma0,
 									 props=props,
 									 M=M,
 									 int_control=int_control,
-									 int_omega=int_omega),
+									 int_omega=int_omega,
+									 tol=tol),
 					 int_omega=int_omega)
 
 
@@ -46,132 +76,212 @@ def _update(gamma0, props, M, int_control, int_omega, _delta):
 
 
 @partial(jit, static_argnames=['tol', '_delta', 'fixpoint'])
-def poisson_opt(props, M, int_control, int_omega, tol, _delta, fixpoint):
+def poisson_opt(props,
+				M,
+				int_control,
+				int_omega,
+				tol,
+				_delta,
+				fixpoint,
+				init_lambda,
+				init_gamma):
 	sol = fixpoint(fixed_point_fun=partial(_update, _delta=_delta)).run(
 		# we initialize gamma so that int_Omega B_gamma(x) = 1
 		# the fixed point method cannot be differentiated w.r.t
 		# the init parameters
-		np.full_like(int_control, 1, dtype=int_control.dtype) / np.sum(
-			int_omega),
+		init_gamma.reshape(-1),
 		# the fixed point method can be differentiated w.r.t
 		# the following auxiliary parameters
 		props, M, int_control, int_omega)
 
-	gamma = normalize(
-		gamma=threshold_non_neg(sol[0], tol=tol),
-		int_omega=int_omega)
+	gamma = sol[0]
+	
+	gamma = normalize(gamma=gamma, int_omega=int_omega)
 
-	gamma_error = np.max(np.abs(_delta(gamma0=gamma,
-									   props=props,
-									   M=M,
-									   int_control=int_control,
-									   int_omega=int_omega) - 1))
+	lambda_ = _lambda_hat(props=props,
+						  gamma=gamma,
+						  int_control=int_control)
 
-	gamma_aux = (gamma_error,
-				 poisson_nll(gamma=gamma, data=(M, props, int_control)),
-				 multinomial_nll(gamma=gamma, data=(M, props, int_control)))
+	aux = dict()
+	aux['gamma_hat'] = gamma
+	aux['lambda_hat'] = lambda_
 
-	return gamma, gamma_aux
+	return lambda_, aux
 
 
-# @partial(jit, static_argnames=['dtype', 'tol', 'maxiter', 'dtype'])
-def multinomial_opt(props, M, int_control, int_omega,
-					tol, maxiter, dtype):
-	A = M
-	b = props.reshape(-1)
-	c = int_omega.reshape(-1)
-	n_params = A.shape[1]
+@partial(jit, static_argnames=['tol'])
+def loss(gamma, data, tol):
+	M, props, int_control, int_omega = data
+	props = props.reshape(-1)
+	gamma = gamma.reshape(-1)
+	lambda_ = gamma[-1]
+	gamma = gamma[:-1]
+
+	prop_control = np.sum(props)
+	background_over_signal = 1 - np.dot(gamma, int_control.reshape(-1))
+	background_over_control_bins = (M @ gamma.reshape(-1, 1)).reshape(-1)
+	t1 = prop_control * np.log(1 - lambda_)
+	pred = np.where(background_over_control_bins <= tol,
+					tol,
+					background_over_control_bins)
+	pred = np.log(pred)
+	pred = np.where(props <= tol, 0.0, props * pred)
+	t2 = np.sum(pred)
+	mix = (1 - lambda_) * background_over_signal + lambda_
+	mix = np.where(mix <= tol, tol, mix)
+	t3 = (1 - prop_control) * np.log(mix)
+	loss_ = (-1) * (t1 + t2 + t3)
+
+	return loss_
+
+
+# With the current optimization
+# lambda is a boundary point
+# this leads to upper bias in its estimation
+# Empirically, I also see bias when using
+# negative gammas
+@partial(jit, static_argnames=['tol', 'maxiter'])
+def multinomial_opt(props,
+					M,
+					int_control,
+					int_omega,
+					tol,
+					maxiter,
+					init_lambda,
+					init_gamma):
+	zero = np.array([0])
+	lambda_upperbound = np.array([0.9])
+	lambda_lowerbound = 0
+	gamma_lowerbound = 0
+
+	int_omega = int_omega.reshape(-1)
+	n_params = M.shape[1]
+
+	# Equality constraint
+	# force the basis to ingreate to 1 over the omega domain
+	A_ = (np.concatenate((int_omega, zero)).reshape(-1)).reshape(1, -1)
+	b_ = np.array([1.0])
+
+	# If using projection_polyhedron
+	# then use the following inequality constraints
+	G = -1 * np.eye(n_params + 2, n_params + 1)
+	G = G.at[-1].set(np.zeros(n_params + 1, ).at[-1].set(1))
+	lower_bounds = np.zeros((n_params + 1,)) + gamma_lowerbound
+	lower_bounds = lower_bounds.at[-1].set(lambda_lowerbound)
+	h = np.concatenate((lower_bounds, lambda_upperbound))
+
+	init_lambda = np.array(init_lambda)  # np.array([init_lambda])
+	init_params = np.concatenate((init_gamma.reshape(-1),
+								  init_lambda.reshape(-1))).reshape(-1, 1)
+
 	pg = ProjectedGradient(
-		fun=multinomial_nll,
+		fun=partial(loss, tol=tol),
 		verbose=False,
 		acceleration=True,
 		implicit_diff=False,
 		tol=tol,
 		maxiter=maxiter,
-		jit=False,
-		projection=
-		lambda x, hyperparams: projection_polyhedron(
-			x=x,
-			hyperparams=hyperparams,
-			check_feasible=False))
-	# equality constraint
-	A_ = c.reshape(1, -1)
-	b_ = np.array([1.0])
-
-	# inequality constraint
-	G = -1 * np.eye(n_params)
-	h = np.zeros((n_params,))
-
+		jit=True,
+		projection=partial(projection_polyhedron,
+						   check_feasible=False))
 	pg_sol = pg.run(
-		init_params=np.full_like(c, 1, dtype=dtype) / n_params,
-		data=(A, b, c),
+		init_params=init_params.reshape(-1),
+		data=(M, props, int_control, int_omega),
 		hyperparams_proj=(A_, b_, G, h))
 	x = pg_sol.params
 
-	gamma = normalize(threshold_non_neg(x, tol=tol), int_omega=int_omega)
+	x = x.reshape(-1)
+	lambda_ = x[-1]
+	gamma = x[:-1].reshape(-1, 1)
 
-	gamma_error = 0
-	gamma_aux = (gamma_error,
-				 poisson_nll(gamma=gamma, data=(M, props, int_control)),
-				 multinomial_nll(gamma=gamma, data=(M, props, int_control)))
+	aux = dict()
+	aux['gamma_hat'] = gamma
+	aux['lambda_hat'] = lambda_
 
-	return gamma, gamma_aux
+	return lambda_, aux
 
 
-# @partial(jit, static_argnames=['dtype', 'tol', 'maxiter', 'dtype'])
-def mom_opt(props, M, int_control, int_omega,
-			tol, maxiter, dtype):
-	gamma, gamma_error = normalized_nnls_with_linear_constraint(
-		b=props / np.sum(props),
-		A=M,
-		c=int_omega,
-		maxiter=maxiter,
+@partial(jit, static_argnames=['tol', 'maxiter'])
+def multinomial_opt2(props,
+					 M,
+					 int_control,
+					 int_omega,
+					 tol,
+					 maxiter,
+					 init_lambda,
+					 init_gamma):
+	int_omega = int_omega.reshape(-1)
+	init_lambda = np.array(init_lambda)
+	init_params = np.concatenate((init_gamma.reshape(-1),
+								  init_lambda.reshape(-1)))
+
+	pg = GradientDescent(
+		fun=partial(loss, tol=tol),
+		stepsize=tol,
+		verbose=False,
+		acceleration=False,
+		implicit_diff=True,
 		tol=tol,
-		dtype=dtype)
+		maxiter=maxiter,
+		jit=True)
 
-	gamma_aux = (gamma_error,
-				 poisson_nll(gamma=gamma, data=(M, props, int_control)),
-				 multinomial_nll(gamma=gamma, data=(M, props, int_control)))
+	pg_sol = pg.run(
+		init_params=init_params.reshape(-1),
+		data=(M, props, int_control, int_omega))
+	x = pg_sol.params
 
-	return gamma, gamma_aux
+	x = x.reshape(-1)
+	lambda_ = x[-1]
+	gamma = x[:-1].reshape(-1, 1)
+
+	# new lambda_ computation to avoid boundary issue
+	# lambda_ = _lambda_hat(props=props,
+	# 					  gamma=gamma,
+	# 					  int_control=int_control)
+
+	aux = dict()
+	aux['gamma_hat'] = gamma
+	aux['lambda_hat'] = lambda_
+
+	return lambda_, aux
 
 
 def preprocess(params):
-	int_omega = params.basis.int_omega(k=params.k)
-	assert not np.isnan(int_omega).any()
+	return 0
 
-	M = params.basis.integrate(params.k,
-							   params.from_,
-							   params.to_)  # n_bins x n_parameters
-	assert not np.isnan(M).any()
 
-	int_control = np.sum(M, axis=0).reshape(-1, 1)
-	assert not np.isnan(int_control).any()
+# params.background.loss = lambda props, gamma, lambda_: loss(
+# 	gamma=np.concatenate((gamma.reshape(-1), np.array([lambda_]))),
+# 	data=(M, props, int_control, int_omega),
+# 	tol=params.tol)
 
-	params.background.int_omega = int_omega
-	params.background.M = M
-	params.background.int_control = int_control
+# params.background.estimate_lambda2 = partial(
+# 	params.background.optimizer2,
+# 	M=params.background.M,
+# 	int_control=params.background.int_control,
+# 	int_omega=params.background.int_omega)
 
-	params.background.estimate_gamma = partial(
-		params.background.optimizer,
-		M=params.background.M,
-		int_control=params.background.int_control,
-		int_omega=params.background.int_omega)
+# params.background.estimate_gamma = partial(
+# 	params.background.optimizer,
+# 	M=params.background.M,
+# 	int_control=params.background.int_control,
+# 	int_omega=params.background.int_omega)
+#
+# params.background.estimate_lambda = partial(
+# 	estimate_lambda,
+# 	compute_gamma=params.background.estimate_gamma,
+# 	int_control=params.background.int_control)
 
-	params.background.estimate_lambda = partial(
-		estimate_lambda,
-		compute_gamma=params.background.estimate_gamma,
-		int_control=params.background.int_control)
 
-	# indicators is a n_props x n_obs matrix that indicates
-	# to which bin every observation belongs
-	params.background.influence = partial(
-		influence,
-		grad=params.grad_op)
+# indicators is a n_props x n_obs matrix that indicates
+# to which bin every observation belongs
+# params.background.influence = partial(
+# 	influence,
+# 	grad=params.grad_op)
 
-	params.background.t2_hat = partial(
-		t2_hat,
-		grad=params.grad_op)
+# params.background.t2_hat = partial(
+# 	t2_hat,
+# 	grad=params.grad_op)
 
 
 @jit

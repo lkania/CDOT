@@ -8,6 +8,7 @@ from src.load import load
 
 def load_background_and_signal(args):
 	params = DotDic()
+	params.hash = args.hash
 
 	#######################################################
 	# Data parameters
@@ -49,14 +50,11 @@ def load_background_and_signal(args):
 	# params.choice = choice
 
 	@partial(jit, static_argnames=['n', 'classifier'])
-	def background_subsample(n, key, classifier=None):
+	def background_subsample(n, key, classifier):
 		idx = choice(n=n,
 					 n_elements=params.background.X.shape[0],
 					 key=key)
 		X = params.background.X[idx].reshape(-1)
-		if classifier is None:
-			return X
-
 		c = params.background.c[classifier][idx].reshape(-1)
 
 		return X, c
@@ -108,7 +106,7 @@ def load_background_and_signal(args):
 	# Note that this function will generate an array
 	# whose size depends on n and lambda_
 	@partial(jit, static_argnames=['n', 'lambda_', 'classifier'])
-	def subsample(n, lambda_, key, classifier=None):
+	def subsample(n, lambda_, key, classifier):
 		if lambda_ == 0:
 			return background_subsample(
 				n=n,
@@ -135,16 +133,15 @@ def load_background_and_signal(args):
 
 	# params.subsample = subsample
 
-	def filter(X_, cutoff):
-		X, c = X_
-		X = X[c >= cutoff]
-		return X
-
-	params.filter = filter
-
 	def mask(X_, cutoff):
 		X, c = X_
 		return X, (c >= cutoff)
+
+	def filter(X_, cutoff):
+		X, c = X_
+		return X[c >= cutoff]
+
+	params.filter = filter
 
 	@partial(jit, static_argnames=['n', 'classifier', 'lambda_'])
 	def subsample_and_mask(n, classifier, lambda_, cutoff, key):

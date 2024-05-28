@@ -62,12 +62,14 @@ def n_bins_(n_lower, n_upper, n_bins):
 	return bins_lower, bins_upper
 
 
+# add check above 0 and below 1
 def threshold(X, lower, upper):
-	lower_idx = X <= lower
+	in_range = np.logical_and(X >= 0, X <= 1)
+	lower_idx = np.logical_and(in_range, X <= lower)
 	n_lower = np.sum(lower_idx)
 	X_lower = X[lower_idx]
 
-	upper_idx = X >= upper
+	upper_idx = np.logical_and(in_range, X >= upper)
 	n_upper = np.sum(upper_idx)
 	X_upper = X[upper_idx]
 
@@ -82,15 +84,16 @@ def _adaptive_n_bins(X, lower, upper, n_bins):
 
 
 # The method assumes that the data lays on the [0,1] interval
-def _adaptive_bin(X, lower, upper, n_bins):
-	n_lower, X_lower, n_upper, X_upper = threshold(X, lower, upper)
+def _adaptive_bin(X, lower, upper, bins_lower, bins_upper):
+	_, X_lower, _, X_upper = threshold(X, lower, upper)
 
-	if isinstance(n_bins, tuple):
-		bins_lower, bins_upper = n_bins
-	elif isinstance(n_bins, int):
-		bins_lower, bins_upper = n_bins_(n_lower, n_upper, n_bins)
-	else:
-		raise ValueError('n_bins must be int or tuple')
+	# bins_lower, bins_upper = n_bins
+	# if isinstance(n_bins, tuple):
+	# 	bins_lower, bins_upper = n_bins
+	# elif isinstance(n_bins, int):
+	# 	bins_lower, bins_upper = n_bins_(n_lower, n_upper, n_bins)
+	# else:
+	# 	raise ValueError('n_bins must be int or tuple')
 
 	s_lower = split_positions(X_lower, n_bins=bins_lower)
 	s_upper = split_positions(X_upper, n_bins=bins_upper)
@@ -98,12 +101,11 @@ def _adaptive_bin(X, lower, upper, n_bins):
 	return s_lower, s_upper
 
 
-def adaptive_bin(X, lower, upper, n_bins):
-	assert np.all(X >= 0), 'all elements of X must be non-negative'
-	assert np.all(X <= 1), 'all elements of X must be bounded by 1'
+def adaptive_bin(X, lower, upper, bins_lower, bins_upper):
+	# assert np.all(X >= 0), 'all elements of X must be non-negative'
+	# assert np.all(X <= 1), 'all elements of X must be bounded by 1'
 
-	s_lower, s_upper = _adaptive_bin(
-		X, lower, upper, n_bins)
+	s_lower, s_upper = _adaptive_bin(X, lower, upper, bins_lower, bins_upper)
 
 	from_ = np.concatenate((np.array([0]), s_lower, np.array([upper]), s_upper))
 	to_ = np.concatenate((s_lower, np.array([lower]), s_upper, np.array([1])))
@@ -112,15 +114,15 @@ def adaptive_bin(X, lower, upper, n_bins):
 
 
 # do not skip the signal region bin
-def full_adaptive_bin(X, lower, upper, n_bins):
-	s_lower, s_upper = _adaptive_bin(X, lower, upper, n_bins)
-
-	from_ = np.concatenate(
-		(np.array([0]), s_lower, np.array([lower]), np.array([upper]), s_upper))
-	to_ = np.concatenate(
-		(s_lower, np.array([lower]), np.array([upper]), s_upper, np.array([1])))
-
-	return from_, to_
+# def full_adaptive_bin(X, lower, upper, n_bins):
+# 	s_lower, s_upper = _adaptive_bin(X, lower, upper, n_bins)
+#
+# 	from_ = np.concatenate(
+# 		(np.array([0]), s_lower, np.array([lower]), np.array([upper]), s_upper))
+# 	to_ = np.concatenate(
+# 		(s_lower, np.array([lower]), np.array([upper]), s_upper, np.array([1])))
+#
+# 	return from_, to_
 
 
 def uniform_bin(lower, upper, n_bins):
@@ -155,15 +157,16 @@ def indicator(X, from_, to_):
 
 @jit
 def counts(X, from_, to_):
+	X = X.reshape(-1)
 	indicators = indicator(X, from_, to_)
 	counts = np.sum(indicators, axis=1).reshape(-1)
 	return counts, indicators
 
-
-@jit
-def proportions(X, from_, to_):
-	X = X.reshape(-1)
-	n_obs = X.shape[0]
-	counts_, indicators = counts(X, from_, to_)
-	empirical_probabilities = counts_ / n_obs
-	return empirical_probabilities, indicators
+# @jit
+# def proportions(X, from_, to_, n=None):
+# 	if n is None:
+# 		n = X.shape[0]
+# 	X = X.reshape(-1)
+# 	counts_, indicators = counts(X, from_, to_)
+# 	empirical_probabilities = counts_ / n
+# 	return empirical_probabilities, indicators
