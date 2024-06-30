@@ -10,6 +10,7 @@ from jax import jit
 from functools import partial
 
 
+# TODO: do test to check that evaluate is correct
 # approximate function
 def comb(N, k):
 	one = np.full(shape=k.shape, fill_value=1)

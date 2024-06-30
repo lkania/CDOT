@@ -1,7 +1,7 @@
 from jax import numpy as np
-from src.dotdic import DotDic
+
 from experiments.parallel import run
-from jax.scipy.stats.norm import cdf, ppf as icdf
+from src.dotdic import DotDic
 
 
 def l2_to_uniform(args, pvalues):
@@ -51,16 +51,12 @@ def select(args, path, params, tests, measure):
 
 		results[test.name].measure = measure(results[test.name].stats)
 
-		# TODO: set to args.alpha
 		# The empirical threshold is np.quantile(results[test.name].pvalues, q=args.alpha)
 		# test.threshold = args.alpha
 		# test.pvalue_quantile = np.quantile(
 		# 	results[test.name].pvalues,
 		# 	q=args.alpha)
-		test.threshold = args.alpha  # icdf(1 - args.alpha)
-	# np.quantile(results[test.name].stats,q=1 - args.alpha)
-
-	# clear()
+		test.threshold = args.alpha
 
 	###################################################
 	# Model selection based on p-value distribution

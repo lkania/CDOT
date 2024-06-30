@@ -1,11 +1,12 @@
-from jax import numpy as np, pmap, jit
-from tqdm import tqdm
-from experiments import storage
 from functools import partial
 
 import numpy as onp
-from src.dotdic import DotDic
+from jax import numpy as np, pmap
+from tqdm import tqdm
+
 from experiments import key_management
+from experiments import storage
+from src.dotdic import DotDic
 
 
 def split_leading_axis(arr, n_jobs):
@@ -26,7 +27,7 @@ def generate_datasets(args, keys, test, params, lambda_):
 	data = onp.zeros(shape=(args.folds, args.sample_size), dtype=args.float)
 	masks = onp.zeros(shape=(args.folds, args.sample_size),
 					  dtype=onp.int32)
-	sample_sizes = onp.zeros(shape=(args.folds), dtype=onp.int32)
+	# sample_sizes = onp.zeros(shape=(args.folds), dtype=onp.int32)
 
 	for j in tqdm(range(args.folds // args.n_jobs), ncols=40):
 		start = (j * args.n_jobs)
@@ -40,11 +41,11 @@ def generate_datasets(args, keys, test, params, lambda_):
 
 		data[start:end, :] = X
 		masks[start:end, :] = mask
-		sample_sizes[start:end] = n
+	# sample_sizes[start:end] = n
 
-	sample_sizes = np.array(sample_sizes)
+	# sample_sizes = np.array(sample_sizes)
 
-	return data, masks, sample_sizes
+	return data, masks  # , sample_sizes
 
 
 def generate_counts(args, keys, test, params, lambda_):
@@ -144,8 +145,16 @@ def run(args, params, test, path, lambda_):
 												 path=path,
 												 name=test.name)
 	else:
-		print('\nGenerate datasets in parallel\n')
-		data, masks, counts, sample_sizes = generate_counts(
+		print(
+			'\nGenerate datasets in parallel lambda={0}\n'.format(lambda_))
+		# data, masks, counts, sample_sizes = generate_counts(
+		# 	args=args,
+		# 	keys=keys,
+		# 	test=test,
+		# 	params=params,
+		# 	lambda_=lambda_)
+
+		data, mask = generate_datasets(
 			args=args,
 			keys=keys,
 			test=test,
@@ -154,21 +163,23 @@ def run(args, params, test, path, lambda_):
 
 		# Certify that all observations fall between 0 and 1
 		# since we are using Bernstein polynomials
-		assert (np.max(data * masks) <= 1) and (np.min(data * masks) >= 0)
+		assert (np.max(data * mask) <= 1) and (np.min(data * mask) >= 0)
 
-		l = lambda c, n: test.test(counts=c, n=n)
-		counts = split_leading_axis(counts, n_jobs=args.n_jobs)
-		sample_sizes = split_leading_axis(sample_sizes.reshape(-1, 1),
-										  n_jobs=args.n_jobs)
+		# l = lambda c, n: test.test(counts=c, n=n)
+		# counts = split_leading_axis(counts, n_jobs=args.n_jobs)
+		# sample_sizes = split_leading_axis(sample_sizes.reshape(-1, 1),
+		# 								  n_jobs=args.n_jobs)
+
+		l = lambda X, mask: test.test(X=X, mask=mask)
+		datas = split_leading_axis(data, n_jobs=args.n_jobs)
+		masks = split_leading_axis(mask, n_jobs=args.n_jobs)
 		exec = pmap(l, in_axes=(0, 0))
 
 		print('\nCompute tests in parallel\n')
 		results_ = []
 		for j in tqdm(range(args.folds // args.n_jobs), ncols=40):
-			r = exec(counts[j], sample_sizes[j])
+			r = exec(datas[j], masks[j])
 
-			# TODO: t2_hat seems to be too small
-			# check for NaNs
 			for k in r.keys():
 				assert not np.isnan(r[k]).any()
 
@@ -176,7 +187,7 @@ def run(args, params, test, path, lambda_):
 
 		storage.save_obj(cwd=args.cwd,
 						 path=path,
-						 obj=(data, masks, results_),
+						 obj=(data, mask, results_),
 						 name=test.name)
 
 	print('\nProcess results\n')
@@ -199,7 +210,7 @@ def run(args, params, test, path, lambda_):
 			for k in keys:
 				d[k] = results_[i][k][j]
 			d.X = data[index].reshape(-1)
-			d.mask = masks[index].reshape(-1)
+			d.mask = mask[index].reshape(-1)
 			# mask filtered observations
 			d.X = d.X * d.mask + (-1) * (1 - d.mask)
 			d.n = np.sum(d.mask)
