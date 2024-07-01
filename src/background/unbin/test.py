@@ -2,7 +2,7 @@ from jax import numpy as np, jit, grad
 from functools import partial
 
 from jax.scipy.stats.norm import cdf, ppf as icdf
-from jaxopt.projection import projection_polyhedron, projection_box_section
+from jaxopt.projection import projection_polyhedron, projection_simplex
 from jaxopt import ProjectedGradient, GradientDescent, LBFGS, LBFGSB
 from jax import grad, hessian, numpy as np, vmap, jit
 
@@ -110,14 +110,10 @@ def loss_per_obs(vars,
 # 					in_control_region=in_control_region,
 # 					tol=tol,
 # 					k=k))
-
-def loss(vars, data, tol):
-	eval_, mask, int_signal, n_signal, in_control_region = data
-
-	vars = vars.reshape(-1)
-	lambda_ = vars[-1]
-	gamma = vars[:-1]
-
+def loss_(gamma, lambda_,
+		  eval_, in_control_region, mask, n_signal,
+		  int_signal,
+		  tol):
 	background_over_signal = np.dot(gamma.reshape(-1), int_signal.reshape(-1))
 	background_per_obs = eval_ @ gamma.reshape(-1, 1)
 	background_per_obs = background_per_obs.reshape(-1)
@@ -130,63 +126,119 @@ def loss(vars, data, tol):
 	signal = np.where(signal <= tol, tol, signal)
 	t2 = n_signal * np.log(signal)
 
-	loss_ = (-1) * (t1 + t2)
-
-	return loss_
+	return (-1) * (t1 + t2)
 
 
-# @partial(jit, static_argnames=['tol', 'maxiter'])
+def loss(vars, data, tol):
+	eval_, mask, int_signal, n_signal, in_control_region = data
+
+	vars = vars.reshape(-1)
+	lambda_ = vars[-1]
+	gamma = vars[:-1]
+
+	return loss_(gamma=gamma,
+				 lambda_=lambda_,
+				 eval_=eval_,
+				 in_control_region=in_control_region,
+				 mask=mask,
+				 n_signal=n_signal,
+				 int_signal=int_signal,
+				 tol=tol)
+
+
+def loss_with_opt_lambda(gamma,
+						 eval_, mask, n_signal, n_control, n, in_control_region,
+						 int_signal, int_control,
+						 tol):
+	gamma = gamma.reshape(-1)
+
+	background_over_control = np.dot(gamma.reshape(-1), int_control.reshape(-1))
+	lambda_ = 1 - (n_control / n) / background_over_control
+
+	return loss_(gamma=gamma,
+				 lambda_=lambda_,
+				 eval_=eval_,
+				 in_control_region=in_control_region,
+				 mask=mask,
+				 n_signal=n_signal,
+				 int_signal=int_signal,
+				 tol=tol)
+
+
+@partial(jit, static_argnames=['tol', 'maxiter', 'projection'])
 def constrained_opt(mask,
+					n,
 					n_signal,
-					int_signal,
-					int_omega,
+					n_control,
 					in_control_region,
 					eval_,
 					tol,
-					stepsize,
 					maxiter,
+					projection,
 					init_lambda,
-					init_gamma,
-					lambda_lowerbound,
-					lambda_upperbound,
-					gamma_lowerbound):
-	zero = np.array([0])
-	lambda_upperbound = np.array([lambda_upperbound])
-
-	n_params = init_gamma.reshape(-1).shape[0]
-
-	# Equality constraint
-	# force the basis to ingreate to 1 over the omega domain
-	A_ = (np.concatenate((int_omega, zero)).reshape(-1)).reshape(1, -1)
-	b_ = np.array([1.0])
-
-	# If using projection_polyhedron
-	# then use the following inequality constraints
-	G = -1 * np.eye(n_params + 2, n_params + 1)
-	G = G.at[-1].set(np.zeros(n_params + 1, ).at[-1].set(1))
-	lower_bounds = np.zeros((n_params + 1,)) + gamma_lowerbound
-	lower_bounds = lower_bounds.at[-1].set(lambda_lowerbound)
-	h = np.concatenate((lower_bounds, lambda_upperbound))
-
+					init_gamma):
 	init_lambda = np.array(init_lambda)
 	init_params = np.concatenate((init_gamma.reshape(-1),
 								  init_lambda.reshape(-1))).reshape(-1, 1)
 
 	pg = ProjectedGradient(
 		fun=partial(loss, tol=tol),
-		stepsize=stepsize,
 		verbose=True,
 		acceleration=False,
 		implicit_diff=False,
 		tol=tol,
 		maxiter=maxiter,
 		jit=True,
-		projection=partial(projection_polyhedron,
-						   check_feasible=False))
+		projection=projection)
+
 	pg_sol = pg.run(
-		init_params=init_params.reshape(-1),
-		data=(eval_, mask, int_signal, n_signal, in_control_region),
-		hyperparams_proj=(A_, b_, G, h))
+		init_params=init_params,
+		eval_=eval_,
+		mas=mask,
+		n=n,
+		n_signal=n_signal,
+		n_control=n_control,
+		in_control_region=in_control_region
+	)
+	x = pg_sol.params
+
+	x = x.reshape(-1)
+	lambda_ = x[-1]
+	gamma = x[:-1].reshape(-1)
+
+	return lambda_, gamma
+
+
+@partial(jit, static_argnames=['tol', 'maxiter'])
+def constrained_opt_with_opt_lambda(
+		mask,
+		n,
+		n_signal,
+		n_control,
+		in_control_region,
+		eval_,
+		projection,
+		tol,
+		maxiter,
+		init_gamma):
+	pg = ProjectedGradient(
+		fun=partial(loss_with_opt_lambda, tol=tol),
+		verbose=True,
+		acceleration=False,
+		implicit_diff=False,
+		tol=tol,
+		maxiter=maxiter,
+		jit=True,
+		projection=projection)
+	pg_sol = pg.run(
+		init_params=init_gamma.reshape(-1),
+		eval_=eval_,
+		mas=mask,
+		n=n,
+		n_signal=n_signal,
+		n_control=n_control,
+		in_control_region=in_control_region
+	)
 	x = pg_sol.params
 
 	x = x.reshape(-1)

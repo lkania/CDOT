@@ -61,7 +61,7 @@ from src.dotdic import DotDic
 from experiments.parser import parse
 from experiments import plot, selection, plots
 from experiments.builder import load_background_and_signal
-from src.test.test import build as build_test
+from src.test.builder import build as build_test
 from src import bin
 from src.basis import bernstein
 from experiments import parallel
@@ -84,22 +84,21 @@ args.float = np.float64
 args.int = np.int64
 args.tol = 1e-15
 args.target_data_id = args.data_id
-args.use_cache = False
+args.use_cache = True
 args.alpha = 0.05
 args.sample_size = 20000
-args.folds = 100
+args.folds = 500
 args.n_jobs = min(args.folds, n_jobs)
-args.signal_region = [0.1,
-					  0.90]  # the signal region contains 80% of the signal
-args.ks = [20, 30, 35]
+args.signal_region = [0.1, 0.90]  # the signal region quantiles
+args.ks = [20, 25, 30, 35]
 args.classifiers = ['class', 'tclass']
 # Subsets are used for plotting while
 # the full range is used for power curve computations
 args.lambdas_subset = [0, 0.05]
-args.lambdas = args.lambdas_subset  # [0, 0.01, 0.02, 0.05]
+args.lambdas = [0, 0.01, 0.02, 0.05]
 
 args.quantiles_subset = [0.0, 0.5, 0.7]
-args.quantiles = args.quantiles_subset  # [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+args.quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
 
 # the following is a number lower than any possible score
 # predicted by any classifier
@@ -121,6 +120,60 @@ def hash_(string):
 	return int(hashlib.sha1(string.encode("utf-8")).hexdigest(), 16)
 
 
+##################################################
+# Compute statistics about datasets
+##################################################
+
+def __stat(signal_region_start,
+		   signal_region_stop,
+		   background,
+		   signal):
+	signal_region_start = np.array([signal_region_start])
+	signal_region_stop = np.array([signal_region_stop])
+	signal_on_signal_region = bin.counts(
+		signal,
+		from_=signal_region_start,
+		to_=signal_region_stop)[0] / signal.shape[0]
+	background_on_control_region = 1 - bin.counts(
+		background,
+		from_=signal_region_start,
+		to_=signal_region_stop)[0] / background.shape[0]
+	print('\t % of signal on signal region {0}\n'
+		  '\t % of background on control region {1}\n'
+		  '\t signal on control / background on control={2}\n'.format(
+		signal_on_signal_region,
+		background_on_control_region,
+		(1 - signal_on_signal_region) / background_on_control_region))
+
+
+print('Validation dataset:\n ')
+args.data_id = '{0}/val'.format(args.target_data_id)
+args.hash = hash_(args.data_id)
+params_ = load_background_and_signal(args)
+
+qs = np.quantile(params_.signal.X,
+				 q=np.array(args.signal_region),
+				 axis=0)
+
+__stat(signal_region_start=qs[0],
+	   signal_region_stop=qs[1],
+	   background=params_.background.X,
+	   signal=params_.signal.X)
+
+print('Test dataset:\n ')
+args.data_id = args.target_data_id
+args.hash = hash_(args.data_id)
+params_ = load_background_and_signal(args)
+
+__stat(signal_region_start=qs[0],
+	   signal_region_stop=qs[1],
+	   background=params_.background.X,
+	   signal=params_.signal.X)
+
+del params_
+del __stat
+
+print('Starting simulation:\n ')
 ##################################################
 # Load background data for model selection
 ##################################################
@@ -623,11 +676,12 @@ def power_analysis(args, params, selected, storage_string, plot_string):
 							   labels=['Without Decorrelation',
 									   'With Decorrelation'])
 
-	plots.power_per_quantile(args=args,
-							 path=plot_path,
-							 results=results,
-							 lambdas=args.lambdas,
-							 quantiles=args.quantiles_subset)
+
+# plots.power_per_quantile(args=args,
+# 						 path=plot_path,
+# 						 results=results,
+# 						 lambdas=args.lambdas,
+# 						 quantiles=args.quantiles_subset)
 
 
 # clear()

@@ -5,7 +5,7 @@ from functools import partial
 
 from jax import numpy as np
 from jaxopt import AndersonAcceleration, FixedPointIteration
-
+from jaxopt.projection import projection_polyhedron, projection_simplex
 #######################################################
 # background methods
 #######################################################
@@ -101,15 +101,56 @@ def build(args):
 		case 'unbin_mle':
 
 			match args.optimizer:
+				case 'density_with_opt_lambda':
+					# only for Bernstein basis
+					projection = partial(
+						projection_simplex,
+						value=params.background.init_gamma.shape[0])
+					params.estimate = partial(
+						unbin_mle.constrained_opt_with_opt_lambda,
+						maxiter=params.maxiter,
+						tol=params.tol,
+						projection=projection,
+						init_gamma=params.background.init_gamma
+					)
+
 				case 'density':
+					lambda_lowerbound = 0  # TODO: can produce upper bias
+					lambda_upperbound = 0.5
+					gamma_lowerbound = 0
+
+					zero = np.array([0])
+					lambda_upperbound = np.array([lambda_upperbound])
+
+					n_params = params.background.init_gamma.reshape(-1).shape[0]
+
+					# Equality constraint
+					# force the basis to integrate to 1 over the omega domain
+					A_ = (
+						np.concatenate((int_omega, zero)).reshape(-1)).reshape(
+						1, -1)
+					b_ = np.array([1.0])
+
+					# If using projection_polyhedron
+					# then use the following inequality constraints
+					G = -1 * np.eye(n_params + 2, n_params + 1)
+					G = G.at[-1].set(np.zeros(n_params + 1, ).at[-1].set(1))
+					lower_bounds = np.zeros((n_params + 1,)) + gamma_lowerbound
+					lower_bounds = lower_bounds.at[-1].set(lambda_lowerbound)
+					h = np.concatenate((lower_bounds, lambda_upperbound))
+
+					projection = partial(projection_polyhedron,
+										 hyperparams_proj=(A_, b_, G, h),
+										 check_feasible=False)
+
 					params.estimate = partial(
 						unbin_mle.constrained_opt,
 						maxiter=params.maxiter,
+						tol=params.tol,
+						projection=projection,
 						init_lambda=params.background.init_lambda,
-						init_gamma=params.background.init_gamma,
-						lambda_lowerbound=0,  # TODO: can produce upper bias
-						lambda_upperbound=0.5,
-						gamma_lowerbound=0)
+						init_gamma=params.background.init_gamma
+					)
 
 				case 'normalized_dagostini':
 					params.estimate = partial(
