@@ -5,12 +5,12 @@ from src.basis import bernstein
 
 @partial(jit, static_argnames=['k'])
 def evaluate(k, X):
-	return bernstein.evaluate(k, X) / (k + 1)
+	return bernstein.evaluate(k, X) * (k + 1)
 
 
 @partial(jit, static_argnames=['k'])
 def integrate(k, a, b):
-	return bernstein.integrate(k, a, b) / (k + 1)
+	return bernstein.integrate(k, a, b) * (k + 1)
 
 
 @partial(jit, static_argnames=['k'])

@@ -87,9 +87,8 @@ def load_background_and_signal(args):
 	# 				  cutoff=cutoff)
 	#
 	# params.subsample_and_filter = subsample_and_filter
-
+	print("Loading signal data")
 	params.signal = DotDic()
-
 	params.signal.X = load(
 		path='{0}/signal/mass.txt'.format(params.path))
 	params.signal.c = DotDic()

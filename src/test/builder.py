@@ -51,8 +51,7 @@ def build(args):
 	# optimizer used in background estimation
 	#######################################################
 
-	params.fixpoint = args.fixpoint
-	match params.fixpoint:
+	match args.fixpoint:
 		case 'anderson':
 			fixpoint = partial(AndersonAcceleration,
 							   beta=1,
@@ -71,16 +70,24 @@ def build(args):
 							   tol=params.tol,
 							   maxiter=params.maxiter)
 
-	init_lambda = 0
-	init_gamma = ((np.zeros(shape=(params.k + 1), dtype=args.float) + 1) / (
-			params.k + 1)).reshape(-1)
-	params.background.init_lambda = init_lambda
-	params.background.init_gamma = init_gamma
+	# init_lambda = 0
+	init_gamma = np.full(shape=(params.k + 1,), fill_value=1 / (params.k + 1))
+	init_gamma = init_gamma.reshape(-1)
+
+	assert np.abs(np.sum(init_gamma) - 1) < params.tol
+	# params.background.init_lambda = init_lambda
+	# params.background.init_gamma = init_gamma
 
 	# compute integrals
-	int_omega = params.basis.int_omega(k=params.k).reshape(-1)
-	assert not np.isnan(int_omega).any()
-	assert np.all(int_omega > params.tol)
+	# int_omega = params.basis.int_omega(k=params.k).reshape(-1)
+	# assert not np.isnan(int_omega).any()
+	# assert np.all(int_omega > params.tol)
+
+	# assert that each basis element integrates to one over omega
+	int_omega = params.basis.integrate(k=params.k, a=0, b=1).reshape(-1)
+	assert np.all(int_omega > 0)
+	assert np.max(np.abs(int_omega - 1)) < params.tol
+	int_omega = 1
 
 	int_signal = params.basis.integrate(k=params.k,
 										a=params.lower,
@@ -91,9 +98,21 @@ def build(args):
 	int_control = int_omega - int_signal
 	assert np.all(int_control > 0)
 
-	params.background.int_signal = int_signal
-	params.background.int_omega = int_omega
-	params.background.int_control = int_control
+	# check that the basis properly integrates to one over omega
+	int_control_ = params.basis.integrate(
+		k=params.k,
+		a=0,
+		b=params.lower).reshape(-1)
+	int_control_ += params.basis.integrate(
+		k=params.k,
+		a=params.upper,
+		b=1).reshape(-1)
+	assert np.max(np.abs(int_control_ - int_control)) < params.tol
+	assert np.max(np.abs(int_signal + int_control_ - int_omega)) < params.tol
+
+	# params.background.int_signal = int_signal
+	# params.background.int_omega = int_omega
+	# params.background.int_control = int_control
 
 	params.method = args.method
 	params.optimizer = args.optimizer
@@ -101,17 +120,18 @@ def build(args):
 		case 'unbin_mle':
 
 			match args.optimizer:
-				case 'density_with_opt_lambda':
-					# only for Bernstein basis
-					projection = partial(
-						projection_simplex,
-						value=params.background.init_gamma.shape[0])
+				case 'constrained_opt':
+
 					params.estimate = partial(
 						unbin_mle.constrained_opt_with_opt_lambda,
+						loss=partial(unbin_mle.loss_with_opt_lambda,
+									 int_control=int_control,
+									 tol=params.tol),
 						maxiter=params.maxiter,
 						tol=params.tol,
-						projection=projection,
-						init_gamma=params.background.init_gamma
+						projection=projection_simplex,
+						init_gamma=init_gamma,
+						int_control=int_control
 					)
 
 				case 'density':
@@ -159,21 +179,22 @@ def build(args):
 						fixpoint=fixpoint,
 						update=partial(unbin_mle.normalized_dagostini,
 									   tol=params.tol,
-									   int_omega=params.background.int_omega,
-									   int_control=params.background.int_control),
-						int_control=params.background.int_control,
-						int_omega=params.background.int_omega)
+									   int_control=int_control),
+						int_control=int_control
+					)
 
-				case 'dagostini' | _:  # default choice
+				case 'dagostini':
 					params.estimate = partial(
 						unbin_mle.EM_opt,
 						init_gamma=init_gamma,
 						fixpoint=fixpoint,
 						update=partial(unbin_mle.dagostini,
 									   tol=params.tol,
-									   int_control=params.background.int_control),
-						int_control=params.background.int_control,
-						int_omega=params.background.int_omega)
+									   int_control=int_control),
+						int_control=int_control,
+						int_omega=int_omega)
+				case _:
+					raise ValueError('Method not supported')
 
 			return partial(unbin_mle.efficient_test, params=params)
 
@@ -183,52 +204,62 @@ def build(args):
 			params.to_ = args.to_
 			assert params.from_.shape[0] == params.to_.shape[0]
 			params.bins = len(params.from_)
+
 			# Certify that there will be enough data-points
 			# to fit the background density
 			assert params.k <= (params.bins + 1)
 
-			# compute key quantities
+			# compute integral of each basis over the control region bins
 			M = params.basis.integrate(params.k,
 									   params.from_,
 									   params.to_)  # n_bins x n_parameters
 			assert not np.isnan(M).any()
 
+			# check that adding integrals over bins on the control region
+			# recovers the integral over the whole control region
 			int_control_ = np.sum(M, axis=0).reshape(-1)
 			assert not np.isnan(int_control_).any()
-			assert np.all(int_control_ > params.tol)
-			assert np.all(np.abs(int_control - int_control_) < params.tol)
-
-			params.background.M = M
+			assert np.max(np.abs(int_control - int_control_)) < params.tol
 
 			match args.optimizer:
-				case 'normalized_dagostini':
+
+				case 'constrained_opt':
 					params.estimate = partial(
-						bin_mle.EM_opt,
-						fixpoint=fixpoint,
-						update=partial(bin_mle.normalized_dagostini,
-									   M=params.background.M,
-									   int_control=params.background.int_control,
-									   int_omega=params.background.int_omega,
-									   tol=params.tol),
-						init_gamma=params.background.init_gamma,
-						int_control=params.background.int_control,
-						int_omega=params.background.int_omega)
-				case 'multinomial':
-					params.estimate = partial(
-						bin_mle.multinomial_opt,
+						bin_mle.constrained_opt,
+						loss=partial(bin_mle.loss,
+									 M=M,
+									 int_control=int_control,
+									 tol=params.tol),
+						init_gamma=init_gamma,
+						int_control=int_control,
+						projection=projection_simplex,
 						maxiter=params.maxiter,
 						tol=params.tol)
-				case 'dagostini' | _:  # default choice
+				case 'dagostini':
 					params.estimate = partial(
 						bin_mle.EM_opt,
 						fixpoint=fixpoint,
 						update=partial(bin_mle.dagostini,
-									   M=params.background.M,
-									   int_control=params.background.int_control,
+									   M=M,
+									   int_control=int_control,
 									   tol=params.tol),
-						init_gamma=params.background.init_gamma,
-						int_control=params.background.int_control,
-						int_omega=params.background.int_omega)
+						init_gamma=init_gamma,
+						int_control=int_control,
+						int_omega=int_omega)
+				case 'normalized_dagostini':  # default choice
+					params.estimate = partial(
+						bin_mle.EM_opt,
+						fixpoint=fixpoint,
+						update=partial(bin_mle.normalized_dagostini,
+									   M=M,
+									   int_control=int_control,
+									   tol=params.tol),
+						init_gamma=init_gamma,
+						int_control=int_control,
+						# int_omega=params.background.int_omega
+					)
+				case _:
+					raise ValueError('Optimizer not supported')
 
 			return partial(bin_mle.delta_method_test, params=params)
 

@@ -63,7 +63,7 @@ from experiments import plot, selection, plots
 from experiments.builder import load_background_and_signal
 from src.test.builder import build as build_test
 from src import bin
-from src.basis import bernstein
+from src.basis import bernstein, normalized_bernstein
 from experiments import parallel
 from experiments import key_management
 
@@ -82,9 +82,9 @@ args.key = key_management.init(args=args)
 args.dtype = np.float64
 args.float = np.float64
 args.int = np.int64
-args.tol = 1e-15
+args.tol = 1e-12
 args.target_data_id = args.data_id
-args.use_cache = True
+args.use_cache = False
 args.alpha = 0.05
 args.sample_size = 20000
 args.folds = 500
@@ -327,7 +327,7 @@ for classifier in args.classifiers:
 		)
 
 		test.args = DotDic()
-		test.args.bins = 500
+		test.args.bins = 1000
 		test.args.method = 'unbin_mle'
 		test.args.optimizer = 'normalized_dagostini'
 		test.args.fixpoint = 'normal'
@@ -359,7 +359,7 @@ for classifier in args.classifiers:
 			tests[i].args.k = k
 			tests[i].name = '{0}_{1}'.format(tests[i].name, k)
 			tests[i].args.hash = hash_(tests[i].name)
-			tests[i].args.basis = bernstein
+			tests[i].args.basis = normalized_bernstein
 			tests[i].generate_dataset = partial(
 				generate_dataset,
 				trans=tests[i].trans,

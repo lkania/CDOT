@@ -6,7 +6,7 @@ from jaxopt.projection import projection_polyhedron, projection_simplex
 from jaxopt import ProjectedGradient, GradientDescent, LBFGS, LBFGSB
 from jax import grad, hessian, numpy as np, vmap, jit
 
-from src.basis import bernstein
+# from src.basis import bernstein
 from src.normalize import normalize, safe_ratio
 
 
@@ -31,7 +31,7 @@ def dagostini(gamma0,
 @partial(jit, static_argnames=['tol'])
 def normalized_dagostini(gamma0,
 						 eval_, mask, in_control_region,
-						 int_control, int_omega,
+						 int_control,
 						 tol):
 	gamma = dagostini(gamma0=gamma0,
 					  eval_=eval_,
@@ -39,7 +39,7 @@ def normalized_dagostini(gamma0,
 					  in_control_region=in_control_region,
 					  int_control=int_control,
 					  tol=tol)
-	return normalize(gamma=gamma, int_omega=int_omega).reshape(-1)
+	return (gamma / np.sum(gamma)).reshape(-1)
 
 
 @partial(jit, static_argnames=['update', 'fixpoint'])
@@ -51,25 +51,27 @@ def EM_opt(mask,
 		   eval_,
 
 		   int_control,
-		   int_omega,
 
 		   init_gamma,
 		   update,
 		   fixpoint):
 	sol = fixpoint(fixed_point_fun=update).run(
-		# we initialize gamma so that int_Omega B_gamma(x) = 1
-		# the fixed point method cannot be differentiated w.r.t
-		# the init parameters
-		init_gamma.reshape(-1),
+		init_params=init_gamma.reshape(-1),
 		# the fixed point method can be differentiated w.r.t
 		# the following auxiliary parameters
-		eval_, mask, in_control_region)
+		eval_=eval_,
+		mask=mask,
+		in_control_region=in_control_region)
 
-	gamma = sol[0]
+	gamma = sol[0].reshape(-1)
 
-	gamma_hat = normalize(gamma=gamma, int_omega=int_omega)
+	# assumes normalized basis, i.e. int_Omega phi_k(x) =1
+	gamma_hat = (gamma / np.sum(gamma)).reshape(-1)
 
-	lambda_hat = 1 - (n_control / n) / np.dot(gamma_hat, int_control)
+	lambda_hat = estimate_lambda(gamma=gamma_hat,
+								 n_control=n_control,
+								 n=n,
+								 int_control=int_control)
 
 	return lambda_hat, gamma_hat
 
@@ -110,15 +112,21 @@ def loss_per_obs(vars,
 # 					in_control_region=in_control_region,
 # 					tol=tol,
 # 					k=k))
-def loss_(gamma, lambda_,
-		  eval_, in_control_region, mask, n_signal,
-		  int_signal,
-		  tol):
+@partial(jit, static_argnames=['tol'])
+def loss(vars,
+		 eval_, in_control_region, mask, n_signal,
+		 int_signal,
+		 tol):
+	vars = vars.reshape(-1)
+	lambda_ = vars[-1]
+	gamma = vars[:-1]
+
+	gamma = gamma.reshape(-1) / np.sum(gamma)
+
 	background_over_signal = np.dot(gamma.reshape(-1), int_signal.reshape(-1))
 	background_per_obs = eval_ @ gamma.reshape(-1, 1)
-	background_per_obs = background_per_obs.reshape(-1)
 
-	back = (1 - lambda_) * background_per_obs
+	back = (1 - lambda_) * background_per_obs.reshape(-1)
 	back = np.where(back <= tol, tol, back)
 	t1 = np.sum(np.log(back) * in_control_region * mask)
 
@@ -129,40 +137,34 @@ def loss_(gamma, lambda_,
 	return (-1) * (t1 + t2)
 
 
-def loss(vars, data, tol):
-	eval_, mask, int_signal, n_signal, in_control_region = data
-
-	vars = vars.reshape(-1)
-	lambda_ = vars[-1]
-	gamma = vars[:-1]
-
-	return loss_(gamma=gamma,
-				 lambda_=lambda_,
-				 eval_=eval_,
-				 in_control_region=in_control_region,
-				 mask=mask,
-				 n_signal=n_signal,
-				 int_signal=int_signal,
-				 tol=tol)
+@jit
+def estimate_lambda(gamma, n_control, n, int_control):
+	background_over_control = np.dot(gamma.reshape(-1), int_control.reshape(-1))
+	return 1 - (n_control / n) / background_over_control
 
 
+@partial(jit, static_argnames=['tol'])
 def loss_with_opt_lambda(gamma,
 						 eval_, mask, n_signal, n_control, n, in_control_region,
-						 int_signal, int_control,
+						 int_control,
 						 tol):
-	gamma = gamma.reshape(-1)
+	# gamma = gamma.reshape(-1) / np.sum(gamma)
+
+	background_per_obs = eval_ @ gamma.reshape(-1, 1)
+	background_per_obs = background_per_obs.reshape(-1)
+	background_per_obs = np.where(background_per_obs <= tol,
+								  tol,
+								  background_per_obs)
+
+	t1 = np.sum(np.log(background_per_obs) * in_control_region * mask)
 
 	background_over_control = np.dot(gamma.reshape(-1), int_control.reshape(-1))
-	lambda_ = 1 - (n_control / n) / background_over_control
+	background_over_control = np.where(background_over_control <= tol,
+									   tol,
+									   background_over_control)
+	t2 = n_control * np.log(background_over_control)
 
-	return loss_(gamma=gamma,
-				 lambda_=lambda_,
-				 eval_=eval_,
-				 in_control_region=in_control_region,
-				 mask=mask,
-				 n_signal=n_signal,
-				 int_signal=int_signal,
-				 tol=tol)
+	return (-1) * (t1 - t2)
 
 
 @partial(jit, static_argnames=['tol', 'maxiter', 'projection'])
@@ -209,7 +211,7 @@ def constrained_opt(mask,
 	return lambda_, gamma
 
 
-@partial(jit, static_argnames=['tol', 'maxiter'])
+@partial(jit, static_argnames=['tol', 'maxiter', 'loss', 'projection'])
 def constrained_opt_with_opt_lambda(
 		mask,
 		n,
@@ -217,14 +219,19 @@ def constrained_opt_with_opt_lambda(
 		n_control,
 		in_control_region,
 		eval_,
+
+		int_control,
+
+		loss,
 		projection,
 		tol,
 		maxiter,
+
 		init_gamma):
 	pg = ProjectedGradient(
-		fun=partial(loss_with_opt_lambda, tol=tol),
-		verbose=True,
-		acceleration=False,
+		fun=loss,
+		verbose=False,
+		acceleration=True,
 		implicit_diff=False,
 		tol=tol,
 		maxiter=maxiter,
@@ -233,17 +240,17 @@ def constrained_opt_with_opt_lambda(
 	pg_sol = pg.run(
 		init_params=init_gamma.reshape(-1),
 		eval_=eval_,
-		mas=mask,
+		mask=mask,
 		n=n,
 		n_signal=n_signal,
 		n_control=n_control,
 		in_control_region=in_control_region
 	)
-	x = pg_sol.params
-
-	x = x.reshape(-1)
-	lambda_ = x[-1]
-	gamma = x[:-1].reshape(-1)
+	gamma = pg_sol.params.reshape(-1)
+	lambda_ = estimate_lambda(gamma=gamma,
+							  n_control=n_control,
+							  n=n,
+							  int_control=int_control)
 
 	return lambda_, gamma
 
@@ -303,6 +310,8 @@ def pvalue(zscore):
 	return 1 - cdf(zscore, loc=0, scale=1)
 
 
+# TODO: do unit test showing that discrete EM and continuous EM
+# find the same lambda_hat when when we have 500 bins or more
 @partial(jit, static_argnames=['params'])
 def efficient_test(params, X, mask):
 	n = np.sum(mask)
@@ -317,13 +326,11 @@ def efficient_test(params, X, mask):
 	n_signal = n - n_control
 
 	# evaluate basis
-	eval_ = bernstein.evaluate(k=params.k, X=X)
+	eval_ = params.basis.evaluate(k=params.k, X=X)
 	eval_ = np.where(eval_ <= params.tol, 0, eval_)
 
 	# check that the basis is a partition of unity
 	# assert np.max(np.abs(np.sum(eval_, axis=1) - 1)) < 1e-7
-
-	print('opt start')
 
 	lambda_hat, gamma_hat = params.estimate(
 		mask=mask,
@@ -332,36 +339,37 @@ def efficient_test(params, X, mask):
 		n_signal=n_signal,
 		in_control_region=in_control_region,
 		eval_=eval_)
+	pvalue_ = lambda_hat
 
-	hessian_op = hessian(
-		fun=partial(loss, data=(eval_,
-								mask,
-								params.background.int_signal.reshape(-1),
-								n_signal,
-								in_control_region),
-					tol=params.tol),
-		argnums=0,
-		has_aux=False)
+	# hessian_op = hessian(
+	# 	fun=partial(loss,
+	# 				eval=eval_,
+	# 				mas=mask,
+	# 				n_signal=n_signal,
+	# 				in_control_region=in_control_region),
+	# 	argnums=0,
+	# 	has_aux=False)
+	#
+	# nu_hat = np.concatenate(
+	# 	(gamma_hat.reshape(-1), np.array([lambda_hat]))
+	# ).reshape(-1)
+	#
+	# H = hessian_op(nu_hat) / n
+	#
+	# grad_op = grad(partial(loss_per_obs,
+	# 					   int_signal=params.background.int_signal.reshape(-1),
+	# 					   tol=params.tol),
+	# 			   argnums=0,
+	# 			   has_aux=False)
+	# grad_ops = vmap(grad_op, in_axes=(None, 0, 0, 0))
+	# grad_per_example = grad_ops(nu_hat, eval_, mask, in_control_region)
+	# psi = np.linalg.solve(H, np.transpose(grad_per_example))
+	# covar = psi @ np.transpose(psi) / n
+	# var = covar[-1, -1]
+	#
+	# zscore = np.sqrt(n) * lambda_hat / np.sqrt(var)
+	# pvalue_ = pvalue(zscore)
 
-	nu_hat = np.concatenate(
-		(gamma_hat.reshape(-1), np.array([lambda_hat]))
-	).reshape(-1)
-
-	H = hessian_op(nu_hat) / n
-
-	grad_op = grad(partial(loss_per_obs,
-						   int_signal=params.background.int_signal.reshape(-1),
-						   tol=params.tol),
-				   argnums=0,
-				   has_aux=False)
-	grad_ops = vmap(grad_op, in_axes=(None, 0, 0, 0))
-	grad_per_example = grad_ops(nu_hat, eval_, mask, in_control_region)
-	psi = np.linalg.solve(H, np.transpose(grad_per_example))
-	covar = psi @ np.transpose(psi) / n
-	var = covar[-1, -1]
-
-	zscore = np.sqrt(n) * lambda_hat / np.sqrt(var)
-	pvalue_ = pvalue(zscore)
 	method = dict()
 
 	method['lambda_hat'] = lambda_hat

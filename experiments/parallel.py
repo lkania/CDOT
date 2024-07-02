@@ -115,8 +115,7 @@ def parallel_predict_counts(n_jobs,
 		to_=to_,
 		predict_density=predict_density,
 		k=k)
-	exec = pmap(ppredict_counts,
-				in_axes=(0, 0, 0, None, None))
+	exec = pmap(ppredict_counts, in_axes=(0, 0, 0, None, None))
 
 	folds = n.shape[0]
 	results = onp.zeros(shape=(folds, from_.shape[0]), dtype=dtype)
@@ -141,18 +140,12 @@ def run(args, params, test, path, lambda_):
 	if args.use_cache and storage.exists(cwd=args.cwd,
 										 path=path,
 										 name=test.name):
-		data, masks, results_ = storage.load_obj(cwd=args.cwd,
-												 path=path,
-												 name=test.name)
+		data, mask, results_ = storage.load_obj(cwd=args.cwd,
+												path=path,
+												name=test.name)
 	else:
-		print(
-			'\nGenerate datasets in parallel lambda={0}\n'.format(lambda_))
-		# data, masks, counts, sample_sizes = generate_counts(
-		# 	args=args,
-		# 	keys=keys,
-		# 	test=test,
-		# 	params=params,
-		# 	lambda_=lambda_)
+		print('\nGenerate datasets in parallel lambda={0}\n'.format(
+			lambda_))
 
 		data, mask = generate_datasets(
 			args=args,
@@ -164,11 +157,6 @@ def run(args, params, test, path, lambda_):
 		# Certify that all observations fall between 0 and 1
 		# since we are using Bernstein polynomials
 		assert (np.max(data * mask) <= 1) and (np.min(data * mask) >= 0)
-
-		# l = lambda c, n: test.test(counts=c, n=n)
-		# counts = split_leading_axis(counts, n_jobs=args.n_jobs)
-		# sample_sizes = split_leading_axis(sample_sizes.reshape(-1, 1),
-		# 								  n_jobs=args.n_jobs)
 
 		l = lambda X, mask: test.test(X=X, mask=mask)
 		datas = split_leading_axis(data, n_jobs=args.n_jobs)
@@ -184,6 +172,8 @@ def run(args, params, test, path, lambda_):
 				assert not np.isnan(r[k]).any()
 
 			results_.append(r)
+		# np.mean(r['lambda_hat'])
+		# np.mean(r['gamma_hat'], axis=0)
 
 		storage.save_obj(cwd=args.cwd,
 						 path=path,
