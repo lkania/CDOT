@@ -90,7 +90,7 @@ args.sample_size = 20000
 args.folds = 1000
 args.n_jobs = min(args.folds, n_jobs)
 args.signal_region = [0.1, 0.90]  # the signal region quantiles
-args.ks = [5, 10, 15, 20, 22, 25, 30, 35, 40, 45, 50]
+args.ks = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 args.classifiers = ['class', 'tclass']
 # Subsets are used for plotting while
 # the full range is used for power curve computations
@@ -236,41 +236,6 @@ def generate_dataset(cutoff,
 	return trans(X), mask, n
 
 
-@partial(jit, static_argnames=['cutoff',
-							   'trans',
-							   'classifier',
-							   'params',
-							   'sample_size',
-							   'lambda_'])
-def generate_counts(cutoff,
-					classifier,
-					params,
-					sample_size,
-					lambda_,
-					key,
-					trans,
-					from_,
-					to_):
-	X, mask, n = generate_dataset(cutoff=cutoff,
-								  classifier=classifier,
-								  params=params,
-								  sample_size=sample_size,
-								  lambda_=lambda_,
-								  key=key,
-								  trans=trans)
-
-	# We mask the filtered values by assigning them
-	# negative values. Any value outside [0,1] would work
-	X_masked = X * mask + (-1) * (1 - mask)
-
-	counts = bin.counts(X=X_masked, from_=from_, to_=to_)[0]
-
-	return X, mask, counts, n
-
-
-# return np.stack((trans(X), mask), axis=0)
-
-
 selected = DotDic()
 for classifier in args.classifiers:
 	selected[classifier] = DotDic()
@@ -366,14 +331,6 @@ for classifier in args.classifiers:
 			assert tests[i].args.from_.shape[0] == tests[i].args.to_.shape[0]
 
 			tests[i].args.bins = len(tests[i].args.from_)
-
-			tests[i].generate_counts = partial(
-				generate_counts,
-				trans=tests[i].trans,
-				from_=tests[i].args.from_,
-				to_=tests[i].args.to_,
-				classifier=classifier,
-				cutoff=tests[i].cutoff)
 
 			tests[i].test = build_test(args=tests[i].args)
 
@@ -481,7 +438,7 @@ for classifier in args.classifiers:
 				ax,
 				x=args.ks,
 				values=idx,
-				label='Clopper-Pearson CI for I(pvalue<={0})'.format(
+				label='Clopper-Pearson CI for I(Test=1) at alpha={0}'.format(
 					args.alpha),
 				color='black',
 				alpha=args.alpha)

@@ -48,47 +48,6 @@ def generate_datasets(args, keys, test, params, lambda_):
 	return data, masks  # , sample_sizes
 
 
-def generate_counts(args, keys, test, params, lambda_):
-	keys = split_leading_axis(keys, n_jobs=args.n_jobs)
-	l = lambda k: test.generate_counts(
-		params=params,
-		sample_size=args.sample_size,
-		lambda_=lambda_,
-		key=k)
-
-	exec = pmap(l, in_axes=(0))
-	data = onp.zeros(shape=(args.folds, args.sample_size),
-					 dtype=args.float)
-	masks = onp.zeros(shape=(args.folds, args.sample_size),
-					  dtype=onp.int32)
-	counts = onp.zeros(shape=(args.folds, test.args.bins),
-					   dtype=args.int)
-	sample_sizes = onp.zeros(shape=(args.folds),
-							 dtype=onp.int32)
-
-	for j in tqdm(range(args.folds // args.n_jobs), ncols=40):
-		start = (j * args.n_jobs)
-		end = (j + 1) * args.n_jobs
-		X, mask, count, n = exec(keys[j])
-
-		assert not np.isnan(X).any()
-		assert not np.isnan(mask).any()
-		assert not np.isnan(count).any()
-		assert np.all(count >= 0)
-		assert not np.isnan(n).any()
-		assert np.all(n > 0)
-
-		data[start:end, :] = X
-		masks[start:end, :] = mask
-		counts[start:end, :] = count
-		sample_sizes[start:end] = n
-
-	counts = np.array(counts, dtype=args.float)
-	sample_sizes = np.array(sample_sizes)
-
-	return data, masks, counts, sample_sizes
-
-
 def predict_counts(predict_density, k, n, gamma, lambda_, from_, to_):
 	density = predict_density(
 		gamma=gamma,

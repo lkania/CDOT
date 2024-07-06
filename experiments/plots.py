@@ -58,9 +58,9 @@ def filtering(args,
 	# Plot datasets with classifier filter
 	##################################################
 	n_cols = len(quantiles)
-	height_ratios = [2, 1, 1.5]
+	height_ratios = [2, 1]  # [2, 1, 1.5]
 	height_ratios = np.array([height_ratios] * len(lambdas)).reshape(-1)
-	n_rows = len(lambdas) * 3
+	n_rows = len(lambdas) * 2
 	height = np.sum(np.array(height_ratios)) / n_rows
 	fig, axs = plot.plt.subplots(nrows=n_rows,
 								 ncols=n_cols,
@@ -71,6 +71,7 @@ def filtering(args,
 								 sharey='row')
 
 	l = 0
+	plots_per_hist = 2
 	for lambda_ in lambdas:
 
 		for q, quantile in enumerate(quantiles):
@@ -80,11 +81,10 @@ def filtering(args,
 				ax.set_title(
 					'Filtering {0}% of the observations'.format(
 						int(quantile * 100)))
-			l += 1
-			ax2 = axs[l, q]
 
-			# l += 2
-			# ax3 = axs[l, q]
+			ax2 = axs[l + 1, q]
+
+			# ax3 = axs[l+2, q]
 			ax3 = None
 
 			plot.hists(ax,
@@ -96,7 +96,7 @@ def filtering(args,
 					   alpha=alpha,
 					   tol=args.tol)
 
-	# l += 3
+		l += plots_per_hist
 
 	fig = plot.tight_pairs(n_cols=n_cols, fig=fig, n_rows=2)
 	plot.save_fig(cwd=args.cwd,
@@ -107,7 +107,7 @@ def filtering(args,
 
 def power(ax, results, lambdas, quantiles, alpha, eps=1e-2):
 	ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha={0}'.format(alpha))
-	ax.set_xlabel('Background reject percentage (BR%)')
+	ax.set_xlabel('% of background observations rejected in validation')
 	ax.set_ylabel('Empirical probability of rejecting $\lambda=0$')
 	ax.set_ylim([0 - eps, 1 + eps])
 
