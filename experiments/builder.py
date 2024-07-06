@@ -2,19 +2,20 @@ from jax import numpy as np, random, jit
 from functools import partial
 from src.dotdic import DotDic
 from src.load import load
+import hasher
 
 
 #######################################################
 
 def load_background_and_signal(args):
 	params = DotDic()
-	params.hash = args.hash
 
 	#######################################################
 	# Data parameters
 	#######################################################
-	params.cwd = args.cwd
 	params.data_id = args.data_id
+	params.hash = hasher.hash_(params.data_id)
+	params.cwd = args.cwd
 	params.classifiers = args.classifiers
 
 	#######################################################

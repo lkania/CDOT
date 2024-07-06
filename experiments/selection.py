@@ -51,12 +51,12 @@ def select(args, path, params, tests, measure):
 
 		results[test.name].measure = measure(results[test.name].stats)
 
-		# The empirical threshold is np.quantile(results[test.name].pvalues, q=args.alpha)
-		# test.threshold = args.alpha
-		# test.pvalue_quantile = np.quantile(
-		# 	results[test.name].pvalues,
-		# 	q=args.alpha)
-		test.threshold = args.alpha
+	# TODO: control type I error empirically
+	# The empirical threshold is np.quantile(results[test.name].pvalues, q=args.alpha)
+	# test.threshold = args.alpha
+	# test.pvalue_quantile = np.quantile(
+	# 	results[test.name].pvalues,
+	# 	q=args.alpha)
 
 	###################################################
 	# Model selection based on p-value distribution

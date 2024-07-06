@@ -17,7 +17,6 @@ def runtime(string):
 # Utilities
 ######################################################################
 from functools import partial
-import hashlib
 
 #######################################################
 # activate parallelism in CPU for JAX
@@ -66,6 +65,7 @@ from src import bin
 from src.basis import bernstein, normalized_bernstein
 from experiments import parallel
 from experiments import key_management
+import hasher
 
 uniform_bin = lambda X, lower, upper, n_bins: bin.full_uniform_bin(
 	n_bins=n_bins)
@@ -84,18 +84,18 @@ args.float = np.float64
 args.int = np.int64
 args.tol = 1e-12
 args.target_data_id = args.data_id
-args.use_cache = False
+args.use_cache = True
 args.alpha = 0.05
 args.sample_size = 20000
-args.folds = 500
+args.folds = 1000
 args.n_jobs = min(args.folds, n_jobs)
 args.signal_region = [0.1, 0.90]  # the signal region quantiles
-args.ks = [20, 25, 30, 35]
+args.ks = [5, 10, 15, 20, 22, 25, 30, 35, 40, 45, 50]
 args.classifiers = ['class', 'tclass']
 # Subsets are used for plotting while
 # the full range is used for power curve computations
 args.lambdas_subset = [0, 0.05]
-args.lambdas = [0, 0.01, 0.02, 0.05]
+args.lambdas = [0, 0.01, 0.02, 0.03, 0.05]
 
 args.quantiles_subset = [0.0, 0.5, 0.7]
 args.quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
@@ -111,13 +111,6 @@ assert args.folds % args.n_jobs == 0
 assert max([len(args.lambdas),
 			len(args.quantiles),
 			len(args.ks)]) <= len(plot.colors)
-
-
-##
-# Define hash function
-#
-def hash_(string):
-	return int(hashlib.sha1(string.encode("utf-8")).hexdigest(), 16)
 
 
 ##################################################
@@ -148,7 +141,6 @@ def __stat(signal_region_start,
 
 print('Validation dataset:\n ')
 args.data_id = '{0}/val'.format(args.target_data_id)
-args.hash = hash_(args.data_id)
 params_ = load_background_and_signal(args)
 
 qs = np.quantile(params_.signal.X,
@@ -162,7 +154,6 @@ __stat(signal_region_start=qs[0],
 
 print('Test dataset:\n ')
 args.data_id = args.target_data_id
-args.hash = hash_(args.data_id)
 params_ = load_background_and_signal(args)
 
 __stat(signal_region_start=qs[0],
@@ -178,7 +169,6 @@ print('Starting simulation:\n ')
 # Load background data for model selection
 ##################################################
 args.data_id = '{0}/val'.format(args.target_data_id)
-args.hash = hash_(args.data_id)
 params = load_background_and_signal(args)
 
 
@@ -327,8 +317,8 @@ for classifier in args.classifiers:
 		)
 
 		test.args = DotDic()
-		test.args.bins = 1000
-		test.args.method = 'unbin_mle'
+		test.args.bins = 500
+		test.args.method = 'bin_mle'
 		test.args.optimizer = 'normalized_dagostini'
 		test.args.fixpoint = 'normal'
 		test.args.maxiter = 5000
@@ -358,7 +348,7 @@ for classifier in args.classifiers:
 			tests.append(test.copy())
 			tests[i].args.k = k
 			tests[i].name = '{0}_{1}'.format(tests[i].name, k)
-			tests[i].args.hash = hash_(tests[i].name)
+			tests[i].args.hash = hasher.hash_(tests[i].name)
 			tests[i].args.basis = normalized_bernstein
 			tests[i].generate_dataset = partial(
 				generate_dataset,
@@ -434,6 +424,7 @@ for classifier in args.classifiers:
 			assert np.all(tests[i].args.to_ >= 0)
 
 			assert tests[i].args.from_.shape[0] == tests[i].args.to_.shape[0]
+
 			tests[i].args.bins = len(tests[i].args.from_)
 
 			tests[i].generate_counts = partial(
@@ -443,50 +434,41 @@ for classifier in args.classifiers:
 				to_=tests[i].args.to_,
 				classifier=classifier,
 				cutoff=tests[i].cutoff)
+
 			tests[i].test = build_test(args=tests[i].args)
+
+			# asymptotic threshold for pvalues
+			# tests[i].test.threshold = args.alpha
 
 			all[k][classifier][quantile] = tests[i]
 
 		###################################################
-		# Path for saving results
-		###################################################
-		path = '{0}/val/{1}/{2}'.format(args.target_data_id,
-										classifier,
-										quantile)
-
-		selection_results = selection.select(
-			args=args,
-			path=path,
-			params=params,
-			tests=tests,
-			measure=partial(selection.target_alpha_level,
-							alpha=args.alpha))
-
-		selected[classifier][quantile] = selection_results.test_star
-		del selection_results['test_star']
-
-		# update threshold
-
-		# Note: to fix the polynomial complexity
-		# simply uncomment the following code
-		# match args.target_data_id:
-		# 	case '3b' | '4b':
-		# 		# choose k=20
-		# 		selected[classifier][quantile] = tests[0]
-		# 	case 'WTagging':
-		# 		# choose k=30
-		# 		selected[classifier][quantile] = tests[1]
-
-		# clear()
-		print('Selected Classifier: {0}'.format(
-			selected[classifier][quantile].name))
-
-		###################################################
-		# Perform plots under the null only
+		# Perform plots and selection under the null only
 		# when the classifier isn't used
 		###################################################
 
 		if quantile == 0:
+			###################################################
+			# Path for saving results
+			###################################################
+			path = '{0}/val/{1}/{2}'.format(args.target_data_id,
+											classifier,
+											quantile)
+
+			selection_results = selection.select(
+				args=args,
+				path=path,
+				params=params,
+				tests=tests,
+				measure=partial(selection.target_alpha_level,
+								alpha=args.alpha))
+
+			selected[classifier][quantile] = selection_results.test_star
+			del selection_results['test_star']
+
+			print('Selected Classifier: {0}'.format(
+				selected[classifier][quantile].name))
+
 			###################################################
 			# Plot fits for different polynomial complexities
 			###################################################
@@ -515,7 +497,7 @@ for classifier in args.classifiers:
 				measure.append(selection_results[k].measure)
 
 			###################################################
-			# Plot all CDF curves
+			# Plot pvalue distribution
 			###################################################
 			fig, ax = plot.plt.subplots(nrows=1, ncols=1,
 										figsize=(10, 10),
@@ -542,43 +524,51 @@ for classifier in args.classifiers:
 			###################################################
 			# Plot CI for I(pvalue <= alpha)
 			###################################################
-			fig, ax = plot.plt.subplots(nrows=1, ncols=1,
+			fig, ax = plot.plt.subplots(nrows=1,
+										ncols=1,
 										figsize=(10, 10),
 										sharex='none',
 										sharey='none')
-			ax.set_title('Clopper-Pearson CI for I(pvalue<={0})'.format(
-				args.alpha))
+
 			ax.axhline(y=args.alpha,
-					   color='black',
-					   linestyle='-',
-					   label='{0}'.format(args.alpha))
+					   color='red',
+					   linestyle='--',
+					   label=r'Target Type I error $\alpha=${0}'.format(
+						   args.alpha))
+
+			idx = [np.int32(np.array(stat) <= args.alpha) for stat in stats]
 			plot.binary_series_with_uncertainty(
 				ax,
 				x=args.ks,
-				values=stats,
-				color='red',
+				values=idx,
+				label='Clopper-Pearson CI for I(pvalue<={0})'.format(
+					args.alpha),
+				color='black',
 				alpha=args.alpha)
+
+			ax.set_xlabel(r'Polynomial order $K$')
+			ax.set_ylabel(r'Empirical probability of rejecting $\lambda=0$')
 			ax.legend()
 			plot.save_fig(cwd=args.cwd,
 						  path=path,
 						  fig=fig,
-						  name='level')
+						  name='selection')
 
-			###################################################
-			# Plot measure
-			###################################################
-			fig, ax = plot.plt.subplots(nrows=1, ncols=1,
-										figsize=(10, 10),
-										sharex='none',
-										sharey='none')
-			ax.set_title('Selection measure')
-			ax.plot(labels,
-					measure,
-					color='black')
-			plot.save_fig(cwd=args.cwd,
-						  path=path,
-						  fig=fig,
-						  name='measure')
+###################################################
+# Plot measure
+###################################################
+# fig, ax = plot.plt.subplots(nrows=1, ncols=1,
+# 							figsize=(10, 10),
+# 							sharex='none',
+# 							sharey='none')
+# ax.set_title('Selection measure')
+# ax.plot(labels,
+# 		measure,
+# 		color='black')
+# plot.save_fig(cwd=args.cwd,
+# 			  path=path,
+# 			  fig=fig,
+# 			  name='measure')
 
 # Sanity check
 # Assert that for the zero quantile,
@@ -619,12 +609,13 @@ def empirical_power(args, path, params, classifier, selected, quantiles,
 				path='{0}/storage/{1}/{2}'.format(path, lambda_, quantile),
 				lambda_=lambda_)
 
-			stats = results[lambda_][quantile].stats
-			t = results[lambda_][quantile].test.threshold
-
-			# TODO: careful here, stat vs pvalue
-			results[lambda_][quantile].tests = np.array(stats <= t,
-														dtype=np.int32)
+			# t = results[lambda_][quantile].test.threshold
+			# TODO: careful here,
+			#  If stat vs pvalue
+			# Here we assume we have a pvalue
+			results[lambda_][quantile].tests = np.array(
+				results[lambda_][quantile].stats <= args.alpha,
+				dtype=np.int32)
 
 	return results
 
@@ -650,13 +641,14 @@ def power_analysis(args, params, selected, storage_string, plot_string):
 											  quantiles=args.quantiles,
 											  lambdas=args.lambdas)
 
-		plots.filtering(args=args,
-						lambdas=args.lambdas_subset,
-						quantiles=args.quantiles_subset,
-						results=results[classifier],
-						path=plot_path,
-						filename='{0}_filter'.format(classifier),
-						alpha=args.alpha)
+		# Plot without the signal region
+		# plots.filtering(args=args,
+		# 				lambdas=args.lambdas_subset,
+		# 				quantiles=args.quantiles_subset,
+		# 				results=results[classifier],
+		# 				path=plot_path,
+		# 				filename='{0}_filter'.format(classifier),
+		# 				alpha=args.alpha)
 
 		plots.filtering(args=args,
 						lambdas=args.lambdas_subset,
@@ -711,7 +703,6 @@ runtime('Finished power analysis on validation data')
 # Test data analysis
 ##################################################
 args.data_id = args.target_data_id
-args.hash = hash_(args.data_id)
 params = load_background_and_signal(args)
 
 check_no_filtering(args, params)

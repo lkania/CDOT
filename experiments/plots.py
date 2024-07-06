@@ -76,13 +76,16 @@ def filtering(args,
 		for q, quantile in enumerate(quantiles):
 
 			ax = axs[l, q]
-			ax2 = axs[l + 1, q]
-			ax3 = axs[l + 2, q]
-
 			if l == 0:
 				ax.set_title(
 					'Filtering {0}% of the observations'.format(
 						int(quantile * 100)))
+			l += 1
+			ax2 = axs[l, q]
+
+			# l += 2
+			# ax3 = axs[l, q]
+			ax3 = None
 
 			plot.hists(ax,
 					   lambda_=lambda_,
@@ -93,10 +96,11 @@ def filtering(args,
 					   alpha=alpha,
 					   tol=args.tol)
 
-		l += 3
+	# l += 3
 
-	fig = plot.tight_pairs(n_cols=n_cols, fig=fig)
-	plot.save_fig(cwd=args.cwd, path=path,
+	fig = plot.tight_pairs(n_cols=n_cols, fig=fig, n_rows=2)
+	plot.save_fig(cwd=args.cwd,
+				  path=path,
 				  fig=fig,
 				  name=filename)
 

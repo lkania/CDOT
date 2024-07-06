@@ -5,8 +5,7 @@ from jax.scipy.stats.norm import cdf
 from jaxopt import ProjectedGradient, GradientDescent
 from jaxopt.projection import projection_polyhedron
 
-from src import bin
-from src.normalize import normalize, safe_ratio
+from src import bin, normalize
 
 
 ######################################################################
@@ -31,7 +30,7 @@ def dagostini(gamma0, props, M, int_control, tol):
 	pred0 = (M @ gamma0.reshape(-1, 1)).reshape(-1)
 	props = props.reshape(-1)
 
-	ratio = safe_ratio(num=props, den=pred0, tol=tol)
+	ratio = normalize.safe_ratio(num=props, den=pred0, tol=tol)
 
 	ak = M.transpose() @ ratio.reshape(-1, 1)
 	ak = ak.reshape(-1)
@@ -101,15 +100,14 @@ def loss(gamma, props, M, int_control, tol):
 
 	lambda_ = 1 - prop_control / background_over_control
 
-	pred = (1 - lambda_) * background_over_control_bins
-	pred = np.where(pred <= tol, tol, pred)
-	pred = np.log(pred)
+	pred = normalize.safe_log(x=(1 - lambda_) * background_over_control_bins,
+							  tol=tol)
 	pred = np.where(props <= tol, 0.0, props * pred)
 	t1 = np.sum(pred)
 
-	mix = (1 - lambda_) * background_over_signal + lambda_
-	mix = np.where(mix <= tol, tol, mix)
-	t2 = (1 - prop_control) * np.log(mix)
+	t2 = (1 - prop_control) * normalize.safe_log(
+		x=(1 - lambda_) * background_over_signal + lambda_,
+		tol=tol)
 
 	return (-1) * (t1 + t2)
 

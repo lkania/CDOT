@@ -5,6 +5,12 @@ from functools import partial
 
 
 @partial(jit, static_argnames=['tol'])
+def safe_log(x, tol):
+	x = np.where(x <= tol, tol, x)
+	return np.log(x)
+
+
+@partial(jit, static_argnames=['tol'])
 def safe_ratio(num, den, tol):
 	# In the following, we implement this decision tree
 	# 	if num <= tol:

@@ -90,12 +90,11 @@ def normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
 	assert X.shape[0] == Y.shape[0]
 	Xsum = np.sum(X, axis=0).reshape(-1)
 	Ysum = np.sum(Y, axis=0).reshape(-1)
-	mean = np.where(np.abs(Xsum - Ysum) <= tol, 1.0, Xsum / Ysum)
+	mean = normalize.safe_ratio(num=Xsum, den=Ysum, tol=tol)
 	# same as (Xbar/Ybar)^2 * (1 / Xbar + 1 / Ybar) * (1/n)
 	# or equivalently Xsum / np.square(Ysum) + np.square(Xsum) / np.power(Ysum, 3)
 	Ysum2 = np.square(Ysum)
-	r = np.where(np.abs(Xsum - Ysum2) <= tol, 1.0, Xsum / Ysum2)
-	var = r * (1 + mean)
+	var = normalize.safe_ratio(num=Xsum, den=Ysum2, tol=tol) * (1 + mean)
 	sd = icdf(1 - alpha / 2, loc=0, scale=1) * np.sqrt(var)
 	lower = normalize.threshold_non_neg(mean - sd, tol=0.0)
 	upper = mean + sd

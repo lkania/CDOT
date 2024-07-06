@@ -39,7 +39,7 @@ from experiments import storage
 
 
 # See: https://stackoverflow.com/questions/51717199/how-to-adjust-space-between-every-second-row-of-subplots-in-matplotlib
-def tight_pairs(n_cols, fig):
+def tight_pairs(n_cols, fig, n_rows):
 	"""
 	Stitch vertical pairs together.
 
@@ -58,24 +58,15 @@ def tight_pairs(n_cols, fig):
 	Returns:
 	- Modified fig
 	"""
-	# for ax in fig.axes:
-	# 	if hasattr(ax, 'get_subplotspec'):
-	# 		ss = ax.get_subplotspec()
-	# 		row, col = ss.num1 // n_cols, ss.num1 % n_cols
-	# 		if (row % 2 == 0) and (col == 0):  # upper-half row (first subplot)
-	# 			y0_upper = ss.get_position(fig).y0
-	# 		elif (row % 2 == 1):  # lower-half row (all subplots)
-	# 			x0_low, _, width_low, height_low = ss.get_position(fig).bounds
-	# 			ax.set_position(
-	# 				pos=[x0_low, y0_upper - height_low, width_low, height_low])
 
 	for ax in fig.axes:
 		if hasattr(ax, 'get_subplotspec'):
 			ss = ax.get_subplotspec()
 			row, col = ss.num1 // n_cols, ss.num1 % n_cols
-			if (row % 3 == 0) and (col == 0):  # upper-half row (first subplot)
+			if (row % n_rows == 0) and (
+					col == 0):  # upper-half row (first subplot)
 				y0_upper = ss.get_position(fig).y0
-			elif (row % 3 == 1):  # lower-half row (all subplots)
+			elif (row % n_rows == 1):  # lower-half row (all subplots)
 				x0_low, _, width_low, height_low = ss.get_position(fig).bounds
 				ax.set_position(
 					pos=[x0_low, y0_upper - height_low, width_low, height_low])
@@ -208,6 +199,7 @@ def hists(ax,
 	count = []
 
 	# TODO: do counts in parallel
+	# simply use vmap like in the unbin test
 	for i, method in enumerate(methods):
 		c = bin.counts(X=method.X, from_=from_, to_=to_)[0]
 		assert not np.isnan(c).any()
@@ -310,20 +302,20 @@ def hists(ax,
 	# Plot estimates histogram
 	###################################################################
 	if ax3 is not None:
-		ax3.set_ylabel('Stat (log scale)')
-		ax3.set_yscale('log')
+		ax3.set_xlabel('P-value')
+		ax3.set_ylabel('Counts')
+		# ax3.set_yscale('log')
 
 		threshold_ = info.test.threshold
-		data_after_threshold = np.mean(
-			np.array(info.stats >= threshold_,
-					 dtype=np.int32))
+		data_below_threshold = np.mean(np.array(info.stats <= threshold_,
+												dtype=np.int32))
 		ax3.axvline(x=threshold_,
 					color='red',
 					linestyle='--',
-					label='value={0:.5f} %data-below={1:.3f}'.format(
-						round(threshold_, 5),
-						round(1 - data_after_threshold, 3)
+					label='% data below threshold={0:.2f}'.format(
+						round(data_below_threshold, 2)
 					))
+
 		ax3.hist(info.stats,
 				 alpha=1,
 				 bins=int(info.stats.shape[0] / 10),
