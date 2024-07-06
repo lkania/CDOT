@@ -358,66 +358,6 @@ for classifier in args.classifiers:
 
 			print('Configure {0} test'.format(tests[i].name))
 
-			# Code for doing equal-frequency bins
-			# Get expected number of bins to the
-			# left and right of the signal region
-			# print('Estimating average equal-frequency binning')
-			# keys = key_management.keys(args=args, num=args.folds)
-			# print('Generating datasets in parallel')
-			# data, masks, sample_sizes = parallel.generate_datasets(
-			# 	args=args,
-			# 	keys=keys,
-			# 	test=tests[i],
-			# 	params=params,
-			# 	lambda_=0)
-
-			# print('Estimating number of bins')
-			# fs, ts = [], []
-			# for r in tqdm(range(args.folds), ncols=40):
-			# 	X_masked = data[r, :] * masks[r, :] + (-1) * (1 - masks[r, :])
-			# 	bins_lower, bins_upper = bin._adaptive_n_bins(
-			# 		X=X_masked,
-			# 		lower=tests[i].args.lower,
-			# 		upper=tests[i].args.upper,
-			# 		n_bins=tests[i].args.bins)
-			# 	fs.append(bins_lower)
-			# 	ts.append(bins_upper)
-			# bins_lower = int(np.mean(np.array(fs), axis=0))
-			# bins_upper = int(np.mean(np.array(ts), axis=0))
-			# Get average bins location for the above
-			# keys = key_management.keys(args=args, num=args.folds)
-			# print('Generating datasets in parallel')
-			# data, masks, sample_sizes = parallel.generate_datasets(
-			# 	args=args,
-			# 	keys=keys,
-			# 	test=tests[i],
-			# 	params=params,
-			# 	lambda_=0)
-
-			# print('Estimating equal-frequency binning')
-			# fs, ts = [], []
-			# for r in tqdm(range(args.folds), ncols=40):
-			# 	X_masked = data[r, :] * masks[r, :] + (-1) * (1 - masks[r, :])
-			# 	f, t = bin.adaptive_bin(
-			# 		X=X_masked,
-			# 		lower=tests[i].args.lower,
-			# 		upper=tests[i].args.upper,
-			# 		bins_lower=bins_lower,
-			# 		bins_upper=bins_upper)
-			# 	fs.append(f)
-			# 	ts.append(t)
-			#
-			# tests[i].args.from_ = np.mean(np.array(fs), axis=0)
-			# tests[i].args.to_ = np.mean(np.array(ts), axis=0)
-
-			# Note: if using equal-frequency bins
-			# remove last and first bin for 3b/4b datasets
-			# match args.target_data_id:
-			# 	case '3b' | '4b':
-			# 		# remove first and last bin
-			# 		tests[i].args.from_ = tests[i].args.from_[1:-1]
-			# 		tests[i].args.to_ = tests[i].args.to_[1:-1]
-
 			assert not np.isnan(tests[i].args.from_).any()
 			assert not np.isnan(tests[i].args.to_).any()
 			assert np.all(tests[i].args.from_ >= 0)
