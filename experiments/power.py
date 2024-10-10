@@ -1,6 +1,3 @@
-# TODO: compare test statistic under null and alternative
-# without any filtering by classifier
-
 import time
 
 start_time = time.time()
@@ -70,8 +67,6 @@ import hasher
 uniform_bin = lambda X, lower, upper, n_bins: bin.full_uniform_bin(
 	n_bins=n_bins)
 
-# TODO: plot the distribution of gamma_hat per K
-# to observe the sparsity of the polynomials
 ##################################################
 # Simulation parameters
 ##################################################
@@ -91,17 +86,16 @@ args.folds = 1000
 args.n_jobs = min(args.folds, n_jobs)
 args.signal_region = [0.1, 0.90]  # the signal region quantiles
 args.ks = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
-args.classifiers = ['class', 'tclass']
+args.classifiers = ['tclass', 'class']
 # Subsets are used for plotting while
 # the full range is used for power curve computations
 args.lambdas_subset = [0, 0.05]
-args.lambdas = [0, 0.01, 0.02, 0.03, 0.05]
+args.lambdas = [0, 0.01, 0.015, 0.02, 0.03, 0.04, 0.05]
 
 args.quantiles_subset = [0.0, 0.5, 0.7]
 args.quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
 
-# the following is a number lower than any possible score
-# predicted by any classifier
+# args.zero_cut is a number lower than any possible classifier score
 args.zero_cut = 0
 
 assert np.all(np.array(args.lambdas[1:]) > args.tol)
@@ -139,39 +133,6 @@ def __stat(signal_region_start,
 		(1 - signal_on_signal_region) / background_on_control_region))
 
 
-print('Validation dataset:\n ')
-args.data_id = '{0}/val'.format(args.target_data_id)
-params_ = load_background_and_signal(args)
-
-qs = np.quantile(params_.signal.X,
-				 q=np.array(args.signal_region),
-				 axis=0)
-
-__stat(signal_region_start=qs[0],
-	   signal_region_stop=qs[1],
-	   background=params_.background.X,
-	   signal=params_.signal.X)
-
-print('Test dataset:\n ')
-args.data_id = args.target_data_id
-params_ = load_background_and_signal(args)
-
-__stat(signal_region_start=qs[0],
-	   signal_region_stop=qs[1],
-	   background=params_.background.X,
-	   signal=params_.signal.X)
-
-del params_
-del __stat
-
-print('Starting simulation:\n ')
-##################################################
-# Load background data for model selection
-##################################################
-args.data_id = '{0}/val'.format(args.target_data_id)
-params = load_background_and_signal(args)
-
-
 ##################################################
 # Check that using the zero_cut for any classifier produces
 # the original dataset. That is, nothing is filtered.
@@ -187,31 +148,48 @@ def check_no_filtering(args, params):
 			assert np.all(d[1] >= args.zero_cut)
 
 
-check_no_filtering(args, params)
+print('Validation dataset:\n ')
+args.data_id = '{0}/val'.format(args.target_data_id)
+params_ = load_background_and_signal(args)
+
+qs = np.quantile(params_.signal.X,
+				 q=np.array(args.signal_region),
+				 axis=0)
+
+__stat(signal_region_start=qs[0],
+	   signal_region_stop=qs[1],
+	   background=params_.background.X,
+	   signal=params_.signal.X)
+
+check_no_filtering(args, params_)
+
+print('Test dataset:\n ')
+args.data_id = args.target_data_id
+params_ = load_background_and_signal(args)
+
+__stat(signal_region_start=qs[0],
+	   signal_region_stop=qs[1],
+	   background=params_.background.X,
+	   signal=params_.signal.X)
+
+check_no_filtering(args, params_)
+
+del params_
+del __stat
+
+print('Starting simulation:\n ')
+##################################################
+# Load background data for model selection
+##################################################
+args.data_id = '{0}/val'.format(args.target_data_id)
+params = load_background_and_signal(args)
 
 
 ###################################################
 # Define test statistic for each classifier x cutoff combination
 ###################################################
 
-def get_trans(args, min_):
-	match args.target_data_id:
-		case '3b' | '4b':
-			return lambda X: exponential.trans(X=X,
-											   rate=0.003,
-											   base=min_,
-											   scale=1)
-		case 'WTagging':
-			# In the WTagging dataset, the data is in the [0,1] scale.
-			# Hence, no transformation in required.
-			return lambda X: X
-
-		case _:
-			raise ValueError('Dataset not supported')
-
-
-# Produce a dataset, filter it, transform it and test it
-
+# Produce a dataset, filter it, and transform it
 @partial(jit, static_argnames=['cutoff',
 							   'trans',
 							   'classifier',
@@ -273,13 +251,23 @@ for classifier in args.classifiers:
 		test.cutoff = cutoffs[q]
 
 		# Note: modify here to change the data transformation after thresholding
-		# Note that if you do that, there is a high change of
-		# test data being below the threshold
-		# specify data transformation
-		test.trans = get_trans(
-			args=args,
-			min_=int(np.floor(np.min(params.background.X)))
-		)
+		# Currently, the data transformation does not depend on the
+		# threshold cutoff
+		match args.target_data_id:
+			case '3b' | '4b':
+				base_ = int(np.floor(np.min(params.background.X)))
+				test.trans = lambda X: exponential.trans(
+					X=X,
+					rate=0.003,
+					base=base_,
+					scale=1)
+			case 'WTagging':
+				# In the WTagging dataset, the data is in the [0,1] scale.
+				# Hence, no transformation in required.
+				test.trans = lambda X: X
+
+			case _:
+				raise ValueError('Dataset not supported')
 
 		test.args = DotDic()
 		test.args.bins = 500
@@ -293,6 +281,7 @@ for classifier in args.classifiers:
 		test.args.int = np.int64
 
 		# Note: modify here to set signal region after thresholding
+		# Currently, the signal region does not depend on the cutoff threshold
 		qs = np.quantile(params.signal.X,
 						 q=np.array(args.signal_region),
 						 axis=0)
@@ -334,14 +323,11 @@ for classifier in args.classifiers:
 
 			tests[i].test = build_test(args=tests[i].args)
 
-			# asymptotic threshold for pvalues
-			# tests[i].test.threshold = args.alpha
-
 			all[k][classifier][quantile] = tests[i]
 
 		###################################################
-		# Perform plots and selection under the null only
-		# when the classifier isn't used
+		# Perform plots and model selection
+		# under the null and when the classifier isn't used
 		###################################################
 
 		if quantile == 0:
@@ -366,30 +352,17 @@ for classifier in args.classifiers:
 			print('Selected Classifier: {0}'.format(
 				selected[classifier][quantile].name))
 
-			###################################################
-			# Plot fits for different polynomial complexities
-			###################################################
-			# plots.fits(args=args,
-			# 		   results=selection_results,
-			# 		   path=path,
-			# 		   filename='fits_uniform',
-			# 		   binning=uniform_bin,
-			# 		   alpha=args.alpha)
-			#
-			# plots.fits(args=args,
-			# 		   results=selection_results,
-			# 		   path=path,
-			# 		   filename='fits',
-			# 		   alpha=args.alpha)
-
 			# Prepare data
 			labels = []
 			stats = []
 			measure = []
 			for i, k in enumerate(selection_results.keys()):
-				labels.append(k)
+				labels.append('K={0}'.format(
+					selection_results[k].test.args.k)
+				)
 				if k == selected[classifier][quantile].name:
 					labels[i] += ' (*)'
+					k_star = selection_results[k].test.args.k
 				stats.append(selection_results[k].stats)
 				measure.append(selection_results[k].measure)
 
@@ -432,13 +405,17 @@ for classifier in args.classifiers:
 					   linestyle='--',
 					   label=r'Target Type I error $\alpha=${0}'.format(
 						   args.alpha))
+			ax.axvline(x=k_star,
+					   color='blue',
+					   linestyle='--',
+					   label=r'K_*={0}'.format(k_star))
 
 			idx = [np.int32(np.array(stat) <= args.alpha) for stat in stats]
 			plot.binary_series_with_uncertainty(
 				ax,
 				x=args.ks,
 				values=idx,
-				label='Clopper-Pearson CI for I(Test=1) at alpha={0}'.format(
+				label='Clopper-Pearson CI for emp. type I error'.format(
 					args.alpha),
 				color='black',
 				alpha=args.alpha)
@@ -454,22 +431,8 @@ for classifier in args.classifiers:
 ###################################################
 # Plot measure
 ###################################################
-# fig, ax = plot.plt.subplots(nrows=1, ncols=1,
-# 							figsize=(10, 10),
-# 							sharex='none',
-# 							sharey='none')
-# ax.set_title('Selection measure')
-# ax.plot(labels,
-# 		measure,
-# 		color='black')
-# plot.save_fig(cwd=args.cwd,
-# 			  path=path,
-# 			  fig=fig,
-# 			  name='measure')
-
 # Sanity check
-# Assert that for the zero quantile,
-# any classifier produces exactly the
+# Assert that for the zero quantile, any classifier produces exactly the
 # same dataset if the same key is used
 for k in args.ks:
 	for lambda_ in args.lambdas:
@@ -506,9 +469,6 @@ def empirical_power(args, path, params, classifier, selected, quantiles,
 				path='{0}/storage/{1}/{2}'.format(path, lambda_, quantile),
 				lambda_=lambda_)
 
-			# t = results[lambda_][quantile].test.threshold
-			# TODO: careful here,
-			#  If stat vs pvalue
 			# Here we assume we have a pvalue
 			results[lambda_][quantile].tests = np.array(
 				results[lambda_][quantile].stats <= args.alpha,
@@ -538,15 +498,6 @@ def power_analysis(args, params, selected, storage_string, plot_string):
 											  quantiles=args.quantiles,
 											  lambdas=args.lambdas)
 
-		# Plot without the signal region
-		# plots.filtering(args=args,
-		# 				lambdas=args.lambdas_subset,
-		# 				quantiles=args.quantiles_subset,
-		# 				results=results[classifier],
-		# 				path=plot_path,
-		# 				filename='{0}_filter'.format(classifier),
-		# 				alpha=args.alpha)
-
 		plots.filtering(args=args,
 						lambdas=args.lambdas_subset,
 						quantiles=args.quantiles_subset,
@@ -566,58 +517,20 @@ def power_analysis(args, params, selected, storage_string, plot_string):
 									   'With Decorrelation'])
 
 
-# plots.power_per_quantile(args=args,
-# 						 path=plot_path,
-# 						 results=results,
-# 						 lambdas=args.lambdas,
-# 						 quantiles=args.quantiles_subset)
-
-
-# clear()
-
-
 runtime('Finished model selection')
-##################################################
-# Validation data analysis
-##################################################
-# Do power-analysis for best test
-# for each classifier/quantile combination
-# power_analysis(args=args,
-# 			   params=params,
-# 			   selected=selected,
-# 			   storage_string='val',
-# 			   plot_string='selected')
 
-# for k in all.keys():
-# 	power_analysis(args=args,
-# 				   params=params,
-# 				   selected=all[k],
-# 				   storage_string='val',
-# 				   plot_string='{0}'.format(k))
-
-runtime('Finished power analysis on validation data')
 ##################################################
 # Test data analysis
 ##################################################
 args.data_id = args.target_data_id
 params = load_background_and_signal(args)
 
-check_no_filtering(args, params)
-
-# Do power-analysis for best test
-# for each classifier/quantile combination
-# power_analysis(args=args,
-# 			   params=params,
-# 			   selected=selected,
-# 			   storage_string='test',
-# 			   plot_string='selected')
-
-for k in all.keys():
-	power_analysis(args=args,
-				   params=params,
-				   selected=all[k],
-				   storage_string='test',
-				   plot_string='{0}'.format(k))
+# Do power-analysis for selected test
+power_analysis(args=args,
+			   params=params,
+			   selected=all[k_star],
+			   storage_string='test',
+			   plot_string='{0}'.format(k_star))
 
 ###################################################################
 # Total time

@@ -11,11 +11,11 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 
 config = {'figure.dpi': 600,
-		  'legend.fontsize': 'xx-large',
-		  'axes.labelsize': 'xx-large',
-		  'axes.titlesize': 'xx-large',
-		  'xtick.labelsize': 'x-large',
-		  'ytick.labelsize': 'x-large'}
+		  'legend.fontsize': 20,
+		  'axes.labelsize': 20,
+		  'axes.titlesize': 20,
+		  'xtick.labelsize': 15,
+		  'ytick.labelsize': 15}
 pylab.rcParams.update(config)
 
 colors = ['red',
@@ -180,7 +180,7 @@ def hists(ax,
 	methods = info.runs
 	ax.set_xlim([0 - eps, 1 + eps])
 	ax.set_ylabel('Counts ($\lambda={0}$)'.format(lambda_))
-	ax.set_xlabel('Mass (projected scale)')
+	ax.set_xlabel('Invariant mass')
 
 	if binning is not None:
 		from_, to_ = binning(
@@ -198,8 +198,6 @@ def hists(ax,
 	predictions = info.predict_counts(from_=from_, to_=to_)
 	count = []
 
-	# TODO: do counts in parallel
-	# simply use vmap like in the unbin test
 	for i, method in enumerate(methods):
 		c = bin.counts(X=method.X, from_=from_, to_=to_)[0]
 		assert not np.isnan(c).any()
@@ -258,7 +256,7 @@ def hists(ax,
 		ax.set_xticks([], minor=True)
 
 		ax2.set_ylabel('Obs / Pred')
-		ax2.set_xlabel('Mass (projected scale)')
+		ax2.set_xlabel('Invariant mass')
 		ax2.set_xlim([0 - eps, 1 + eps])
 		ax2.set_ylim([1 - 0.2, 1 + 0.2])
 
@@ -340,14 +338,10 @@ def cdfs(ax, df, labels, alpha, eps=1e-2):
 			ax=ax,
 			color=colors[i],
 			alpha=1,
-			label='{0} {1}-qtile={2}'.format(labels[i],
-											 alpha,
-											 round(np.quantile(d, q=alpha), 2)
-											 )
-		)
+			label=labels[i])
 
 	ax.set_ylabel('Cumulative probability')
-	# ax.set_xlabel('pvalue')
+	ax.set_xlabel('P-value')
 	ax.legend()
 
 

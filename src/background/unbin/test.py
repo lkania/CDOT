@@ -310,8 +310,6 @@ def pvalue(zscore):
 	return 1 - cdf(zscore, loc=0, scale=1)
 
 
-# TODO: do unit test showing that discrete EM and continuous EM
-# find the same lambda_hat when when we have 500 bins or more
 @partial(jit, static_argnames=['params'])
 def efficient_test(params, X, mask):
 	n = np.sum(mask)

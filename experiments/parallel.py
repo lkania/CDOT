@@ -131,8 +131,6 @@ def run(args, params, test, path, lambda_):
 				assert not np.isnan(r[k]).any()
 
 			results_.append(r)
-		# np.mean(r['lambda_hat'])
-		# np.mean(r['gamma_hat'], axis=0)
 
 		storage.save_obj(cwd=args.cwd,
 						 path=path,
@@ -198,7 +196,5 @@ def run(args, params, test, path, lambda_):
 		n=results.n,
 		gamma=results.gammas,
 		lambda_=results.lambdas)
-
-	results.predict_counts(from_=test.args.from_, to_=test.args.to_)
 
 	return results

@@ -75,13 +75,7 @@ def build(args):
 	init_gamma = init_gamma.reshape(-1)
 
 	assert np.abs(np.sum(init_gamma) - 1) < params.tol
-	# params.background.init_lambda = init_lambda
-	# params.background.init_gamma = init_gamma
 
-	# compute integrals
-	# int_omega = params.basis.int_omega(k=params.k).reshape(-1)
-	# assert not np.isnan(int_omega).any()
-	# assert np.all(int_omega > params.tol)
 
 	# assert that each basis element integrates to one over omega
 	int_omega = params.basis.integrate(k=params.k, a=0, b=1).reshape(-1)
@@ -110,10 +104,6 @@ def build(args):
 	assert np.max(np.abs(int_control_ - int_control)) < params.tol
 	assert np.max(np.abs(int_signal + int_control_ - int_omega)) < params.tol
 
-	# params.background.int_signal = int_signal
-	# params.background.int_omega = int_omega
-	# params.background.int_control = int_control
-
 	params.method = args.method
 	params.optimizer = args.optimizer
 	match params.method:
@@ -135,7 +125,7 @@ def build(args):
 					)
 
 				case 'density':
-					lambda_lowerbound = 0  # TODO: can produce upper bias
+					lambda_lowerbound = 0
 					lambda_upperbound = 0.5
 					gamma_lowerbound = 0
 
