@@ -8,8 +8,8 @@
 *.pickle
 acc_form.pdf
 acc_form.md
-
-# folders
+cdot/WTaggingDecorrelated.RData
+cdot/WTaggingTest.csv
 presentation
 simulation
 runners
