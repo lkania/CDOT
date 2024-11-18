@@ -10,7 +10,7 @@ We note the following folders and files contained in this his repository.
 
 | Name                                             | Description                                                                                                                    |
 |--------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| [`cdot`](./cdot/README.md)                       | Contains the necessary code to produce classifiers decorrelated via optimal transport (CDOT)                                   |
+| `cdot`                                           | Contains the necessary code to produce classifiers decorrelated via optimal transport (CDOT)                                   |
 | [`rundocker.sh`](rundocker.sh)                   | Prepares docker environment to reproduce the power experiments with correlated and decorrelated classifiers.                   |
 | `experiments`                                    | Source code to run power experiments.                                                                                          |
 | [`experiments/power.py`](./experiments/power.py) | Main script called by rundocker.sh. It loads all the necesary data, creates the the test procedures and evaluates their power. |
