@@ -222,8 +222,8 @@ def hists(ax,
 		n_events=count,
 		alpha=alpha / count.shape[1])
 
-	ax.axvline(x=lower, color='blue', linestyle='--')
-	ax.axvline(x=upper, color='blue', linestyle='--', label='Signal region')
+	ax.axvline(x=lower, color='green', linestyle='--')
+	ax.axvline(x=upper, color='green', linestyle='--', label='Signal region')
 
 	hist_with_uncertainty(
 		ax=ax,
@@ -261,10 +261,9 @@ def hists(ax,
 		ax2.set_ylim([1 - 0.2, 1 + 0.2])
 
 		ax2.axvline(x=lower,
-					color='blue', linestyle='--')
+					color='green', linestyle='--')
 		ax2.axvline(x=upper,
-					color='blue', linestyle='--',
-					label='Signal region')
+					color='green', linestyle='--')
 		ax2.axhline(y=1,
 					color='black',
 					linestyle='-')
@@ -291,7 +290,7 @@ def hists(ax,
 			lower=pred_lower,
 			upper=pred_upper,
 			jitter=0,
-			color='red',
+			color='blue',
 			markersize=2,
 			label='Normal CI')
 		ax2.legend()

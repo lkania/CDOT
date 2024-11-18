@@ -85,8 +85,8 @@ args.sample_size = 20000
 args.folds = 1000
 args.n_jobs = min(args.folds, n_jobs)
 args.signal_region = [0.1, 0.90]  # the signal region quantiles
-args.ks = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
-args.classifiers = ['tclass', 'class']
+args.ks = [5, 10, 15, 20, 25, 30, 35, 40]
+args.classifiers = ['class', 'tclass']
 # Subsets are used for plotting while
 # the full range is used for power curve computations
 args.lambdas_subset = [0, 0.05]
@@ -98,6 +98,9 @@ args.quantiles = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
 # args.zero_cut is a number lower than any possible classifier score
 args.zero_cut = 0
 
+# a flag for model selection
+runonce = False
+
 assert np.all(np.array(args.lambdas[1:]) > args.tol)
 assert args.folds > 1
 assert args.n_jobs > 1
@@ -108,9 +111,8 @@ assert max([len(args.lambdas),
 
 
 ##################################################
-# Compute statistics about datasets
+# Compute amount of signal leaking into the control region
 ##################################################
-
 def __stat(signal_region_start,
 		   signal_region_stop,
 		   background,
@@ -214,12 +216,6 @@ def generate_dataset(cutoff,
 	return trans(X), mask, n
 
 
-selected = DotDic()
-for classifier in args.classifiers:
-	selected[classifier] = DotDic()
-	for quantile in args.quantiles:
-		selected[classifier][quantile] = None
-
 all = DotDic()
 for k in args.ks:
 	all[k] = DotDic()
@@ -230,12 +226,6 @@ for k in args.ks:
 
 for classifier in args.classifiers:
 	print('Configure {0} classifer'.format(classifier))
-
-	fig, axs = plot.plt.subplots(nrows=1,
-								 ncols=len(args.quantiles),
-								 figsize=(10 * len(args.quantiles), 10),
-								 sharex='all',
-								 sharey='all')
 
 	cutoffs = onp.quantile(params.background.c[classifier],
 						   q=args.quantiles,
@@ -326,11 +316,22 @@ for classifier in args.classifiers:
 			all[k][classifier][quantile] = tests[i]
 
 		###################################################
-		# Perform plots and model selection
-		# under the null and when the classifier isn't used
+		# Perform plots and model selection under the null
+		# That corresponds to quantile=0, i.e. the classifier
+		# output is not used.
+		# The following code can be easily modified if it
+		# is necessary to perfom model selection for each quantile
 		###################################################
 
-		if quantile == 0:
+		if quantile == 0 and runonce == False:
+			runonce = True
+
+			fig, axs = plot.plt.subplots(nrows=1,
+										 ncols=len(args.quantiles),
+										 figsize=(10 * len(args.quantiles), 10),
+										 sharex='all',
+										 sharey='all')
+
 			###################################################
 			# Path for saving results
 			###################################################
@@ -346,50 +347,52 @@ for classifier in args.classifiers:
 				measure=partial(selection.target_alpha_level,
 								alpha=args.alpha))
 
-			selected[classifier][quantile] = selection_results.test_star
+			selected_test = selection_results.test_star
 			del selection_results['test_star']
 
-			print('Selected Classifier: {0}'.format(
-				selected[classifier][quantile].name))
+			print('Selected Classifier: {0}'.format(selected_test.name))
 
 			# Prepare data
 			labels = []
 			stats = []
 			measure = []
 			for i, k in enumerate(selection_results.keys()):
-				labels.append('K={0}'.format(
-					selection_results[k].test.args.k)
-				)
-				if k == selected[classifier][quantile].name:
+				labels.append('K={0}'.format(selection_results[k].test.args.k))
+				if k == selected_test.name:
 					labels[i] += ' (*)'
-					k_star = selection_results[k].test.args.k
 				stats.append(selection_results[k].stats)
 				measure.append(selection_results[k].measure)
 
 			###################################################
 			# Plot pvalue distribution
 			###################################################
-			fig, ax = plot.plt.subplots(nrows=1, ncols=1,
-										figsize=(10, 10),
-										sharex='none',
-										sharey='none')
+			fig, axs = plot.plt.subplots(nrows=1, ncols=2,
+										 figsize=(20, 10),
+										 sharex='none',
+										 sharey='none')
 
+			ax = axs[0]
 			ax.set_title('P-value CDF')
 			plot.cdfs(ax=ax,
 					  df=stats,
 					  labels=labels,
 					  alpha=args.alpha)
+			ax.legend().set_visible(False)
+
+			ax = axs[1]
+			ax.set_title('P-value CDF')
+			plot.cdfs(ax=ax,
+					  df=stats,
+					  labels=labels,
+					  alpha=args.alpha)
+			ax.set_xlim([0, 2 * args.alpha])
+			ax.set_ylim([0, 2 * args.alpha])
+			ax.legend(loc='lower right')
+
 			plot.save_fig(cwd=args.cwd,
 						  path=path,
 						  fig=fig,
 						  name='pvalues')
-
-			ax.set_xlim([0, 2 * args.alpha])
-			ax.set_ylim([0, 2 * args.alpha])
-			plot.save_fig(cwd=args.cwd,
-						  path=path,
-						  fig=fig,
-						  name='pvalues_restricted')
 
 			###################################################
 			# Plot CI for I(pvalue <= alpha)
@@ -405,23 +408,23 @@ for classifier in args.classifiers:
 					   linestyle='--',
 					   label=r'Target Type I error $\alpha=${0}'.format(
 						   args.alpha))
-			ax.axvline(x=k_star,
+			ax.axvline(x=selected_test.args.k,
 					   color='blue',
 					   linestyle='--',
-					   label=r'K_*={0}'.format(k_star))
+					   label=r'$K_*$={0}'.format(selected_test.args.k))
 
 			idx = [np.int32(np.array(stat) <= args.alpha) for stat in stats]
 			plot.binary_series_with_uncertainty(
 				ax,
 				x=args.ks,
 				values=idx,
-				label='Clopper-Pearson CI for emp. type I error'.format(
+				label='CP CI for Type I error'.format(
 					args.alpha),
 				color='black',
 				alpha=args.alpha)
 
 			ax.set_xlabel(r'Polynomial order $K$')
-			ax.set_ylabel(r'Empirical probability of rejecting $\lambda=0$')
+			ax.set_ylabel(r'Probability of rejecting $\lambda=0$')
 			ax.legend()
 			plot.save_fig(cwd=args.cwd,
 						  path=path,
@@ -429,11 +432,10 @@ for classifier in args.classifiers:
 						  name='selection')
 
 ###################################################
-# Plot measure
-###################################################
 # Sanity check
 # Assert that for the zero quantile, any classifier produces exactly the
 # same dataset if the same key is used
+###################################################
 for k in args.ks:
 	for lambda_ in args.lambdas:
 		d1 = all[k][args.classifiers[0]][0.0].generate_dataset(
@@ -449,6 +451,9 @@ for k in args.ks:
 		assert np.all(d1 - d2 == 0)
 
 
+###################################################
+# Plot measure
+###################################################
 def empirical_power(args, path, params, classifier, selected, quantiles,
 					lambdas):
 	results = DotDic()
@@ -528,9 +533,9 @@ params = load_background_and_signal(args)
 # Do power-analysis for selected test
 power_analysis(args=args,
 			   params=params,
-			   selected=all[k_star],
+			   selected=all[selected_test.args.k],
 			   storage_string='test',
-			   plot_string='{0}'.format(k_star))
+			   plot_string='{0}'.format(selected_test.args.k))
 
 ###################################################################
 # Total time

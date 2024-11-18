@@ -85,20 +85,37 @@ def filtering(args,
 			ax2 = axs[l + 1, q]
 
 			# ax3 = axs[l+2, q]
-			ax3 = None
+			# ax3 = None
 
 			plot.hists(ax,
 					   lambda_=lambda_,
 					   binning=binning,
 					   info=results[lambda_][quantile],
 					   ax2=ax2,
-					   ax3=ax3,
+					   ax3=None,
 					   alpha=alpha,
 					   tol=args.tol)
+
+			ax.legend().set_visible(False)
+			ax2.legend().set_visible(False)
 
 		l += plots_per_hist
 
 	fig = plot.tight_pairs(n_cols=n_cols, fig=fig, n_rows=2)
+
+	# Collect handles and labels from each subplot
+	axs_ = [ax, ax2]
+	handles, labels = [], []
+	for ax in axs_:
+		for handle, label in zip(*ax.get_legend_handles_labels()):
+			handles.append(handle)
+			labels.append(label)
+
+	# Add a single combined legend to the figure
+	fig.legend(handles, labels,
+			   loc="center left",
+			   bbox_to_anchor=(0.8, 0.8))
+
 	plot.save_fig(cwd=args.cwd,
 				  path=path,
 				  fig=fig,
@@ -108,7 +125,7 @@ def filtering(args,
 def power(ax, results, lambdas, quantiles, alpha, eps=1e-2):
 	ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha={0}'.format(alpha))
 	ax.set_xlabel('% of background observations rejected in validation')
-	ax.set_ylabel('Empirical probability of rejecting $\lambda=0$')
+	ax.set_ylabel('Probability of rejecting $\lambda=0$')
 	ax.set_ylim([0 - eps, 1 + eps])
 
 	ax.axhline(y=alpha,
@@ -130,10 +147,15 @@ def power(ax, results, lambdas, quantiles, alpha, eps=1e-2):
 	ax.legend()
 
 
-def power_per_classifier(args, path, classifiers, labels, results, lambdas,
+def power_per_classifier(args,
+						 path,
+						 classifiers,
+						 labels,
+						 results,
+						 lambdas,
 						 quantiles):
 	fig, axs = plot.plt.subplots(nrows=1, ncols=2,
-								 figsize=(20, 10),
+								 figsize=(20, 5),
 								 sharex='none',
 								 sharey='none')
 
@@ -144,6 +166,20 @@ def power_per_classifier(args, path, classifiers, labels, results, lambdas,
 			  quantiles=quantiles,
 			  alpha=args.alpha)
 		axs[c].set_title(labels[c], fontsize=20)
+
+	# Collect handles and labels from each subplot
+	axs[0].legend().set_visible(False)
+	handles, labels = [], []
+	for handle, label in zip(*axs[1].get_legend_handles_labels()):
+		handles.append(handle)
+		labels.append(label)
+	axs[1].legend().set_visible(False)
+
+	# Add a single combined legend to the figure
+	fig.legend(handles,
+			   labels,
+			   loc="center left",
+			   bbox_to_anchor=(0.9, 0.5))
 
 	plot.save_fig(cwd=args.cwd, path=path, fig=fig, name='power')
 

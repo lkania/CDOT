@@ -23,8 +23,8 @@ readonly dest_data=/program/data/:ro
 # Data saved outside the designated directory will
 # be erased when the container is stopped
 #####################################################
-readonly src_results=$PWD/summaries/
-readonly dest_results=/program/summaries
+readonly src_results=$PWD/results/
+readonly dest_results=/program/results
 
 #####################################################
 # Location of the executable inside the container
@@ -45,7 +45,9 @@ docker build --tag $name .
 #####################################################
 # Automatically determine if GPUs are available
 #####################################################
-gpus=$([ $(ls -la /dev | grep nvidia | wc -l) "==" "0" ] && echo "" || echo "--gpus all")
+# Uncomment the following line to use GPUs
+gpus=""
+#gpus=$([ $(ls -la /dev | grep nvidia | wc -l) "==" "0" ] && echo "" || echo "--gpus all")
 
 #####################################################
 # Start container

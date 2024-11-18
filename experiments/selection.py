@@ -54,6 +54,10 @@ def select(args, path, params, tests, measure):
 	###################################################
 	# Model selection based on p-value distribution
 	###################################################
+
+	# Note: if two test have approximately same error, choose the one with
+	# lower complexity.
+
 	idx = np.argmin(np.array([results[test.name].measure for test in tests]))
 	results.test_star = tests[idx]
 
