@@ -1,19 +1,34 @@
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+
+getPackage <- function(package) {
+  if (!requireNamespace(package, quietly = TRUE)) {
+    message(paste("Installing package:", package))
+    install.packages(package)
+  }
+  message(paste("Package", package, "is ready to use."))
+}
+
+getBiocPackage <- function(package) {
+  getPackage('BiocManager')
+  if (!requireNamespace(package, quietly = TRUE)) {
+    message(paste("Installing package:", package))
+    BiocManager::install(package)
+  }
+  message(paste("Package", package, "is ready to use."))
+}
+
 # computation
-install.packages('np')
-install.packages('ranger')
-
-if (!require("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
-BiocManager::install("rhdf5")
-
+getPackage('np')
+getPackage('ranger')
+getBiocPackage('rhdf5')
 
 # plots
-install.packages('ggplot2')
-install.packages('ggpubr')
-install.packages('gridExtra')
-install.packages('knitr')
-install.packages('colorBlindness')
-install.packages('latex2exp')
+getPackage('ggplot2')
+getPackage('ggpubr')
+getPackage('gridExtra')
+getPackage('knitr')
+getPackage('colorBlindness')
+getPackage('latex2exp')
 
 
 
