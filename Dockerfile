@@ -2,12 +2,12 @@
 # Dockerfile
 #####################################################
 
-# Please uncomment the followign command if you have a GPU
+# Please uncomment the following command if you have a GPU
 # The following base image contains: jax (with GPU support), numpy and scipy
 # Nvidia documents will be located at /workspace
 # FROM nvcr.io/nvdlfwea/jax/jax:23.05-py3
 
-# If you are using an NVIDIA base image
+# If you are using a NVIDIA base image
 # please remember to login into their server first
 # Run the following command in your terminal
 # docker login nvcr.io

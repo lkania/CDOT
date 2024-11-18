@@ -6,16 +6,18 @@ Larry Wasserman. (*) Denotes equal contribution.
 The provided code reproduces the experiments described
 in https://arxiv.org/pdf/2409.06399.
 
-This repository contains the following folders and files.
+We remark the following folder and files contained in this his repository.
 
-| Name           | Description                                                                                                                                  |
-|----------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| `cdot`         | Contains the necessary code to decorrelate classifiers via optimal transport (CDOT). [See `./cdot/README.md` for details](./cdot/README.md). |
-| `rundocker.sh` | Prepares docker environment to reproduce the power experiments with correlated and decorrelated classifiers.                                 |
-| `Dockerfile`   | Configures the necessary dependencies to reproduce the power experiments.                                                                    |
-| `data`         | Data required to reproduce the power experiments.                                                                                            |
-| `src`          | Source code to reproduce the power experiments.                                                                                              |
-| `results`      | The results of the power experiments are saved in this folder.                                                                               |
+| Name                                             | Description                                                                                                                                  |
+|--------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| [`cdot`](./cdot/README.md)                       | Contains the necessary code to decorrelate classifiers via optimal transport (CDOT). [See `./cdot/README.md` for details](./cdot/README.md). |
+| [`rundocker.sh`](rundocker.sh)                   | Prepares docker environment to reproduce the power experiments with correlated and decorrelated classifiers.                                 |
+| `experiments`                                    | Source code to run power experiments.                                                                                                        |
+| [`experiments/power.py`](./experiments/power.py) | Main script called by rundocker.sh. It loads all the necesary data, creates the the test procedures and evaluates their power.               |
+| [`Dockerfile`](Dockerfile)                       | Configures the necessary dependencies to reproduce the power experiments.                                                                    |
+| `data`                                           | Data required to reproduce the power experiments.                                                                                            |
+| `src`                                            | Source code to create classifier-based test procedures.                                                                                      |
+| `results`                                        | The results of the power experiments are saved in this folder.                                                                               |
 
 ## Requirements
 
