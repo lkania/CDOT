@@ -87,7 +87,7 @@ sets and get the classifier as well as the decorrelated classifier outputs for
 the experiment using the following command.
 
 ```
-Rscript ./cdot/3b4bPlots.R
+Rscript ./cdot/3b4bCDOT.R
 ```
 
 This outputs `DecorrelatedData3b4b.Rdata` that contains the training,
