@@ -10,9 +10,6 @@ acc_form.pdf
 acc_form.md
 
 # folders
-presentation
-runners
-simulation
 data/0.5
 data/1
 data/5
@@ -21,7 +18,6 @@ data/30
 data/50
 data/100
 data/200
-data/dimuon
 
 ### macOS ###
 # General
