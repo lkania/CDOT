@@ -73,6 +73,6 @@ After the script finishes, the following figures are available.
 
 | Figure number (click link to open)                   | Location                                         |
 |------------------------------------------------------|--------------------------------------------------|
-| [12](./results/3b/test/20/power.pdf)                 | `./results/3b/test/20/power.pdf`                 |
-| [20](./results/3b/test/20/class_filter_uniform.pdf)  | `./results/3b/test/20/class_filter_uniform.pdf`  |
-| [21](./results/3b/test/20/tclass_filter_uniform.pdf) | `./results/3b/test/20/tclass_filter_uniform.pdf` |
+| [12](./results/4b/test/20/power.pdf)                 | `./results/4b/test/20/power.pdf`                 |
+| [20](./results/4b/test/20/class_filter_uniform.pdf)  | `./results/4b/test/20/class_filter_uniform.pdf`  |
+| [21](./results/4b/test/20/tclass_filter_uniform.pdf) | `./results/4b/test/20/tclass_filter_uniform.pdf` |
