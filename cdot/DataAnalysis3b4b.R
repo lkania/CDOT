@@ -3,9 +3,9 @@ library("rhdf5")
 
 # Load the data sets from .h5 files
 # Loading 4b background
-background_4b = h5read(paste0("bbbb", ".h5"), "/df/block0_values")
+background_4b = h5read(paste0("./cdot/bbbb", ".h5"), "/df/block0_values")
 background_4b = as.data.frame(t(background_4b))
-cols_4b = h5read(paste0("bbbb", ".h5"), "/df/block0_items")
+cols_4b = h5read(paste0("./cdot/bbbb", ".h5"), "/df/block0_items")
 colnames(background_4b) = cols_4b
 
 # Loading 3b background
