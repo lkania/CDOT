@@ -45,8 +45,8 @@ docker build --tag $name .
 #####################################################
 # Automatically determine if GPUs are available
 #####################################################
-# Uncomment the following line to use GPUs
 gpus=""
+# Uncomment the following line to use GPUs
 #gpus=$([ $(ls -la /dev | grep nvidia | wc -l) "==" "0" ] && echo "" || echo "--gpus all")
 
 #####################################################

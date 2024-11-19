@@ -19,12 +19,24 @@ We note the following folders and files contained in this his repository.
 | `src`                                            | Source code to create classifier-based test procedures.                                                                        |
 | `results`                                        | The results of the power experiments are saved in this folder.                                                                 |
 
-## Training and decorrelating classifiers via optimal transport
+## Contents
+
+- [Decorrelating classifiers via optimal transport](#decorrelating-classifiers-via-optimal-transport)
+    - [Detection of high-p_T W-bosons experiments (WTagging)](#detection-of-high-p_t-w-bosons-experiments-wtagging)
+        - [Comparing CDOT to existing decorrelation methods](#comparing-cdot-to-existing-decorrelation-methods)
+    - [Detection of exotic high-mass resonance experiment (3b - 4b)](#detection-of-exotic-high-mass-resonance-experiment-3b---4b)
+    - [Convert Rdata output to txt files](#convert-rdata-output-to-txt-files)
+- [Evaluating the performance of test procedures based on correlated and decorrelated classifiers](#evaluating-the-performance-of-test-procedures-based-on-correlated-and-decorrelated-classifiers)
+    - [Detection of high-p_T W-bosons experiments (WTagging)](#detection-of-high-p_t-w-bosons-experiments-wtagging-1)
+    - [Detection of exotic high-mass resonance experiment (3b)](#detection-of-exotic-high-mass-resonance-experiment-3b)
+    - [Detection of exotic high-mass resonance experiment (4b)](#detection-of-exotic-high-mass-resonance-experiment-4b)
+
+## Decorrelating classifiers via optimal transport
 
 You need R to run the commands in this section.
 See https://www.r-project.org/ for instructions on how to install R.
 
-### Detection of high-$p_{\mathrm{T}}$ W-bosons experiments (WTagging)
+### Detection of high-p_T W-bosons experiments (WTagging)
 
 To get the classifier as well as the decorrelated classifier outputs for the
 WTagging experiment run the following command.
@@ -113,13 +125,13 @@ After the script finishes, the following figures are available.
 Rscript ./cdot/convert.R
 ```
 
-## Evaluating the performance of decorrelated and correlated classifier-based test procedures
+## Evaluating the performance of test procedures based on correlated and decorrelated classifiers
 
 You need Docker to run the commands in this section.
 See https://docs.docker.com/desktop/ for
 instructions on how to install Docker with a graphical interface.
 
-### Detection of high-$p_{\mathrm{T}}$ W-bosons experiments (WTagging)
+### Detection of high-P_T W-bosons experiments (WTagging)
 
 Run the following command.
 
@@ -131,11 +143,11 @@ After the script finishes, the following figures are available.
 
 | Figure number (click link to open)                        | Location                                               |
 |-----------------------------------------------------------|--------------------------------------------------------|
+| [14](./results/WTagging/val/class/0.0/selection.pdf)      | `./results/WTagging/val/class/0.0/selection.pdf`       |
+| [15](./results/WTagging/val/class/0.0/pvalues.pdf)        | `./results/WTagging/val/class/0.0/pvalues.pdf`         |
 | [6](./results/WTagging/test/35/power.pdf)                 | `./results/WTagging/test/35/power.pdf`                 |
 | [7](./results/WTagging/test/35/class_filter_uniform.pdf)  | `./results/WTagging/test/35/class_filter_uniform.pdf`  |
 | [8](./results/WTagging/test/35/tclass_filter_uniform.pdf) | `./results/WTagging/test/35/tclass_filter_uniform.pdf` |
-| [14](./results/WTagging/val/class/0.0/selection.pdf)      | `./results/WTagging/val/class/0.0/selection.pdf`       |
-| [15](./results/WTagging/val/class/0.0/pvalues.pdf)        | `./results/WTagging/val/class/0.0/pvalues.pdf`         |
 
 ### Detection of exotic high-mass resonance experiment (3b)
 
@@ -147,13 +159,13 @@ Run the following command.
 
 After the script finishes, the following figures are available.
 
-| Figure number (click link to open)                   | Location                                         |
-|------------------------------------------------------|--------------------------------------------------|
-| [11](./results/3b/test/20/power.pdf)                 | `./results/3b/test/20/power.pdf`                 |
-| [16](./results/3b/val/class/0.0/selection.pdf)       | `./results/3b/val/class/0.0/selection.pdf`       |
-| [17](./results/3b/val/class/0.0/pvalues.pdf)         | `./results/3b/val/class/0.0/pvalues.pdf`         |
-| [18](./results/3b/test/20/class_filter_uniform.pdf)  | `./results/3b/test/20/class_filter_uniform.pdf`  |
-| [19](./results/3b/test/20/tclass_filter_uniform.pdf) | `./results/3b/test/20/tclass_filter_uniform.pdf` |
+| Figure number (click link to open)                   |                                                                                                   | Location                                         |
+|------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------|
+| [16](./results/3b/val/class/0.0/selection.pdf)       | Selection of test statistic that achieves best type I error                                       | `./results/3b/val/class/0.0/selection.pdf`       |
+| [17](./results/3b/val/class/0.0/pvalues.pdf)         | Distribution of p-values corresponding the above test statistics                                  | `./results/3b/val/class/0.0/pvalues.pdf`         |
+| [11](./results/3b/test/20/power.pdf)                 | Power comparison of classifier-based test procedures using decorrelated and correlated classfiers | `./results/3b/test/20/power.pdf`                 |
+| [18](./results/3b/test/20/class_filter_uniform.pdf)  | Background fit used by test procedure with correlated classifier                                  | `./results/3b/test/20/class_filter_uniform.pdf`  |
+| [19](./results/3b/test/20/tclass_filter_uniform.pdf) | Background fit used by test procedure with decorrelated classifier                                | `./results/3b/test/20/tclass_filter_uniform.pdf` |
 
 ### Detection of exotic high-mass resonance experiment (4b)
 
@@ -165,8 +177,8 @@ Run the following command.
 
 After the script finishes, the following figures are available.
 
-| Figure number (click link to open)                   | Location                                         |
-|------------------------------------------------------|--------------------------------------------------|
-| [12](./results/4b/test/20/power.pdf)                 | `./results/4b/test/20/power.pdf`                 |
-| [20](./results/4b/test/20/class_filter_uniform.pdf)  | `./results/4b/test/20/class_filter_uniform.pdf`  |
-| [21](./results/4b/test/20/tclass_filter_uniform.pdf) | `./results/4b/test/20/tclass_filter_uniform.pdf` |
+| Figure number (click link to open)                   | Description                                                                                       | Location                                         |
+|------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------|
+| [12](./results/4b/test/20/power.pdf)                 | Power comparison of classifier-based test procedures using decorrelated and correlated classfiers | `./results/4b/test/20/power.pdf`                 |
+| [20](./results/4b/test/20/class_filter_uniform.pdf)  | Background fit used by test procedure with correlated classifier                                  | `./results/4b/test/20/class_filter_uniform.pdf`  |
+| [21](./results/4b/test/20/tclass_filter_uniform.pdf) | Background fit used by test procedure with decorrelated classifier                                | `./results/4b/test/20/tclass_filter_uniform.pdf` |
