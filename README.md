@@ -39,9 +39,10 @@ See https://www.r-project.org/ for instructions on how to install R.
 ### Detection of high-p_T W-bosons experiments (WTagging)
 
 To get the classifier as well as the decorrelated classifier outputs for the
-WTagging experiment run the following command.
+WTagging experiment run the following commands.
 
 ```
+unzip ./cdot/WTaggingTest.csv.zip -d ./cdot/
 Rscript ./cdot/WTaggingCDOT.R
 ```
 
@@ -49,13 +50,20 @@ The code outputs a file called `./cdot/WTaggingDecorrelated.Rdata` that contains
 the training, validation and test data sets. Each data set has a column
 `h` that provides the classifier output and a column `Trans_h`
 that provides the transformed decorrelated classifier output for the
-corresponding data set. The, we can proceed to run the following command.
+corresponding data set. Alternatevely, you can obtain
+`./cdot/WTaggingDecorrelated.Rdata` by running the following command.
+
+```
+unzip ./cdot/WTaggingDecorrelated.Rdata.zip -d ./cdot/
+```
+
+Finally, run the following command to produce figures 1, 3 and 4.
 
 ```
 Rscript ./cdot/WTaggingPlots.R
 ```
 
-After the script finishes, the following figures are available.
+After the script finishes, the figures are available at the following locations.
 
 | Figure number (click link to open)            | Location                                   |
 |-----------------------------------------------|--------------------------------------------|
@@ -106,7 +114,9 @@ This outputs `DecorrelatedData3b4b.Rdata` that contains the training,
 validation and test data sets for both backgrounds and the signal. Each data set
 has a column `h` that provides the classifier output and a column
 `Trans_h` that provides the transformed decorrelated classifier output
-for the corresponding data set. Finally, run the following command.
+for the corresponding data set.
+
+Finally, run the following command.
 
 ```
 Rscript ./cdot/3b4bPlots.R
@@ -120,6 +130,15 @@ After the script finishes, the following figures are available.
 | [10](./cdot/img/3b4bWithDecorrelation.png) | `./cdot/img/3b4bWithDecorrelation.png` |
 
 ### Convert Rdata output to txt files
+
+If the file `./cdot/WTaggingDecorrelated.Rdata` is not in the folder `./cdot/`,
+run the following command to obtain it.
+
+```
+unzip ./cdot/WTaggingTest.csv.zip -d ./cdot/
+```
+
+To convert the Rdata output to txt files, run the following command.
 
 ```
 Rscript ./cdot/convert.R
