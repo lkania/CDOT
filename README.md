@@ -81,7 +81,7 @@ the R50 scores needed for Figure 5. To ensure that the same bins are used as in
 Figure 7 of Kitouni et al. (2021), run the Python code in
 
 ```
-./cdot/R50JSDPlot.ipynb
+jupyter notebook ./cdot/R50JSDPlot.ipynb
 ```
 
 The script stores the scores in `PythonR50JSDPlotData.RData`. Finally, to draw
