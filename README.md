@@ -129,7 +129,7 @@ After the script finishes, the following figures are available.
 | [9](./cdot/img/4bNoDecorrelation.png)      | `./cdot/img/4bNoDecorrelation.png`     |
 | [10](./cdot/img/3b4bWithDecorrelation.png) | `./cdot/img/3b4bWithDecorrelation.png` |
 
-### Convert Rdata output to txt files
+### Convert Rdata to txt files
 
 If the file `./cdot/WTaggingDecorrelated.Rdata` is not in the folder `./cdot/`,
 run the following command to obtain it.
@@ -138,7 +138,7 @@ run the following command to obtain it.
 unzip ./cdot/WTaggingTest.csv.zip -d ./cdot/
 ```
 
-To convert the Rdata output to txt files, run the following command.
+To convert the `.Rdata` to `.txt` files, run the following command.
 
 ```
 Rscript ./cdot/convert.R
@@ -160,13 +160,13 @@ Run the following command.
 
 After the script finishes, the following figures are available.
 
-| Figure number (click link to open)                        | Location                                               |
-|-----------------------------------------------------------|--------------------------------------------------------|
-| [14](./results/WTagging/val/class/0.0/selection.pdf)      | `./results/WTagging/val/class/0.0/selection.pdf`       |
-| [15](./results/WTagging/val/class/0.0/pvalues.pdf)        | `./results/WTagging/val/class/0.0/pvalues.pdf`         |
-| [6](./results/WTagging/test/35/power.pdf)                 | `./results/WTagging/test/35/power.pdf`                 |
-| [7](./results/WTagging/test/35/class_filter_uniform.pdf)  | `./results/WTagging/test/35/class_filter_uniform.pdf`  |
-| [8](./results/WTagging/test/35/tclass_filter_uniform.pdf) | `./results/WTagging/test/35/tclass_filter_uniform.pdf` |
+| Figure number (click link to open)                        | Description                                                                                       | Location                                               |
+|-----------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| [14](./results/WTagging/val/class/0.0/selection.pdf)      | Selection of test statistic that achieves best type I error                                       | `./results/WTagging/val/class/0.0/selection.pdf`       |
+| [15](./results/WTagging/val/class/0.0/pvalues.pdf)        | Distribution of p-values corresponding the above test statistics                                  | `./results/WTagging/val/class/0.0/pvalues.pdf`         |
+| [6](./results/WTagging/test/35/power.pdf)                 | Power comparison of classifier-based test procedures using decorrelated and correlated classfiers | `./results/WTagging/test/35/power.pdf`                 |
+| [7](./results/WTagging/test/35/class_filter_uniform.pdf)  | Background fit used by test procedure with correlated classifier                                  | `./results/WTagging/test/35/class_filter_uniform.pdf`  |
+| [8](./results/WTagging/test/35/tclass_filter_uniform.pdf) | Background fit used by test procedure with decorrelated classifier                                | `./results/WTagging/test/35/tclass_filter_uniform.pdf` |
 
 ### Detection of exotic high-mass resonance experiment (3b)
 
@@ -178,7 +178,7 @@ Run the following command.
 
 After the script finishes, the following figures are available.
 
-| Figure number (click link to open)                   |                                                                                                   | Location                                         |
+| Figure number (click link to open)                   | Description                                                                                       | Location                                         |
 |------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------|
 | [16](./results/3b/val/class/0.0/selection.pdf)       | Selection of test statistic that achieves best type I error                                       | `./results/3b/val/class/0.0/selection.pdf`       |
 | [17](./results/3b/val/class/0.0/pvalues.pdf)         | Distribution of p-values corresponding the above test statistics                                  | `./results/3b/val/class/0.0/pvalues.pdf`         |
