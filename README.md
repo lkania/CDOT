@@ -38,26 +38,27 @@ See https://www.r-project.org/ for instructions on how to install R.
 
 ### Detection of high-p_T W-bosons experiments (WTagging)
 
-To get the classifier as well as the decorrelated classifier outputs for the
-WTagging experiment run the following commands.
+For the WTgging experiement, you can ontain the output of the correlated and
+decorrelated classifiers by running the following command.
 
 ```
 unzip ./cdot/WTaggingTest.csv.zip -d ./cdot/
 Rscript ./cdot/WTaggingCDOT.R
 ```
 
-The code outputs a file called `./cdot/WTaggingDecorrelated.Rdata` that contains
-the training, validation and test data sets. Each data set has a column
+After the script finishes, the file `./cdot/WTaggingDecorrelated.Rdata` is
+available. It contains the training, validation and test data sets.
+Each data set has a column
 `h` that provides the classifier output and a column `Trans_h`
-that provides the transformed decorrelated classifier output for the
-corresponding data set. Alternatevely, you can obtain
+that provides the decorrelated classifier output for each observation.
+Alternatevely, you can obtain the file
 `./cdot/WTaggingDecorrelated.Rdata` by running the following command.
 
 ```
 unzip ./cdot/WTaggingDecorrelated.Rdata.zip -d ./cdot/
 ```
 
-Finally, run the following command to produce figures 1, 3 and 4.
+To produce figures 1, 3 and 4, run the following command.
 
 ```
 Rscript ./cdot/WTaggingPlots.R
@@ -74,12 +75,17 @@ After the script finishes, the figures are available at the following locations.
 
 #### Comparing CDOT to existing decorrelation methods
 
-The code in `WTaggingCDOT.R` also outputs an additional file
-`DataforR50JSDPlot.Rdata`, which can be used to calculate the 1/JSD and
-the R50 scores for Figure 5. To ensure that the same bins are used for the
-comparison as used in Figure 7 of Kitouni et al. (2021), we use a similar python
-code as Kitouni et al. (2021) in `R50JSDPlot.ipynb` which outputs the
-scores in `PythonR50JSDPlotData.RData`. Finally, we run the following command.
+The code in `./cdot/WTaggingCDOT.R` also outputs an additional file
+`./cdot/DataforR50JSDPlot.Rdata`, which can be used to calculate the 1/JSD and
+the R50 scores needed for Figure 5. To ensure that the same bins are used as in
+Figure 7 of Kitouni et al. (2021), run the Python code in
+
+```
+./cdot/R50JSDPlot.ipynb
+```
+
+The script stores the scores in `PythonR50JSDPlotData.RData`. Finally, to draw
+figure 5, run the following command.
 
 ```
 Rscript ./cdot/R50JSDPlot.R
@@ -93,36 +99,36 @@ After the script finishes, the following figure is available.
 
 ### Detection of exotic high-mass resonance experiment (3b - 4b)
 
-For this experiment, we first need to perform some variable transformations to
-improve the overall performance of the classifiers. We do this as follows:
+For 3b and 4b experiments, the following script performs some variable
+transformations to improve the overall performance of the classifiers.
 
 ```
 Rscript ./cdot/DataAnalysis3b4b.R
 ```
 
-The code above outputs a file called `Data3b4b.RData` that provides the
-3b, 4b and signal data sets used in the experiments. We now randomly select the
+After the script finishes, the file `./cdot/Data3b4b.RData` is available. It
+provides the 3b, 4b and signal data sets used in the experiments. We proceed to
+randomly select the
 training, validation and test data sets from the entire 3b, 4b and signal data
-sets and get the classifier as well as the decorrelated classifier outputs for
-the experiment using the following command.
+sets to produce the outputs of the correlated and decorrelated classifiers.
 
 ```
 Rscript ./cdot/3b4bCDOT.R
 ```
 
-This outputs `DecorrelatedData3b4b.Rdata` that contains the training,
-validation and test data sets for both backgrounds and the signal. Each data set
-has a column `h` that provides the classifier output and a column
-`Trans_h` that provides the transformed decorrelated classifier output
-for the corresponding data set.
+After the script finishes, the file `./cdot/DecorrelatedData3b4b.Rdata` is
+available. Its contains the training,
+validation and test data sets, together with
+a column `h` that provides the classifier output and a column
+`Trans_h` that provides the output of the decorrelated classifier.
 
-Finally, run the following command.
+To produce figures 9 and 10, run the following command.
 
 ```
 Rscript ./cdot/3b4bPlots.R
 ```
 
-After the script finishes, the following figures are available.
+After the script finishes, they are available at the following locations.
 
 | Figure number (click link to open)         | Location                               |
 |--------------------------------------------|----------------------------------------|
