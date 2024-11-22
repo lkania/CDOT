@@ -156,7 +156,7 @@ for (i in 1:4) {
 
 ggsave(ggarrange(plot4b[[1]], plot4b[[2]], plot4b[[3]], plot4b[[4]],
                  nrow = 1, ncol = 4, common.legend = TRUE, legend = "bottom"),
-       filename = paste0("./cdot/img/4bNoDecorrelation.pdf"),
+       filename = paste0("./cdot/img/4bNoDecorrelation.png"),
        width = 12, height = 3)
 
 

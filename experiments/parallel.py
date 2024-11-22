@@ -158,7 +158,10 @@ def run(args, params, test, path, lambda_):
 				d[k] = results_[i][k][j]
 			d.X = data[index].reshape(-1)
 			d.mask = mask[index].reshape(-1)
-			# mask filtered observations
+			###########################################
+			# Mask filtered observations
+			# Assign -1 to observations that have been filtered
+			###########################################
 			d.X = d.X * d.mask + (-1) * (1 - d.mask)
 			d.n = np.sum(d.mask)
 			d.test = test

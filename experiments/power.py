@@ -87,6 +87,8 @@ args.n_jobs = min(args.folds, n_jobs)
 args.signal_region = [0.1, 0.90]  # the signal region quantiles
 args.ks = [5, 10, 15, 20, 25, 30, 35, 40]
 args.classifiers = ['class', 'tclass']
+args.classifiers_labels = ['Without Decorrelation', 'With Decorrelation']
+
 # Subsets are used for plotting while
 # the full range is used for power curve computations
 args.lambdas_subset = [0, 0.05]
@@ -482,18 +484,14 @@ def empirical_power(args, path, params, classifier, selected, quantiles,
 	return results
 
 
-def power_analysis(args, params, selected, storage_string, plot_string):
-	print("\n{0} power analysis\n".format(storage_string))
+def power_analysis(args, params, selected, plot_string):
+	print("\n{0} power analysis\n".format(args.data_id))
 
-	plot_path = '{0}/{1}/{2}'.format(args.target_data_id,
-									 storage_string,
-									 plot_string)
+	plot_path = '{0}/{1}'.format(args.data_id, plot_string)
 
 	results = DotDic()
 	for classifier in params.classifiers:
-		path = '{0}/{1}/{2}'.format(args.target_data_id,
-									storage_string,
-									classifier)
+		path = '{0}/{1}'.format(args.data_id, classifier)
 
 		results[classifier] = empirical_power(args=args,
 											  path=path,
@@ -518,26 +516,35 @@ def power_analysis(args, params, selected, storage_string, plot_string):
 							   lambdas=args.lambdas,
 							   quantiles=args.quantiles,
 							   classifiers=args.classifiers,
-							   labels=['Without Decorrelation',
-									   'With Decorrelation'])
+							   labels=args.classifiers_labels)
 
 
 runtime('Finished model selection')
 
 ##################################################
-# Test data analysis
+# Power analysis on validation data
+# Used to
 ##################################################
-args.data_id = args.target_data_id
+
+# Do power-analysis for selected test
+power_analysis(args=args,
+			   params=params,
+			   selected=all[selected_test.args.k],
+			   plot_string='{0}'.format(selected_test.args.k))
+
+##################################################
+# Power analysis on test data
+##################################################
+args.data_id = '{0}/test'.format(args.target_data_id)
 params = load_background_and_signal(args)
 
 # Do power-analysis for selected test
 power_analysis(args=args,
 			   params=params,
 			   selected=all[selected_test.args.k],
-			   storage_string='test',
 			   plot_string='{0}'.format(selected_test.args.k))
 
 ###################################################################
-# Total time
+# Total runtime
 ###################################################################
 runtime('runtime')

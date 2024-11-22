@@ -209,6 +209,7 @@ def hists(ax,
 
 	if len(methods) > 1:
 
+		# simultaneous confidence intervals for predicted counts
 		pred_lower, pred_mid, pred_upper = binom.garwood_poisson_ci(
 			n_events=predictions,
 			alpha=alpha / predictions.shape[1])
@@ -218,6 +219,7 @@ def hists(ax,
 		pred_lower = None
 		pred_upper = None
 
+	# simultaneous confidence intervals for observed counts
 	count_lower, count_mean, count_upper = binom.garwood_poisson_ci(
 		n_events=count,
 		alpha=alpha / count.shape[1])
@@ -271,10 +273,11 @@ def hists(ax,
 
 		if pred_lower is not None and pred_upper is not None:
 
+			# simulatenous confidence intervals for observed / predicted ratio
 			pred_lower, pred_mid, pred_upper = binom.normal_approximation_poisson_ratio_ci(
 				X=count,
 				Y=predictions,
-				alpha=alpha,
+				alpha=alpha / count.shape[1],
 				tol=tol)
 
 		else:

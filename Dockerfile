@@ -34,7 +34,6 @@ RUN pip install tqdm==4.65.0
 RUN pip install matplotlib==3.8.0
 RUN pip install seaborn==0.13.0
 RUN pip install scipy==1.11.4
-RUN pip install distinctipy==1.2.3
 RUN pip install statsmodels==0.14.0
 RUN pip install cloudpickle==3.0.0
 

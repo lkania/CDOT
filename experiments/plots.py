@@ -77,11 +77,6 @@ def filtering(args,
 		for q, quantile in enumerate(quantiles):
 
 			ax = axs[l, q]
-			if l == 0:
-				ax.set_title(
-					'Filtering {0}% of the observations'.format(
-						int(quantile * 100)))
-
 			ax2 = axs[l + 1, q]
 
 			# ax3 = axs[l+2, q]
@@ -96,6 +91,18 @@ def filtering(args,
 					   alpha=alpha,
 					   tol=args.tol)
 
+			if l == 0:
+				ax.set_title(
+					'Filtering {0}% of the observations'.format(
+						int(quantile * 100)))
+				ax.set_xlabel('')
+				ax.set_xticks([])
+				ax.set_xticks([], minor=True)
+				ax2.set_xlabel('')
+				ax2.set_xticks([])
+				ax2.set_xticks([], minor=True)
+
+			# Make all axes invisible so that they can be merged afterwards
 			ax.legend().set_visible(False)
 			ax2.legend().set_visible(False)
 

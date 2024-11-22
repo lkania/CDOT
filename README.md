@@ -39,7 +39,7 @@ See https://www.r-project.org/ for instructions on how to install R.
 ### Detection of high-p_T W-bosons experiments (WTagging)
 
 For the WTgging experiement, you can ontain the output of the correlated and
-decorrelated classifiers by running the following command.
+decorrelated classifiers by running the following commands.
 
 ```
 unzip ./cdot/WTaggingTest.csv.zip -d ./cdot/
@@ -91,7 +91,7 @@ figure 5, run the following command.
 Rscript ./cdot/R50JSDPlot.R
 ```
 
-After the script finishes, the following figure is available.
+After the script finishes, the figure is available at the following location.
 
 | Figure number (click link to open)  | Location                         |
 |-------------------------------------|----------------------------------|
