@@ -71,6 +71,7 @@ def load_background_and_signal(args):
 	#######################################################
 	# Sampling
 	#######################################################
+
 	@partial(jit, static_argnames=['n', 'n_elements'])
 	def choice(n, n_elements, probs, key):
 		# if probs are assume to be uniform,
@@ -119,8 +120,6 @@ def load_background_and_signal(args):
 	# Sampling
 	#######################################################
 
-	# Note that this function will generate an array
-	# whose size depends on n and lambda_
 	@partial(jit, static_argnames=['n', 'lambda_', 'classifier'])
 	def subsample(n, lambda_, key, classifier):
 		if lambda_ == 0:
@@ -129,6 +128,9 @@ def load_background_and_signal(args):
 				classifier=classifier,
 				key=key)
 
+		# Note that the following function generates an array
+		# whose size depends on n and lambda_
+		# Therefore, we include n and lambda_ in the static_argnames
 		key1, key2 = random.split(key, num=2)
 		n_signal = int(n * lambda_)
 		X, c = background_subsample(classifier=classifier,

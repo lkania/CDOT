@@ -12,28 +12,50 @@ from src import normalize
 # - https://en.wikipedia.org/wiki/Poisson_distribution#Confidence_interval
 # - https://stackoverflow.com/questions/14813530/poisson-confidence-interval-with-numpy
 def _garwood_poisson_ci(n_events, alpha):
-	n_events = n_events.reshape(-1)
+	# n_events = n_events.reshape(-1)
 	assert np.sum(n_events < 0) == 0, "negative value found in n_events"
 
-	L = chi2.ppf(alpha / 2, 2 * n_events) / 2
-	U = chi2.ppf(1 - alpha / 2, 2 * (n_events + 1)) / 2
-	# ci = np.stack([L, U], axis=1)
+	L = np.where((n_events == 0),
+				 0,
+				 chi2.ppf(alpha / 2, 2 * n_events) / 2)
+	U = np.where((n_events == 0),
+				 chi2.ppf(1 - alpha, 2 * (n_events + 1)) / 2,
+				 chi2.ppf(1 - alpha / 2, 2 * (n_events + 1)) / 2)
+
 	return L, U
 
 
 def garwood_poisson_ci(n_events, alpha):
 	# if n_events.ndim == 1 or n_events.shape[0] == 1:
-	# 	return _exact_poisson_ci(n_events=n_events, alpha=alpha)
+	# return _exact_poisson_ci(n_events=n_events, alpha=alpha)
 
-	# We will compute the CI using the sum of the observed events
-	n_observations = n_events.shape[0]
-	L, U = _garwood_poisson_ci(
-		n_events=np.sum(n_events, axis=0),
-		alpha=alpha)
-	mean = np.mean(n_events, axis=0)
-	return (L.reshape(-1) / n_observations,
-			mean.reshape(-1),
-			U.reshape(-1) / n_observations)
+	# A confidence interval based on pooled data proceeds as follows
+	# We compute the CI using the sum of the observed events
+	# n_observations = n_events.shape[0]
+	# sum_ = np.sum(n_events, axis=0)
+	# L, U = _garwood_poisson_ci(n_events=sum_.reshape(-1), alpha=alpha)
+	# and obtain the CI for the average
+	# return (L.reshape(-1) / n_observations,
+	# 		sum_.reshape(-1) / n_observations,
+	# 		U.reshape(-1) / n_observations)
+	# However, we do not want this, since we are interested
+	# not on pooling the data but on a confidence set of
+	# confidence sets. Therefore, we will compute a Gaarwood CI for each
+	# study and then proceed to aggreagate them
+
+	L, U = _garwood_poisson_ci(n_events=n_events, alpha=alpha)
+	Lq = np.quantile(L, q=alpha / 2, axis=0).reshape(-1)
+	Uq = np.quantile(U, q=1 - alpha / 2, axis=0).reshape(-1)
+	# midq = (Lq + Uq) / 2
+	midq = np.mean(n_events, axis=0)
+
+	assert not np.isnan(Lq).any()
+	assert not np.isnan(Uq).any()
+	assert not np.isnan(midq).any()
+	assert np.all(midq <= Uq)
+	assert np.all(midq >= Lq)
+
+	return Lq, midq, Uq
 
 
 def _scipy_cp(n_successes, n_trials, alpha, alternative='two-sided'):
@@ -103,7 +125,7 @@ def normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
 
 # Note: we use the mean rather than refitting to all data
 def boostrap_pivotal_ci(values, alpha):
-	values = np.array(values)
+	# values = np.array(values)
 	mean = np.mean(values, axis=0)
 	lower = 2 * mean - np.quantile(values, q=1 - alpha / 2, axis=0)
 	upper = 2 * mean - np.quantile(values, q=alpha / 2, axis=0)

@@ -1,4 +1,12 @@
+##################################################
 # Script for converting .Rdata files to .txt files
+##################################################
+set.seed(123)
+
+source("./cdot/Requirements.R")
+library(ggplot2)
+library(dplyr)
+library(tidyr)
 
 load(file = "./cdot/DecorrelatedData3b4b.RData")
 # RData file data frames:
@@ -19,6 +27,84 @@ export <- function(file, data) {
 
 }
 
+# Function to calculate Garwood confidence intervals
+garwood_ci <- function(count, conf_level = 0.95) {
+  if (count == 0) {
+    # Special case for zero counts
+    lower <- 0
+    upper <- qchisq(conf_level, df = 2 * (count + 1)) / 2
+  } else {
+    alpha <- 1 - conf_level
+    lower <- qchisq(alpha / 2, df = 2 * count) / 2
+    upper <- qchisq(1 - alpha / 2, df = 2 * (count + 1)) / 2
+  }
+  c(lower, upper)
+}
+
+# Plot dataset
+plot_dataset <- function(data, name) {
+  # Create a data frame
+  df <- data.frame(obs = 1 - exp(-0.003 * (data$m4j - min(data$m4j))),
+                   weights = data$weight)
+
+  # Subsampling using weights
+  # sampled_indices <- sample(
+  #   x = seq_len(nrow(df)),        # Indices of the dataframe
+  #   size = 20000,                     # Desired sample size
+  #   prob = df$weight,             # Weights for sampling
+  #   replace = TRUE               # With replacement
+  # )
+  # df <- df[sampled_indices,]
+  # df$weights <- 1
+
+  n_bins <- 500
+  bin_breaks <- seq(0, 1, length.out = n_bins)
+  bin_mid <- (bin_breaks[-1] + bin_breaks[-n_bins]) / 2
+  bins <- cut(df$obs, breaks = bin_breaks, include.lowest = TRUE)
+
+  # Bin the data and compute confidence intervals
+  binned_data <- df %>%
+    mutate(bin = cut(obs, breaks = bin_breaks, include.lowest = TRUE)) %>%
+    group_by(bin) %>%
+    summarize(
+      count = sum(weights),
+      .groups = "drop"
+    ) %>%
+    rowwise() %>%
+    mutate(
+      ci = list(garwood_ci(count)),
+      lower_ci = ci[[1]],
+      upper_ci = ci[[2]]
+    ) %>%
+    ungroup() %>%
+    complete(bin = bins,
+             fill = list(count = 0,
+                         lower_ci = 0,
+                         upper_ci = qchisq(0.95, df = 2) / 2))
+
+  binned_data$bin <- bin_mid
+
+  # Plot histogram with confidence intervals
+  p <- ggplot(binned_data, aes(x = bin, y = count)) +
+    # geom_line(color = "blue") +               # Line plot
+    geom_point(color = "red", size = 0.5, alpha = 1) +    # Points
+    geom_errorbar(aes(ymin = lower_ci, ymax = upper_ci),
+                  width = 0.0001,
+                  color = "black",
+                  alpha = 0.6) +
+    labs(title = paste(name,
+                       " Histogram with Garwood CI (n=", dim(df)[1], ")",
+                       sep = ''),
+         x = "Invariant mass", y = "Counts") +
+    # ylim(0, 800) +
+    theme_minimal()
+
+  ggsave(paste('./data/', name, '/distribution.png', sep = ''),
+         plot = p,
+         width = 8,
+         height = 6, dpi = 300)
+}
+
 exports <- function(name, data) {
   export(paste('./data/', name, '/mass.txt', sep = ''),
          data$m4j)
@@ -28,10 +114,12 @@ exports <- function(name, data) {
          data$h)
   export(paste('./data/', name, '/weight.txt', sep = ''),
          data$weight)
+  plot_dataset(data, name)
 }
 
 exports('3b/test/background', Background.Test.3b)
 exports('3b/test/signal', Signal.Test)
+
 exports('3b/val/background', Background.CDOT)
 exports('3b/val/signal', Signal.Classifier)
 

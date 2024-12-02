@@ -53,9 +53,9 @@ background.ind.2 = sample(index2, size = nCDOT,
 index3 = permute.3b[-c(background.ind, background.ind.2)]
 background.ind.3 = index3
 
-Background.Classifier = data.3b[background.ind, c(1:16, 18)]
-Background.CDOT = data.3b[background.ind.2, c(1:16, 18)]
-Background.Test.3b = data.3b[background.ind.3, c(1:16, 18)]
+Background.Classifier = data.3b[background.ind,]
+Background.CDOT = data.3b[background.ind.2,]
+Background.Test.3b = data.3b[background.ind.3,]
 
 # Signal Datasets
 
@@ -65,20 +65,20 @@ permute.sig = sample(1:nrow(data.sig), size = nrow(data.sig))
 
 # Signal training data to train classifier
 signal.ind = permute.sig[1:ms]
-Signal.Classifier = data.sig[signal.ind, c(1:16, 18)]
+Signal.Classifier = data.sig[signal.ind,]
 
 # Signal test data
-Signal.Test = data.sig[-signal.ind, c(1:16, 18)]
+Signal.Test = data.sig[-signal.ind,]
 
 # 4b Dataset - test data
 
-Background.Test.4b = data.4b[, c(1:16, 18)]
+Background.Test.4b = data.4b
 
 
 # Fitting the classifier h on training 3b background and signal Data
 
-combdata = rbind(Background.Classifier[, -16],
-                 Signal.Classifier[, -16])
+combdata = rbind(Background.Classifier[, -c(16:17)],
+                 Signal.Classifier[, -c(16:17)])
 combdata$Class = factor(combdata$Class, levels = c("3b", "Signal"))
 
 
@@ -91,17 +91,17 @@ randomF = ranger(Class ~ ., data = combdata,
 # Predicting the classifier on the different data sets
 
 Background.Classifier$h = predict(randomF,
-                                  Background.Classifier[, -c(16)])$predictions[, 2]
+                                  Background.Classifier[, -c(16:17)])$predictions[, 2]
 Background.CDOT$h = predict(randomF,
-                            Background.CDOT[, -c(16)])$predictions[, 2]
+                            Background.CDOT[, -c(16:17)])$predictions[, 2]
 Background.Test.3b$h = predict(randomF,
-                               Background.Test.3b[, -c(16)])$predictions[, 2]
+                               Background.Test.3b[, -c(16:17)])$predictions[, 2]
 Signal.Classifier$h = predict(randomF,
-                              Signal.Classifier[, -c(16)])$predictions[, 2]
+                              Signal.Classifier[, -c(16:17)])$predictions[, 2]
 Signal.Test$h = predict(randomF,
-                        Signal.Test[, -c(16)])$predictions[, 2]
+                        Signal.Test[, -c(16:17)])$predictions[, 2]
 Background.Test.4b$h = predict(randomF,
-                               Background.Test.4b[, -c(16)])$predictions[, 2]
+                               Background.Test.4b[, -c(16:17)])$predictions[, 2]
 
 
 # Fitting the Decorrelation Algorithm CDOT on Background 3b validation data
@@ -133,6 +133,14 @@ Background.CDOT.fit = predict.CDOT(CDOT.model = CDOT.fit,
                                    logit.y.scale = logit.y.scale,
                                    log.x.scale = log.x.scale,
                                    splits = splits)
+
+Background.Classifier.fit = predict.CDOT(CDOT.model = CDOT.fit,
+                                         x = Background.Classifier$m4j,
+                                         y = Background.Classifier$h,
+                                         scaled = scaled,
+                                         logit.y.scale = logit.y.scale,
+                                         log.x.scale = log.x.scale,
+                                         splits = splits)
 
 
 Background.Test.3b.fit = predict.CDOT(CDOT.model = CDOT.fit,
@@ -171,6 +179,7 @@ Signal.Classifier.fit = predict.CDOT(CDOT.model = CDOT.fit,
 
 # Adding the transformed classifier scores to the data sets
 Background.CDOT$Trans_h = Background.CDOT.fit$Trans_h
+Background.Classifier$Trans_h = Background.Classifier.fit$Trans_h
 Background.Test.3b$Trans_h = Background.Test.3b.fit$Trans_h
 Background.Test.4b$Trans_h = Background.Test.4b.fit$Trans_h
 Signal.Test$Trans_h = Signal.Test.fit$Trans_h

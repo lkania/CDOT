@@ -51,9 +51,7 @@ def filtering(args,
 			  results,
 			  path,
 			  alpha,
-			  filename,
-			  binning=None,
-			  eps=1e-2):
+			  filename):
 	##################################################
 	# Plot datasets with classifier filter
 	##################################################
@@ -84,7 +82,7 @@ def filtering(args,
 
 			plot.hists(ax,
 					   lambda_=lambda_,
-					   binning=binning,
+					   binning=plot.uniform_bin,
 					   info=results[lambda_][quantile],
 					   ax2=ax2,
 					   ax3=None,

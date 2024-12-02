@@ -29,6 +29,7 @@ getPackage('gridExtra')
 getPackage('knitr')
 getPackage('colorBlindness')
 getPackage('latex2exp')
-
+getPackage('dplyr')
+getPackage('tidyr')
 
 

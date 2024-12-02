@@ -190,6 +190,7 @@ def run(args, params, test, path, lambda_):
 	assert len(results.n) == args.folds
 	assert results.gammas.shape[0] == args.folds
 
+	# parallel predict counts over all folds
 	results.predict_counts = partial(
 		parallel_predict_counts,
 		n_jobs=args.n_jobs,

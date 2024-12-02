@@ -1,4 +1,5 @@
 from jax import numpy as np
+from tqdm import tqdm
 from src import normalize
 ######################################################################
 # Configure matplolib
@@ -36,6 +37,9 @@ colors = ['red',
 from src import bin
 from src.stat import binom
 from experiments import storage
+
+uniform_bin = lambda X, lower, upper, n_bins: bin.full_uniform_bin(
+	n_bins=n_bins)
 
 
 # See: https://stackoverflow.com/questions/51717199/how-to-adjust-space-between-every-second-row-of-subplots-in-matplotlib
@@ -103,6 +107,7 @@ def series_with_uncertainty(ax, x, mean,
 				capsize=capsize,
 				markersize=markersize,
 				elinewidth=elinewidth,
+				alpha=0.5,
 				fmt=fmt,
 				label=label)
 
@@ -183,6 +188,7 @@ def hists(ax,
 	ax.set_xlabel('Invariant mass')
 
 	if binning is not None:
+		# The function assumes that all methods have the same X range
 		from_, to_ = binning(
 			X=methods[0].X,
 			lower=methods[0].test.args.lower,
@@ -196,33 +202,40 @@ def hists(ax,
 	upper = methods[0].test.args.upper
 
 	predictions = info.predict_counts(from_=from_, to_=to_)
-	count = []
+	predictions = np.array(predictions)
+	predictions = normalize.threshold_non_neg(predictions, tol=tol)
 
-	for i, method in enumerate(methods):
+	count = []
+	print('\nBin observations sequentially\n')
+	for i in tqdm(range(len(methods)), ncols=40):
+		method = methods[i]
 		c = bin.counts(X=method.X, from_=from_, to_=to_)[0]
 		assert not np.isnan(c).any()
 		count.append(c)
-
-	predictions = np.array(predictions)
-	predictions = normalize.threshold_non_neg(predictions, tol=tol)
 	count = np.array(count, dtype=np.int64)
+
+	assert count.shape == predictions.shape
 
 	if len(methods) > 1:
 
-		# simultaneous confidence intervals for predicted counts
+		# individual confidence intervals for predicted counts
 		pred_lower, pred_mid, pred_upper = binom.garwood_poisson_ci(
 			n_events=predictions,
-			alpha=alpha / predictions.shape[1])
+			alpha=alpha)
+
+		# individual confidence intervals for observed counts
+		count_lower, count_mid, count_upper = binom.garwood_poisson_ci(
+			n_events=count,
+			alpha=alpha)
 
 	else:
 		pred_mid = predictions.reshape(-1)
 		pred_lower = None
 		pred_upper = None
 
-	# simultaneous confidence intervals for observed counts
-	count_lower, count_mean, count_upper = binom.garwood_poisson_ci(
-		n_events=count,
-		alpha=alpha / count.shape[1])
+		count_mid = count.reshape(-1)
+		count_lower = None
+		count_upper = None
 
 	ax.axvline(x=lower, color='green', linestyle='--')
 	ax.axvline(x=upper, color='green', linestyle='--', label='Signal region')
@@ -231,7 +244,7 @@ def hists(ax,
 		ax=ax,
 		from_=from_,
 		to_=to_,
-		mean=count_mean,
+		mean=count_mid,
 		lower=count_lower,
 		upper=count_upper,
 		color='black',
@@ -260,7 +273,6 @@ def hists(ax,
 		ax2.set_ylabel('Obs / Pred')
 		ax2.set_xlabel('Invariant mass')
 		ax2.set_xlim([0 - eps, 1 + eps])
-		ax2.set_ylim([1 - 0.2, 1 + 0.2])
 
 		ax2.axvline(x=lower,
 					color='green', linestyle='--')
@@ -273,11 +285,11 @@ def hists(ax,
 
 		if pred_lower is not None and pred_upper is not None:
 
-			# simulatenous confidence intervals for observed / predicted ratio
+			# individual confidence intervals for observed / predicted ratio
 			pred_lower, pred_mid, pred_upper = binom.normal_approximation_poisson_ratio_ci(
 				X=count,
 				Y=predictions,
-				alpha=alpha / count.shape[1],
+				alpha=alpha,
 				tol=tol)
 
 		else:
@@ -296,33 +308,38 @@ def hists(ax,
 			color='blue',
 			markersize=2,
 			label='Normal CI')
+
+		ax2.set_ylim([np.quantile(pred_lower, alpha),
+					  np.quantile(pred_upper, 1 - alpha)])
+
+		# ax2.set_ylim([1 - 0.2, 1 + 0.2])
 		ax2.legend()
 
 	###################################################################
 	# Plot estimates histogram
 	###################################################################
-	if ax3 is not None:
-		ax3.set_xlabel('P-value')
-		ax3.set_ylabel('Counts')
-		# ax3.set_yscale('log')
-
-		threshold_ = info.test.threshold
-		data_below_threshold = np.mean(np.array(info.stats <= threshold_,
-												dtype=np.int32))
-		ax3.axvline(x=threshold_,
-					color='red',
-					linestyle='--',
-					label='% data below threshold={0:.2f}'.format(
-						round(data_below_threshold, 2)
-					))
-
-		ax3.hist(info.stats,
-				 alpha=1,
-				 bins=int(info.stats.shape[0] / 10),
-				 density=False,
-				 histtype='step',
-				 color='black')
-		ax3.legend()
+	# if ax3 is not None:
+	# 	ax3.set_xlabel('P-value')
+	# 	ax3.set_ylabel('Counts')
+	# 	# ax3.set_yscale('log')
+	#
+	# 	threshold_ = info.test.threshold
+	# 	data_below_threshold = np.mean(np.array(info.stats <= threshold_,
+	# 											dtype=np.int32))
+	# 	ax3.axvline(x=threshold_,
+	# 				color='red',
+	# 				linestyle='--',
+	# 				label='% data below threshold={0:.2f}'.format(
+	# 					round(data_below_threshold, 2)
+	# 				))
+	#
+	# 	ax3.hist(info.stats,
+	# 			 alpha=1,
+	# 			 bins=int(info.stats.shape[0] / 10),
+	# 			 density=False,
+	# 			 histtype='step',
+	# 			 color='black')
+	# 	ax3.legend()
 
 	ax.legend()
 
@@ -348,7 +365,8 @@ def cdfs(ax, df, labels, alpha, eps=1e-2):
 
 
 def save_fig(cwd, path, fig, name):
-	filename = storage.get_path(cwd=cwd, path=path) + '{0}.pdf'.format(name)
+	base_path = storage.get_path(cwd=cwd, path=path)
+	filename = base_path + '{0}.pdf'.format(name)
 	fig.savefig(fname=filename, bbox_inches='tight')
-	plt.close(fig)
 	print('\nSaved to {0}'.format(filename))
+	plt.close(fig)

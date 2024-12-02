@@ -32,8 +32,10 @@ match multiprocessing.cpu_count():
 		n_jobs = 10
 	case 4:
 		n_jobs = 2
+	case 1:
+		n_jobs = 1
 	case _:
-		n_jobs = int(multiprocessing.cpu_count()) / 2
+		n_jobs = int(multiprocessing.cpu_count() / 2)
 
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
 	n_jobs)
@@ -59,13 +61,10 @@ from experiments import plot, selection, plots
 from experiments.builder import load_background_and_signal
 from src.test.builder import build as build_test
 from src import bin
-from src.basis import bernstein, normalized_bernstein
+from src.basis import normalized_bernstein
 from experiments import parallel
 from experiments import key_management
 import hasher
-
-uniform_bin = lambda X, lower, upper, n_bins: bin.full_uniform_bin(
-	n_bins=n_bins)
 
 ##################################################
 # Simulation parameters
@@ -86,6 +85,8 @@ args.folds = 1000
 args.n_jobs = min(args.folds, n_jobs)
 args.signal_region = [0.1, 0.90]  # the signal region quantiles
 args.ks = [5, 10, 15, 20, 25, 30, 35, 40]
+
+# Modify the following lines to change the classifiers
 args.classifiers = ['class', 'tclass']
 args.classifiers_labels = ['Without Decorrelation', 'With Decorrelation']
 
@@ -506,7 +507,6 @@ def power_analysis(args, params, selected, plot_string):
 						quantiles=args.quantiles_subset,
 						results=results[classifier],
 						path=plot_path,
-						binning=uniform_bin,
 						filename='{0}_filter_uniform'.format(classifier),
 						alpha=args.alpha)
 

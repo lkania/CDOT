@@ -70,7 +70,7 @@ After the script finishes, the figures are available at the following locations.
 |-----------------------------------------------|--------------------------------------------|
 | [1a](./cdot/img/PlotMass.png)                 | `./cdot/img/PlotMass.png`                  |
 | [1b](./cdot/img/PlotMassCut.png)              | `./cdot/img/PlotMassCut.png`               |
-| [3](./cdot/img/WTaggingNoDecorrelation.pdf)   | `./cdot/img/WTaggingNoDecorrelation.pdf`   |
+| [3](./cdot/img/WTaggingNoDecorrelation.png)   | `./cdot/img/WTaggingNoDecorrelation.png`   |
 | [4](./cdot/img/WTaggingWithDecorrelation.png) | `./cdot/img/WTaggingWithDecorrelation.png` |
 
 #### Comparing CDOT to existing decorrelation methods
