@@ -46,16 +46,15 @@ def garwood_poisson_ci(n_events, alpha):
 	L, U = _garwood_poisson_ci(n_events=n_events, alpha=alpha)
 	Lq = np.quantile(L, q=alpha / 2, axis=0).reshape(-1)
 	Uq = np.quantile(U, q=1 - alpha / 2, axis=0).reshape(-1)
-	# midq = (Lq + Uq) / 2
-	midq = np.mean(n_events, axis=0)
+	mq = np.mean(n_events, axis=0)
 
 	assert not np.isnan(Lq).any()
 	assert not np.isnan(Uq).any()
-	assert not np.isnan(midq).any()
-	assert np.all(midq <= Uq)
-	assert np.all(midq >= Lq)
+	assert not np.isnan(mq).any()
+	assert np.all(mq <= Uq)
+	assert np.all(mq >= Lq)
 
-	return Lq, midq, Uq
+	return Lq, mq, Uq
 
 
 def _scipy_cp(n_successes, n_trials, alpha, alternative='two-sided'):
@@ -109,14 +108,37 @@ def clopper_pearson_binomial_ci(values, alpha):
 
 
 def normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
-	assert X.shape[0] == Y.shape[0]
-	Xsum = np.sum(X, axis=0).reshape(-1)
-	Ysum = np.sum(Y, axis=0).reshape(-1)
-	mean = normalize.safe_ratio(num=Xsum, den=Ysum, tol=tol)
+	assert X.shape == Y.shap
+
+	L, m, U = __normal_approximation_poisson_ratio_ci(X, Y, alpha, tol)
+
+	Lq = np.quantile(L, q=alpha / 2, axis=0).reshape(-1)
+	Uq = np.quantile(U, q=1 - alpha / 2, axis=0).reshape(-1)
+	mq = np.mean(m, axis=0)
+
+	assert not np.isnan(Lq).any()
+	assert not np.isnan(Uq).any()
+	assert not np.isnan(mq).any()
+	assert np.all(mq <= Uq)
+	assert np.all(mq >= Lq)
+
+	return Lq, mq, Uq
+
+
+# if one pooles the data
+# return __normal_approximation_poisson_ratio_ci(
+# 	X=np.sum(X, axis=0).reshape(-1),
+# 	Y=np.sum(Y, axis=0).reshape(-1),
+# 	alpha=alpha,
+# 	tol=tol)
+
+
+def __normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
+	mean = normalize.safe_ratio(num=X, den=Y, tol=tol)
 	# same as (Xbar/Ybar)^2 * (1 / Xbar + 1 / Ybar) * (1/n)
 	# or equivalently Xsum / np.square(Ysum) + np.square(Xsum) / np.power(Ysum, 3)
-	Ysum2 = np.square(Ysum)
-	var = normalize.safe_ratio(num=Xsum, den=Ysum2, tol=tol) * (1 + mean)
+	Y2 = np.square(Y)
+	var = normalize.safe_ratio(num=X, den=Y2, tol=tol) * (1 + mean)
 	sd = icdf(1 - alpha / 2, loc=0, scale=1) * np.sqrt(var)
 	lower = normalize.threshold_non_neg(mean - sd, tol=0.0)
 	upper = mean + sd

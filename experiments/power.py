@@ -428,7 +428,7 @@ for classifier in args.classifiers:
 
 			ax.set_xlabel(r'Polynomial order $K$')
 			ax.set_ylabel(r'Probability of rejecting $\lambda=0$')
-			ax.legend()
+			ax.legend(loc=2)  # This places the legend in the upper left.
 			plot.save_fig(cwd=args.cwd,
 						  path=path,
 						  fig=fig,

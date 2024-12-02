@@ -12,9 +12,9 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 
 config = {'figure.dpi': 600,
-		  'legend.fontsize': 20,
-		  'axes.labelsize': 20,
-		  'axes.titlesize': 20,
+		  'legend.fontsize': 25,
+		  'axes.labelsize': 25,
+		  'axes.titlesize': 25,
 		  'xtick.labelsize': 15,
 		  'ytick.labelsize': 15}
 pylab.rcParams.update(config)
