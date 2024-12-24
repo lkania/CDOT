@@ -7,7 +7,6 @@
 *.html
 *.pickle
 acc_form.pdf
-acc_form.md
 cdot/WTaggingDecorrelated.RData
 cdot/WTaggingTest.csv
 presentation

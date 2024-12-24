@@ -11,13 +11,13 @@ def fits(args,
 		 eps=1e-2):
 	keys = results.keys()
 	n_cols = len(keys)
-	height_ratios = [2, 1, 1.5]
-	n_rows = 3
-	height = np.sum(np.array(height_ratios)) / n_rows
+	height_ratios = [2, 1]
+	n_rows = 2
+	# height = np.sum(np.array(height_ratios)) / n_rows
 	fig, axs = plot.plt.subplots(nrows=n_rows,
 								 ncols=n_cols,
 								 figsize=(10 * n_cols,
-										  10 * height),
+										  10 * n_rows),
 								 height_ratios=height_ratios,
 								 sharex='row',
 								 sharey='row')
@@ -27,18 +27,18 @@ def fits(args,
 	for i, k in enumerate(keys):
 		ax = axs[0, i]
 		ax2 = axs[1, i]
-		ax3 = axs[2, i]
+		# ax3 = axs[2, i]
 
 		plot.hists(ax,
 				   lambda_=0,
 				   binning=binning,
 				   ax2=ax2,
-				   ax3=ax3,
+				   ax3=None,
 				   info=results[k],
 				   alpha=alpha,
 				   tol=args.tol)
 
-	fig = plot.tight_pairs(n_cols=n_cols, fig=fig)
+	fig = plot.tight_pairs(n_cols=n_cols, fig=fig, n_rows=2)
 	plot.save_fig(cwd=args.cwd,
 				  path=path,
 				  fig=fig,
@@ -51,7 +51,8 @@ def filtering(args,
 			  results,
 			  path,
 			  alpha,
-			  filename):
+			  filename,
+			  aggregate):
 	##################################################
 	# Plot datasets with classifier filter
 	##################################################
@@ -86,6 +87,7 @@ def filtering(args,
 					   info=results[lambda_][quantile],
 					   ax2=ax2,
 					   ax3=None,
+					   aggregate=aggregate,
 					   alpha=alpha,
 					   tol=args.tol)
 

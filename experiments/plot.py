@@ -179,10 +179,12 @@ def hists(ax,
 		  tol,
 		  lambda_,
 		  binning=None,
+		  aggregate=None,
 		  ax2=None,
 		  ax3=None,
 		  eps=1e-2):
 	methods = info.runs
+
 	ax.set_xlim([0 - eps, 1 + eps])
 	ax.set_ylabel('Counts ($\lambda={0}$)'.format(lambda_))
 	ax.set_xlabel('Invariant mass')
@@ -201,12 +203,22 @@ def hists(ax,
 	lower = methods[0].test.args.lower
 	upper = methods[0].test.args.upper
 
-	predictions = info.predict_counts(from_=from_, to_=to_)
+	if aggregate is not None:
+		# try:
+		# Do not aggregate the simulations
+		# Instead, just plot the results for the first simulation
+		predictions = [info.runs[aggregate].predict_counts(from_=from_, to_=to_)]
+		methods = [info.runs[aggregate]]
+		# except IndexError as e:
+		# 	assert False,"Idx is {}".format(aggregate)
+	else:
+		predictions = info.predict_counts(from_=from_, to_=to_)
+
 	predictions = np.array(predictions)
 	predictions = normalize.threshold_non_neg(predictions, tol=tol)
 
 	count = []
-	print('\nBin observations sequentially\n')
+	print('\nBinning observations sequentially\n')
 	for i in tqdm(range(len(methods)), ncols=40):
 		method = methods[i]
 		c = bin.counts(X=method.X, from_=from_, to_=to_)[0]
@@ -216,26 +228,13 @@ def hists(ax,
 
 	assert count.shape == predictions.shape
 
-	if len(methods) > 1:
+	pred_lower, pred_mid, pred_upper = binom.bootstrap_percentile_ci(
+		values=predictions,
+		alpha=alpha)
 
-		# individual confidence intervals for predicted counts
-		pred_lower, pred_mid, pred_upper = binom.garwood_poisson_ci(
-			n_events=predictions,
-			alpha=alpha)
-
-		# individual confidence intervals for observed counts
-		count_lower, count_mid, count_upper = binom.garwood_poisson_ci(
-			n_events=count,
-			alpha=alpha)
-
-	else:
-		pred_mid = predictions.reshape(-1)
-		pred_lower = None
-		pred_upper = None
-
-		count_mid = count.reshape(-1)
-		count_lower = None
-		count_upper = None
+	count_lower, count_mid, count_upper = binom.bootstrap_percentile_ci(
+		values=count,
+		alpha=alpha)
 
 	ax.axvline(x=lower, color='green', linestyle='--')
 	ax.axvline(x=upper, color='green', linestyle='--', label='Signal region')
@@ -247,11 +246,11 @@ def hists(ax,
 		mean=count_mid,
 		lower=count_lower,
 		upper=count_upper,
-		color='black',
-		label='Data (Garwood CI)',
+		color='blue',
+		label='Data',
 		markersize=2)
 
-	label = 'K={0} (Garwood CI)'.format(methods[0].test.args.k)
+	label = 'Prediction'  # .format(methods[0].test.args.k)
 
 	hist_with_uncertainty(
 		ax=ax,
@@ -281,36 +280,29 @@ def hists(ax,
 		ax2.axhline(y=1,
 					color='black',
 					linestyle='-')
-		# ax2.set_ylim(bottom=0)
+		# ax2.set_ylim(bottom=2)
 
-		if pred_lower is not None and pred_upper is not None:
-
-			# individual confidence intervals for observed / predicted ratio
-			pred_lower, pred_mid, pred_upper = binom.normal_approximation_poisson_ratio_ci(
-				X=count,
-				Y=predictions,
-				alpha=alpha,
-				tol=tol)
-
-		else:
-			pred_mid = np.where(np.abs(count - predictions) <= tol,
-								1.0,
-								count / predictions).reshape(-1)
+		# individual confidence intervals for observed / predicted ratio
+		ratio_lower, ratio_mid, ratio_upper = binom.bootstrap_percentile_ci(
+			values=normalize.safe_ratio(num=count, den=predictions, tol=tol),
+			alpha=alpha)
 
 		hist_with_uncertainty(
 			ax=ax2,
 			from_=from_,
 			to_=to_,
-			mean=pred_mid,
-			lower=pred_lower,
-			upper=pred_upper,
+			mean=ratio_mid,
+			lower=ratio_lower,
+			upper=ratio_upper,
 			jitter=0,
-			color='blue',
+			color='black',
 			markersize=2,
-			label='Normal CI')
+			label='Ratio')
 
-		ax2.set_ylim([np.quantile(pred_lower, alpha),
-					  np.quantile(pred_upper, 1 - alpha)])
+		ax2.set_ylim([0, 1.5])
+
+		# ax2.set_ylim([np.quantile(pred_lower, alpha),
+		# 			  np.quantile(pred_upper, 1 - alpha)])
 
 		# ax2.set_ylim([1 - 0.2, 1 + 0.2])
 		ax2.legend()

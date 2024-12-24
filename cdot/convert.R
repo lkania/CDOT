@@ -4,9 +4,11 @@
 set.seed(123)
 
 source("./cdot/Requirements.R")
+# library(Hmisc)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+
 
 load(file = "./cdot/DecorrelatedData3b4b.RData")
 # RData file data frames:
@@ -28,34 +30,24 @@ export <- function(file, data) {
 }
 
 # Function to calculate Garwood confidence intervals
-garwood_ci <- function(count, conf_level = 0.95) {
+garwood_ci <- function(count, alpha = 0.05) {
   if (count == 0) {
     # Special case for zero counts
     lower <- 0
-    upper <- qchisq(conf_level, df = 2 * (count + 1)) / 2
+    upper <- qchisq(1 - alpha, df = 2 * (count + 1)) / 2
   } else {
-    alpha <- 1 - conf_level
     lower <- qchisq(alpha / 2, df = 2 * count) / 2
     upper <- qchisq(1 - alpha / 2, df = 2 * (count + 1)) / 2
   }
   c(lower, upper)
 }
 
+
 # Plot dataset
-plot_dataset <- function(data, name) {
+plot_dataset <- function(data, name, alpha = 0.05) {
   # Create a data frame
   df <- data.frame(obs = 1 - exp(-0.003 * (data$m4j - min(data$m4j))),
                    weights = data$weight)
-
-  # Subsampling using weights
-  # sampled_indices <- sample(
-  #   x = seq_len(nrow(df)),        # Indices of the dataframe
-  #   size = 20000,                     # Desired sample size
-  #   prob = df$weight,             # Weights for sampling
-  #   replace = TRUE               # With replacement
-  # )
-  # df <- df[sampled_indices,]
-  # df$weights <- 1
 
   n_bins <- 500
   bin_breaks <- seq(0, 1, length.out = n_bins)
@@ -64,23 +56,27 @@ plot_dataset <- function(data, name) {
 
   # Bin the data and compute confidence intervals
   binned_data <- df %>%
-    mutate(bin = cut(obs, breaks = bin_breaks, include.lowest = TRUE)) %>%
+    mutate(bin = cut(obs,
+                     breaks = bin_breaks,
+                     include.lowest = TRUE)) %>%
     group_by(bin) %>%
-    summarize(
+    dplyr::summarize(
       count = sum(weights),
-      .groups = "drop"
-    ) %>%
+      median = wtd.quantile(obs, weights = weights, probs = 0.5),
+      .groups = "drop") %>%
     rowwise() %>%
     mutate(
       ci = list(garwood_ci(count)),
       lower_ci = ci[[1]],
-      upper_ci = ci[[2]]
-    ) %>%
+      upper_ci = ci[[2]]) %>%
     ungroup() %>%
     complete(bin = bins,
              fill = list(count = 0,
                          lower_ci = 0,
-                         upper_ci = qchisq(0.95, df = 2) / 2))
+                         upper_ci = qchisq(1 - alpha, df = 2) / 2,
+                         median = 0,
+                         lower_quantile = 0,
+                         upper_quantile = 0))
 
   binned_data$bin <- bin_mid
 
@@ -99,10 +95,39 @@ plot_dataset <- function(data, name) {
     # ylim(0, 800) +
     theme_minimal()
 
-  ggsave(paste('./data/', name, '/distribution.png', sep = ''),
+  ggsave(paste('./data/', name, '/distribution_garwood.png', sep = ''),
          plot = p,
          width = 8,
          height = 6, dpi = 300)
+
+  # TODO: do plot based on subsampling
+  # Subsampling using weights
+  # sampled_indices <- sample(
+  #   x = seq_len(nrow(df)),        # Indices of the dataframe
+  #   size = 20000,                     # Desired sample size
+  #   prob = df$weight,             # Weights for sampling
+  #   replace = TRUE               # With replacement
+  # )
+  # df <- df[sampled_indices,]
+  # df$weights <- 1
+  # p2 <- ggplot(binned_data, aes(x = bin, y = median)) +
+  #   # geom_line(color = "blue") +               # Line plot
+  #   geom_point(color = "red", size = 0.5, alpha = 1) +    # Points
+  #   geom_errorbar(aes(ymin = lower_quantile, ymax = upper_quantile),
+  #                 width = 0.0001,
+  #                 color = "black",
+  #                 alpha = 0.6) +
+  #   labs(title = paste(name,
+  #                      " Histogram with percentile interval (n=", dim(df)[1], ")",
+  #                      sep = ''),
+  #        x = "Invariant mass", y = "Counts") +
+  #   # ylim(0, 800) +
+  #   theme_minimal()
+  #
+  # ggsave(paste('./data/', name, '/distribution_percentile.png', sep = ''),
+  #        plot = p2,
+  #        width = 8,
+  #        height = 6, dpi = 300)
 }
 
 exports <- function(name, data) {

@@ -6,6 +6,30 @@ Larry Wasserman. (*) denotes equal contribution.
 The provided code reproduces the experiments described
 in https://arxiv.org/pdf/2409.06399.
 
+## Abstract
+
+Searches for new signals in particle physics are usually done by training a
+supervised classifier to separate a signal model from the known Standard Model
+physics (also called the background model). However, even when the signal model
+is correct, systematic errors in the background model can influence supervised
+classifiers and might adversely affect the signal detection procedure. To tackle
+this problem, one approach is to use the (possibly misspecified) classifier only
+to perform a preliminary signal-enrichment step and then to carry out a bump
+hunt on the signal-rich sample. For this procedure to work, we need a classifier
+constrained to be decorrelated with one or more protected variables used for the
+signal-detection step. We do this by considering an optimal transport map of the
+classifier output that makes it independent of the protected variable(s) for the
+background. We then fit a semi-parametric mixture model to the distribution of
+the protected variable after making cuts on the transformed classifier to detect
+the presence of a signal. We compare and contrast this decorrelation method with
+previous approaches, show that the decorrelation procedure is robust to moderate
+background misspecification, and analyze the power and validity of the signal
+detection test as a function of the cut on the classifier both with and without
+decorrelation. We conclude that decorrelation and signal enrichment help produce
+a stable, robust, valid, and more powerful test.
+
+## Files
+
 We note the following folders and files contained in this his repository.
 
 | Name                                             | Description                                                                                                                    |

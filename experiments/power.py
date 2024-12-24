@@ -434,6 +434,15 @@ for classifier in args.classifiers:
 						  fig=fig,
 						  name='selection')
 
+##############################################
+# Plot fits
+##############################################
+# plots.fits(args=args,
+# 		   results=selection_results,
+# 		   path=path,
+# 		   filename='fits',
+# 		   alpha=args.alpha)
+
 ###################################################
 # Sanity check
 # Assert that for the zero quantile, any classifier produces exactly the
@@ -502,12 +511,25 @@ def power_analysis(args, params, selected, plot_string):
 											  quantiles=args.quantiles,
 											  lambdas=args.lambdas)
 
+		for idx in range(20):
+			plots.filtering(args=args,
+							lambdas=args.lambdas_subset,
+							quantiles=args.quantiles_subset,
+							results=results[classifier],
+							path=plot_path,
+							aggregate=idx,
+							filename='{0}_filter_uniform_{1}'.format(classifier,
+																	 idx + 1),
+							alpha=args.alpha)
+
 		plots.filtering(args=args,
 						lambdas=args.lambdas_subset,
 						quantiles=args.quantiles_subset,
 						results=results[classifier],
 						path=plot_path,
-						filename='{0}_filter_uniform'.format(classifier),
+						aggregate=None,
+						filename='{0}_filter_uniform_one_simulation'.format(
+							classifier),
 						alpha=args.alpha)
 
 	plots.power_per_classifier(args=args,

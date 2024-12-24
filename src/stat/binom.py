@@ -11,7 +11,7 @@ from src import normalize
 # https://arxiv.org/pdf/2104.05620
 # - https://en.wikipedia.org/wiki/Poisson_distribution#Confidence_interval
 # - https://stackoverflow.com/questions/14813530/poisson-confidence-interval-with-numpy
-def _garwood_poisson_ci(n_events, alpha):
+def __garwood_poisson_ci(n_events, alpha):
 	# n_events = n_events.reshape(-1)
 	assert np.sum(n_events < 0) == 0, "negative value found in n_events"
 
@@ -25,28 +25,35 @@ def _garwood_poisson_ci(n_events, alpha):
 	return L, U
 
 
-def garwood_poisson_ci(n_events, alpha):
+def __pooled_garwood_poisson_ci(n_events, alpha):
+	# A confidence interval based on pooled data proceeds as follows
+	# We will compute the CI using the sum of the observed events
+	n_observations = n_events.shape[0]
+	sum_ = np.sum(n_events, axis=0)
+	L, U = __garwood_poisson_ci(n_events=sum_, alpha=alpha)
+	return (L.reshape(-1) / n_observations,
+			sum_.reshape(-1) / n_observations,
+			U.reshape(-1) / n_observations)
+
+
+def garwood_poisson_ci(n_events, alpha, pool=False):
 	# if n_events.ndim == 1 or n_events.shape[0] == 1:
 	# return _exact_poisson_ci(n_events=n_events, alpha=alpha)
 
-	# A confidence interval based on pooled data proceeds as follows
-	# We compute the CI using the sum of the observed events
-	# n_observations = n_events.shape[0]
-	# sum_ = np.sum(n_events, axis=0)
-	# L, U = _garwood_poisson_ci(n_events=sum_.reshape(-1), alpha=alpha)
-	# and obtain the CI for the average
-	# return (L.reshape(-1) / n_observations,
-	# 		sum_.reshape(-1) / n_observations,
-	# 		U.reshape(-1) / n_observations)
-	# However, we do not want this, since we are interested
-	# not on pooling the data but on a confidence set of
-	# confidence sets. Therefore, we will compute a Gaarwood CI for each
-	# study and then proceed to aggreagate them
+	if pool:
+		# A confidence interval based on pooled data proceeds as follows
+		# We compute the CI using the sum of the observed events
+		Lq, mq, Uq = __pooled_garwood_poisson_ci(n_events=n_events, alpha=alpha)
+	else:
+		# However, we do not want this, since we are interested
+		# not on pooling the data but on a confidence set of
+		# confidence sets. Therefore, we will compute a Gaarwood CI for each
+		# study and then proceed to aggreagate them
 
-	L, U = _garwood_poisson_ci(n_events=n_events, alpha=alpha)
-	Lq = np.quantile(L, q=alpha / 2, axis=0).reshape(-1)
-	Uq = np.quantile(U, q=1 - alpha / 2, axis=0).reshape(-1)
-	mq = np.mean(n_events, axis=0)
+		L, U = __garwood_poisson_ci(n_events=n_events, alpha=alpha)
+		Lq = np.quantile(L, q=alpha / 2, axis=0).reshape(-1)
+		Uq = np.quantile(U, q=1 - alpha / 2, axis=0).reshape(-1)
+		mq = np.mean(n_events, axis=0)
 
 	assert not np.isnan(Lq).any()
 	assert not np.isnan(Uq).any()
@@ -107,30 +114,34 @@ def clopper_pearson_binomial_ci(values, alpha):
 	return lower, mean, upper
 
 
-def normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
-	assert X.shape == Y.shap
+def normal_approximation_poisson_ratio_ci(X, Y, alpha, tol, pool=True):
+	assert X.shape == Y.shape
 
-	L, m, U = __normal_approximation_poisson_ratio_ci(X, Y, alpha, tol)
+	if pool:
+		lower, mean, upper = __pooled_normal_approximation_poisson_ratio_ci(
+			X=X, Y=Y, alpha=alpha, tol=tol)
+	else:
+		lower, mean, upper = __normal_approximation_poisson_ratio_ci(
+			X=X, Y=Y, alpha=alpha, tol=tol)
+		lower = np.quantile(lower, q=alpha / 2, axis=0).reshape(-1)
+		upper = np.quantile(upper, q=1 - alpha / 2, axis=0).reshape(-1)
+		mean = np.mean(mean, axis=0)
 
-	Lq = np.quantile(L, q=alpha / 2, axis=0).reshape(-1)
-	Uq = np.quantile(U, q=1 - alpha / 2, axis=0).reshape(-1)
-	mq = np.mean(m, axis=0)
+	assert not np.isnan(lower).any()
+	assert not np.isnan(upper).any()
+	assert not np.isnan(mean).any()
+	assert np.all(mean <= upper)
+	assert np.all(mean >= lower)
 
-	assert not np.isnan(Lq).any()
-	assert not np.isnan(Uq).any()
-	assert not np.isnan(mq).any()
-	assert np.all(mq <= Uq)
-	assert np.all(mq >= Lq)
-
-	return Lq, mq, Uq
+	return lower, mean, upper
 
 
-# if one pooles the data
-# return __normal_approximation_poisson_ratio_ci(
-# 	X=np.sum(X, axis=0).reshape(-1),
-# 	Y=np.sum(Y, axis=0).reshape(-1),
-# 	alpha=alpha,
-# 	tol=tol)
+def __pooled_normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
+	Xsum = np.sum(X, axis=0).reshape(-1)
+	Ysum = np.sum(Y, axis=0).reshape(-1)
+	return __normal_approximation_poisson_ratio_ci(X=Xsum,
+												   Y=Ysum,
+												   alpha=alpha, tol=tol)
 
 
 def __normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
@@ -157,16 +168,16 @@ def boostrap_pivotal_ci(values, alpha):
 	return lower, midpoint, upper
 
 
-def bootstrap_percentile_ci(values, alpha, tol):
-	values = np.array(values)
+def bootstrap_percentile_ci(values, alpha):
+	lower = np.quantile(values, q=alpha / 2, axis=0).reshape(-1)
+	upper = np.quantile(values, q=1 - alpha / 2, axis=0).reshape(-1)
+	# midpoint = np.mean(values, axis=0)
+	midpoint = np.quantile(values, q=0.5, axis=0).reshape(-1)
 
-	lower = np.quantile(values, q=alpha / 2, axis=0)
-	lower = normalize.threshold(lower, tol=tol)
-
-	upper = np.quantile(values, q=1 - alpha / 2, axis=0)
-	upper = normalize.threshold(upper, tol=tol)
-
-	midpoint = np.quantile(values, q=0.5, axis=0)
-	midpoint = normalize.threshold(midpoint, tol=tol)
+	assert not np.isnan(lower).any()
+	assert not np.isnan(upper).any()
+	assert not np.isnan(midpoint).any()
+	assert np.all(midpoint <= upper)
+	assert np.all(midpoint >= lower)
 
 	return lower, midpoint, upper
