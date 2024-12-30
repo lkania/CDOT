@@ -51,6 +51,7 @@ If box above is checked and if no simulated/synthetic data files are provided by
 Provide a short (< 100 words), high-level description of the data
 -->
 
+<!--
 In the Large Hadron Collider, two protons or
 heavy ions are accelerated in opposite directions and made to collide within
 underground detectors. When a collision
@@ -63,6 +64,20 @@ particles, called signal events. This repository contains
 the background and signal events related to two experiments: the high-momentum
 W-boson production, see section 1 of the paper, and high-mass resonance
 production, see appendix A.1 of the supplementary material.
+-->
+
+Two high-energy particle physics data sets related to the detection of
+high-$p_T$ W bosons (called W-Tagging), and the detection of exotic high-mass
+resonance events (called 3b/4b) are analyzed in the article.
+The data contain information about the jets produced in different collision
+events
+for background and signal events.
+These include the invariant mass variable (`mass` for W-tagging, `m4j` for
+3b/4b) and
+a variable for whether an event is a background or a signal event
+(`label` for W-tagging -- `0`: signal, `1`: background, `Class` for 3b/4b).
+Further, the W-tagging data include jet-substructure variables
+and the 3b/4b data include kinematic variables for the jets.
 
 ## Availability
 
@@ -108,8 +123,9 @@ Check all that apply
 -->
 
 - [x] CSV or other plain text.
-- [x] Software-specific binary format (.Rda, Python pickle, etc.): pkcle
-- [x] Standardized binary format (e.g., netCDF, HDF5, etc.):
+- [x] Software-specific binary format (.Rda, Python pickle, etc.): .RData and
+  .pikcle
+- [x] Standardized binary format (e.g., netCDF, HDF5, etc.): HDF5
 - [ ] Other (please specify):
 
 ### Data dictionary
@@ -183,7 +199,7 @@ often shows how the package authors wish to be cited.
 (e.g., R version 3.6.0)
 -->
 
-Python 3.11
+R 4.4.1 and Python 3.11
 
 #### Libraries and dependencies used by the code
 
@@ -191,6 +207,20 @@ Python 3.11
 Include version numbers (e.g., version numbers for any R or Python packages used)
 -->
 
+R 4.4.1 with the following packages
+
+| Package        | Version |
+|----------------|---------|
+| np             | 0.60-17 |
+| ranger         | 0.17.0  |
+| BiocManager    | 1.30.25 |
+| rhdf5          | 2.50.0  |
+| ggplot2        | 3.5.1   |
+| ggpubr         | 0.6.0   |
+| gridExtra      | 2.3     |
+| knitr          | 1.49    |
+| colorBlindness | 0.1.9   |
+| latex2exp      | 0.9.6   |
 
 Python 3.11 with the following packages
 
@@ -266,7 +296,8 @@ Check all that apply, and in the case of a Git repository include unique identif
 -->
 
 - [x] As part of the paper’s supplementary material.
-- [x] In this Git repository: See README.md for instructions on how to reproduce
+- [x] In this Git repository: See `README.md` for instructions on how to
+  reproduce
   the results.
 - [ ] Other (please specify):
 
@@ -294,7 +325,7 @@ Check all that apply
 Describe how to use the materials provided to reproduce analyses in the manuscript. Additional details can be provided in file(s) accompanying the reproducibility materials. If no workflow is provided, please state this and say why (e.g., if the paper contains no computational work).
 -->
 
-See README.md for instructions on how to reproduce the results.
+See `README.md` for instructions on how to reproduce the results.
 
 ### Expected run-time
 
