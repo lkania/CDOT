@@ -1,11 +1,5 @@
 # Robust semi-parametric signal detection in particle physics with classifiers decorrelated via optimal transport
 
-By Purvasha Chakravarti*, Lucas Kania*, Olaf Behnke, Mikael Kuusela, and
-Larry Wasserman. (*) denotes equal contribution.
-
-The provided code reproduces the experiments described
-in https://arxiv.org/pdf/2409.06399.
-
 ## Abstract
 
 Searches for new signals in particle physics are usually done by training a
@@ -190,13 +184,15 @@ Run the following command.
 
 After the script finishes, the following figures are available.
 
-| Figure number (click link to open)                        | Description                                                                                       | Location                                               |
-|-----------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------------|
-| [14](./results/WTagging/val/class/0.0/selection.pdf)      | Selection of test statistic that achieves best type I error                                       | `./results/WTagging/val/class/0.0/selection.pdf`       |
-| [15](./results/WTagging/val/class/0.0/pvalues.pdf)        | Distribution of p-values corresponding the above test statistics                                  | `./results/WTagging/val/class/0.0/pvalues.pdf`         |
-| [6](./results/WTagging/test/35/power.pdf)                 | Power comparison of classifier-based test procedures using decorrelated and correlated classfiers | `./results/WTagging/test/35/power.pdf`                 |
-| [7](./results/WTagging/test/35/class_filter_uniform.pdf)  | Background fit used by test procedure with correlated classifier                                  | `./results/WTagging/test/35/class_filter_uniform.pdf`  |
-| [8](./results/WTagging/test/35/tclass_filter_uniform.pdf) | Background fit used by test procedure with decorrelated classifier                                | `./results/WTagging/test/35/tclass_filter_uniform.pdf` |
+| Figure number (click link to open)                           | Description                                                                                       | Location                                               |
+|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| [14](./results/WTagging/val/class/0.0/selection.pdf)         | Selection of test statistic that achieves best type I error                                       | `./results/WTagging/val/class/0.0/selection.pdf`       |
+| [15](./results/WTagging/val/class/0.0/pvalues.pdf)           | Distribution of p-values corresponding the above test statistics                                  | `./results/WTagging/val/class/0.0/pvalues.pdf`         |
+| [6](./results/WTagging/test/35/power.pdf)                    | Power comparison of classifier-based test procedures using decorrelated and correlated classfiers | `./results/WTagging/test/35/power.pdf`                 |
+| [7](./results/WTagging/test/35/class_filter_uniform.pdf)     | Summary of background fit used by test procedure with non-decorrelated classifier                 | `./results/WTagging/test/35/class_filter_uniform.pdf`  |
+| [8](./results/WTagging/test/35/tclass_filter_uniform.pdf)    | Summary of background fit used by test procedure with decorrelated classifier                     | `./results/WTagging/test/35/tclass_filter_uniform.pdf` |
+| [16](./results/WTagging/test/35/class_filter_uniform_4.pdf)  | Example of single background fit used by test procedure with non-decorrelated classifier          | `./results/WTagging/test/35/class_filter_uniform.pdf`  |
+| [17](./results/WTagging/test/35/tclass_filter_uniform_4.pdf) | Example of single background fit used by test procedure with decorrelated classifier              | `./results/WTagging/test/35/tclass_filter_uniform.pdf` |
 
 ### Detection of exotic high-mass resonance experiment (3b)
 
@@ -208,13 +204,15 @@ Run the following command.
 
 After the script finishes, the following figures are available.
 
-| Figure number (click link to open)                   | Description                                                                                       | Location                                         |
-|------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------|
-| [16](./results/3b/val/class/0.0/selection.pdf)       | Selection of test statistic that achieves best type I error                                       | `./results/3b/val/class/0.0/selection.pdf`       |
-| [17](./results/3b/val/class/0.0/pvalues.pdf)         | Distribution of p-values corresponding the above test statistics                                  | `./results/3b/val/class/0.0/pvalues.pdf`         |
-| [11](./results/3b/test/20/power.pdf)                 | Power comparison of classifier-based test procedures using decorrelated and correlated classfiers | `./results/3b/test/20/power.pdf`                 |
-| [18](./results/3b/test/20/class_filter_uniform.pdf)  | Background fit used by test procedure with correlated classifier                                  | `./results/3b/test/20/class_filter_uniform.pdf`  |
-| [19](./results/3b/test/20/tclass_filter_uniform.pdf) | Background fit used by test procedure with decorrelated classifier                                | `./results/3b/test/20/tclass_filter_uniform.pdf` |
+| Figure number (click link to open)                     | Description                                                                                       | Location                                               |
+|--------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| [18](./results/3b/val/class/0.0/selection.pdf)         | Selection of test statistic that achieves best type I error                                       | `./results/3b/val/class/0.0/selection.pdf`             |
+| [19](./results/3b/val/class/0.0/pvalues.pdf)           | Distribution of p-values corresponding the above test statistics                                  | `./results/3b/val/class/0.0/pvalues.pdf`               |
+| [11](./results/3b/test/20/power.pdf)                   | Power comparison of classifier-based test procedures using decorrelated and correlated classfiers | `./results/3b/test/20/power.pdf`                       |
+| [20](./results/3b/test/20/class_filter_uniform.pdf)    | Background fit used by test procedure with correlated classifier                                  | `./results/3b/test/20/class_filter_uniform.pdf`        |
+| [21](./results/3b/test/20/tclass_filter_uniform.pdf)   | Background fit used by test procedure with decorrelated classifier                                | `./results/3b/test/20/tclass_filter_uniform.pdf`       |
+| [22](./results/3b/test/20/class_filter_uniform_4.pdf)  | Example of single background fit used by test procedure with non-decorrelated classifier          | `./results/WTagging/test/35/class_filter_uniform.pdf`  |
+| [23](./results/3b/test/20/tclass_filter_uniform_4.pdf) | Example of single background fit used by test procedure with decorrelated classifier              | `./results/WTagging/test/35/tclass_filter_uniform.pdf` |
 
 ### Detection of exotic high-mass resonance experiment (4b)
 
@@ -226,8 +224,10 @@ Run the following command.
 
 After the script finishes, the following figures are available.
 
-| Figure number (click link to open)                   | Description                                                                                       | Location                                         |
-|------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------|
-| [12](./results/4b/test/20/power.pdf)                 | Power comparison of classifier-based test procedures using decorrelated and correlated classfiers | `./results/4b/test/20/power.pdf`                 |
-| [20](./results/4b/test/20/class_filter_uniform.pdf)  | Background fit used by test procedure with correlated classifier                                  | `./results/4b/test/20/class_filter_uniform.pdf`  |
-| [21](./results/4b/test/20/tclass_filter_uniform.pdf) | Background fit used by test procedure with decorrelated classifier                                | `./results/4b/test/20/tclass_filter_uniform.pdf` |
+| Figure number (click link to open)                     | Description                                                                                       | Location                                               |
+|--------------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| [12](./results/4b/test/20/power.pdf)                   | Power comparison of classifier-based test procedures using decorrelated and correlated classfiers | `./results/4b/test/20/power.pdf`                       |
+| [24](./results/4b/test/20/class_filter_uniform.pdf)    | Background fit used by test procedure with correlated classifier                                  | `./results/4b/test/20/class_filter_uniform.pdf`        |
+| [25](./results/4b/test/20/tclass_filter_uniform.pdf)   | Background fit used by test procedure with decorrelated classifier                                | `./results/4b/test/20/tclass_filter_uniform.pdf`       |
+| [26](./results/4b/test/20/class_filter_uniform_4.pdf)  | Example of single background fit used by test procedure with non-decorrelated classifier          | `./results/WTagging/test/35/class_filter_uniform.pdf`  |
+| [27](./results/4b/test/20/tclass_filter_uniform_4.pdf) | Example of single background fit used by test procedure with decorrelated classifier              | `./results/WTagging/test/35/tclass_filter_uniform.pdf` |
