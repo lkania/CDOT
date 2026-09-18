@@ -56,7 +56,7 @@ See https://www.r-project.org/ for instructions on how to install R.
 
 ### Detection of high-p_T W-bosons experiments (WTagging)
 
-For the WTgging experiement, you can ontain the output of the correlated and
+For the WTgging experiement, you can obtain the output of the correlated and
 decorrelated classifiers by running the following commands.
 
 ```

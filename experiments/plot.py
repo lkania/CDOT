@@ -31,6 +31,48 @@ colors = ['red',
 		  'purple',
 		  'peru']
 
+# colors = [
+# 	'#1F77B4',  # dark blue  (prints dark gray)
+# 	'#D62728',  # brick red  (dark-mid gray)
+# 	'#2CA02C',  # green      (mid gray)
+# 	'#9467BD',  # purple     (mid-light gray)
+# 	'#8C564B',  # brown      (mid-light, different hue but same family)
+# 	'#E377C2',  # pink       (light gray)
+# 	'#7F7F7F',  # neutral gray (reference without being black)
+# 	'#BCBD22',  # olive      (light-mid gray)
+# 	'#17BECF',  # cyan       (light gray but still visible)
+# 	'#FF7F0E',  # orange     (mid-light, prints distinctly)
+# 	'#AEC7E8',  # pale blue  (very light gray)
+# ]
+
+linetypes = [
+	'-',  # solid
+	(0, (6, 3)),  # medium dash
+	(0, (2, 2)),  # short dash
+	(0, (6, 2, 2, 2)),  # dash–dot
+	(0, (10, 3)),  # long dash
+	(0, (3, 3, 1.5, 3)),  # short dash–dot
+	(0, (10, 2, 2, 2, 2, 2)),  # long dash–dot–dot
+	(0, (1.5, 2.5)),  # dotted (print-safe spacing)
+	(0, (8, 4, 1.5, 4)),  # wide dash–dot
+	(0, (3, 2, 3, 4)),  # asymmetric dash pattern
+	(0, (12, 3, 3, 3)),  # very long + short dash
+]
+
+markers = [
+	'o',  # circle
+	's',  # square
+	'^',  # triangle up
+	'D',  # diamond
+	'v',  # triangle down
+	'P',  # filled plus
+	'X',  # filled x
+	'<',  # triangle left
+	'>',  # triangle right
+	'h',  # hexagon
+	'*',  # star
+]
+
 ######################################################################
 # Load utilities
 ######################################################################
@@ -83,7 +125,10 @@ def series_with_uncertainty(ax, x, mean,
 							upper=None,
 							label='',
 							color='black',
+							linetype='-',
 							fmt='',
+							marker=None,
+							markevery=None,
 							markersize=5,
 							elinewidth=1,
 							capsize=3,
@@ -104,7 +149,10 @@ def series_with_uncertainty(ax, x, mean,
 				y=mean,
 				yerr=yerr,
 				color=color,
+				linestyle=linetype,
 				capsize=capsize,
+				marker=marker,
+				markevery=markevery,
 				markersize=markersize,
 				elinewidth=elinewidth,
 				alpha=0.5,
@@ -118,6 +166,9 @@ def binary_series_with_uncertainty(ax,
 								   alpha,
 								   label='',
 								   color='black',
+								   linetype='-',
+								   marker=None,
+								   markevery=None,
 								   fmt='',
 								   markersize=5,
 								   elinewidth=1,
@@ -141,6 +192,9 @@ def binary_series_with_uncertainty(ax,
 								   upper=uppers,
 								   label=label,
 								   color=color,
+								   linetype=linetype,
+								   marker=marker,
+								   markevery=markevery,
 								   fmt=fmt,
 								   markersize=markersize,
 								   elinewidth=elinewidth,
@@ -207,10 +261,11 @@ def hists(ax,
 		# try:
 		# Do not aggregate the simulations
 		# Instead, just plot the results for the first simulation
-		predictions = [info.runs[aggregate].predict_counts(from_=from_, to_=to_)]
+		predictions = [
+			info.runs[aggregate].predict_counts(from_=from_, to_=to_)]
 		methods = [info.runs[aggregate]]
-		# except IndexError as e:
-		# 	assert False,"Idx is {}".format(aggregate)
+	# except IndexError as e:
+	# 	assert False,"Idx is {}".format(aggregate)
 	else:
 		predictions = info.predict_counts(from_=from_, to_=to_)
 
@@ -348,6 +403,9 @@ def cdfs(ax, df, labels, alpha, eps=1e-2):
 			legend=False,
 			ax=ax,
 			color=colors[i],
+			linestyle=linetypes[i],
+			marker=markers[i],
+			markevery=8,
 			alpha=1,
 			label=labels[i])
 

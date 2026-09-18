@@ -12,6 +12,7 @@ cdot/WTaggingTest.csv
 presentation
 simulation
 runners
+condaEnvironment
 data/dimuon
 data/0.5
 data/1
@@ -331,4 +332,3 @@ cython_debug/
 #.idea/
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,pycharm,python
-

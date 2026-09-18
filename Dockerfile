@@ -4,7 +4,7 @@
 
 # The following base image can be used if only CPU support is needed
 FROM python:3.11-slim-buster
-#  This image does not jax, numpy and scipy. Thus, we proceed to install them.
+#  This image does not have jax, numpy and scipy. Thus, we proceed to install them.
 RUN pip install jax==0.4.23
 RUN pip install jaxlib==0.4.23
 RUN pip install scipy==1.11.4

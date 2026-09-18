@@ -1,15 +1,14 @@
-source("./cdot/Requirements.R")
 # Load necessary libraries
 library(colorBlindness)
 library(ggplot2)
 
 # Load the R50 and JSD values calculated for the geodesic using R50JSDPlot.ipynb
-load("./cdot/PythonR50JSDPlotData.RData")
+load("PythonR50JSDPlotData.RData")
 
 # The JSD and R50 values for MoDe, Disco, Planing and Adversary are extracted
 # from Figure 7 in Kitouni et al. (2021)
 
-CDOT = as.matrix(R50JSDPython[, 2:3])
+CDOT = as.matrix(R50JSDPython[,2:3])
 Mode = matrix(c(2.054899095681104, 10414.635944056585,
                 4.339699081942078, 9457.667980971291,
                 5.377300839583278, 6195.266604844741,
@@ -66,27 +65,27 @@ Adversary = matrix(c(11.962415893190524, 1851.110979892527,
 # Getting the data ready to plot
 R50JSDPlot.df = rbind(Mode, Disco, Planing, Adversary, CDOT)
 R50JSDPlot.df = as.data.frame(R50JSDPlot.df)
-colnames(R50JSDPlot.df) = c("R50", "JSD")
-R50JSDPlot.df$Method = c(rep("Mode", nrow(Mode)),
+colnames(R50JSDPlot.df) = c( "R50", "JSD")
+R50JSDPlot.df$Method = c(rep("Mode", nrow(Mode)), 
                          rep("Disco", nrow(Disco)),
                          rep("Planing", nrow(Planing)),
                          rep("Adversary", nrow(Adversary)),
                          rep("CDOT", nrow(CDOT)))
 
 # Saving data for future plots
-#save(R50JSDPlot.df, file = "R50JSDPlotData.RData")
-#load("R50JSDPlotData.RData")
+# save(R50JSDPlot.df, file = "R50JSDPlotData.RData")
+load("R50JSDPlotData.RData")
 
 # Plotting the data
-p = ggplot(R50JSDPlot.df, aes(x = R50, y = JSD, color = Method)) +
-  geom_point() +
-  geom_line(linewidth = 0.85) +
+p = ggplot(R50JSDPlot.df, aes(x = R50, y = JSD, 
+                              color = Method))+
+  geom_point(aes(shape = Method)) + geom_line(linewidth = 0.85) +
   #scale_color_manual(values=c("#009292","#ff6db6", "#490092", "#b66dff", "#920000", "#db6d00")) +
-  scale_color_manual(values = c("#009292", "#490092", "#b66dff", "#920000", "#db6d00")) +
+  scale_color_manual(values=c("#ff6db6", "#490092","#b66dff", "#009292", "#920000")) +
   #lims(x = c(0,30), y = c(0,10000)) +
-  scale_y_continuous(trans = 'log10') +
+  scale_y_continuous(trans='log10') +
   ylab("1/JSD") +
   theme_bw()
-ggsave(p, filename = "./cdot/img/R50JSDPlotFinal.png", height = 3, width = 6)
+ggsave(p, filename = "R50JSDPlotFinal.png", height =  3, width = 6)
 
 

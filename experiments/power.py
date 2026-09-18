@@ -427,7 +427,7 @@ for classifier in args.classifiers:
 				alpha=args.alpha)
 
 			ax.set_xlabel(r'Polynomial order $K$')
-			ax.set_ylabel(r'Probability of rejecting $\lambda=0$')
+			ax.set_ylabel(r'Prob. rejecting $\lambda=0$')
 			ax.legend(loc=2)  # This places the legend in the upper left.
 			plot.save_fig(cwd=args.cwd,
 						  path=path,
@@ -511,15 +511,15 @@ def power_analysis(args, params, selected, plot_string):
 											  quantiles=args.quantiles,
 											  lambdas=args.lambdas)
 
-		plots.filtering(args=args,
-						lambdas=args.lambdas_subset,
-						quantiles=args.quantiles_subset,
-						results=results[classifier],
-						path=plot_path,
-						aggregate=4,
-						filename='{0}_filter_uniform_{1}'.format(classifier,
-																 4 + 1),
-						alpha=args.alpha)
+		plots.filtering(
+			args=args,
+			lambdas=args.lambdas_subset,
+			quantiles=args.quantiles_subset,
+			results=results[classifier],
+			path=plot_path,
+			aggregate=4,
+			filename='{0}_filter_uniform_{1}'.format(classifier, 4 + 1),
+			alpha=args.alpha)
 
 		plots.filtering(args=args,
 						lambdas=args.lambdas_subset,

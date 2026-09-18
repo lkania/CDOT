@@ -131,8 +131,8 @@ def filtering(args,
 
 def power(ax, results, lambdas, quantiles, alpha, eps=1e-2):
 	ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha={0}'.format(alpha))
-	ax.set_xlabel('% of background observations rejected in validation')
-	ax.set_ylabel('Probability of rejecting $\lambda=0$')
+	ax.set_xlabel('% of back. obs. rejected in validation')
+	ax.set_ylabel('Prob. rejecting $\lambda=0$')
 	ax.set_ylim([0 - eps, 1 + eps])
 
 	ax.axhline(y=alpha,
@@ -148,6 +148,9 @@ def power(ax, results, lambdas, quantiles, alpha, eps=1e-2):
 			x=np.array(quantiles) * 100,
 			values=tests,
 			color=plot.colors[i],
+			linetype=plot.linetypes[i],
+			marker=plot.markers[i],
+			markevery=8,
 			label='$\lambda$={0}'.format(lambda_),
 			alpha=alpha)
 
