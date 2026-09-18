@@ -9,6 +9,14 @@ import hasher
 #######################################################
 
 def load_weights(path, n_obs):
+	"""Load, validate, and normalize event-sampling weights.
+	
+	Args:
+	    path (str): Path to the weight file; a scalar string.
+	    n_obs (int): Expected number of events; a scalar.
+	Returns:
+	    array: Positive normalized weights with shape (n_obs,).
+	"""
 	if os.path.isfile(path):
 
 		weights = load(path).reshape(-1)
@@ -30,6 +38,13 @@ def load_weights(path, n_obs):
 
 
 def load_background_and_signal(args):
+	"""Load background/signal masses, weights, classifier scores, and sampling helpers.
+	
+	Args:
+	    args (Namespace/DotDic): Scalar configuration object with data paths and classifier names.
+	Returns:
+	    DotDic: Data/configuration container with 1-D event arrays and sampling/filter functions.
+	"""
 	params = DotDic()
 
 	#######################################################
@@ -74,13 +89,16 @@ def load_background_and_signal(args):
 
 	@partial(jit, static_argnames=['n', 'n_elements'])
 	def choice(n, n_elements, probs, key):
-		# if probs are assume to be uniform,
-		# the following code is more efficient
-		# return random.randint(key=key,
-		# 						  minval=0,
-		# 						  maxval=n_elements,
-		# 						  shape=(n,)).reshape(-1)
-
+		"""Draw weighted event indices with replacement.
+		
+		Args:
+		    n (int): Number of indices to draw; a scalar.
+		    n_elements (int): Number of available events; a scalar.
+		    probs (array): Sampling probabilities with shape (n_elements,).
+		    key (JAX PRNG key): One random-number-generator key.
+		Returns:
+		    array: Integer indices with shape (n,).
+		"""
 		return random.choice(key=key,
 							 a=n_elements,
 							 shape=(n,),
@@ -89,6 +107,15 @@ def load_background_and_signal(args):
 
 	@partial(jit, static_argnames=['n', 'classifier'])
 	def background_subsample(n, key, classifier):
+		"""Sample background masses and classifier scores using background weights.
+		
+		Args:
+		    n (int): Number of background events to sample; a scalar.
+		    key (JAX PRNG key): One random-number-generator key.
+		    classifier (str): Classifier-score name; a scalar string.
+		Returns:
+		    tuple: Masses and scores, each a 1-D array with shape (n,).
+		"""
 		idx = choice(n=n,
 					 n_elements=params.background.X.shape[0],
 					 probs=params.background.weight,
@@ -122,6 +149,16 @@ def load_background_and_signal(args):
 
 	@partial(jit, static_argnames=['n', 'lambda_', 'classifier'])
 	def subsample(n, lambda_, key, classifier):
+		"""Sample a background/signal mixture at the requested signal fraction.
+		
+		Args:
+		    n (int): Total number of events; a scalar.
+		    lambda_ (float): Signal fraction in [0, 1]; a scalar.
+		    key (JAX PRNG key): One random-number-generator key.
+		    classifier (str): Classifier-score name; a scalar string.
+		Returns:
+		    tuple: Mixture masses and scores, each a 1-D array with shape (n,).
+		"""
 		if lambda_ == 0:
 			return background_subsample(
 				n=n,
@@ -149,10 +186,26 @@ def load_background_and_signal(args):
 		return X, c
 
 	def mask(X_, cutoff):
+		"""Create a classifier-threshold mask without dropping observations.
+		
+		Args:
+		    X_ (tuple): Pair of 1-D mass and score arrays, each with shape (n,).
+		    cutoff (float): Classifier threshold; a scalar.
+		Returns:
+		    tuple: Mass array with shape (n,) and Boolean mask with shape (n,).
+		"""
 		X, c = X_
 		return X, (c >= cutoff)
 
 	def filter(X_, cutoff):
+		"""Return masses whose classifier scores pass a threshold.
+		
+		Args:
+		    X_ (tuple): Pair of 1-D mass and score arrays, each with shape (n,).
+		    cutoff (float): Classifier threshold; a scalar.
+		Returns:
+		    array: Selected masses with shape (m,), where m <= n.
+		"""
 		X, c = X_
 		return X[c >= cutoff]
 
@@ -160,6 +213,17 @@ def load_background_and_signal(args):
 
 	@partial(jit, static_argnames=['n', 'classifier', 'lambda_'])
 	def subsample_and_mask(n, classifier, lambda_, cutoff, key):
+		"""Sample a mixture and return its masses with the classifier-selection mask.
+		
+		Args:
+		    n (int): Total number of sampled events; a scalar.
+		    classifier (str): Classifier-score name; a scalar string.
+		    lambda_ (float): Signal fraction in [0, 1]; a scalar.
+		    cutoff (float): Classifier threshold; a scalar.
+		    key (JAX PRNG key): One random-number-generator key.
+		Returns:
+		    tuple: Mass array and Boolean mask, each with shape (n,).
+		"""
 		X_ = subsample(n=n,
 					   classifier=classifier,
 					   lambda_=lambda_,

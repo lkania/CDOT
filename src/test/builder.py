@@ -10,7 +10,6 @@ from jaxopt.projection import projection_polyhedron, projection_simplex
 # background methods
 #######################################################
 from src.background.bin import test as bin_mle
-from src.background.unbin import test as unbin_mle
 from src.dotdic import DotDic
 
 
@@ -18,6 +17,12 @@ def build(args):
 	#######################################################
 	# init sub-dictionaries
 	#######################################################
+	"""Build the configured binned or unbinned signal-test callable used in simulations.
+	
+	Args:
+	    args: Namespace/config object containing scalar method, optimizer, k, bounds, tolerances, and a basis object; bin methods also require 1-D from_/to_ arrays of equal shape (B,).
+	Returns:
+	    Callable test function accepting protected-variable data X of shape (N,) and a shape-(N,) selection mask."""
 	params = DotDic()
 	params.hash = args.hash
 	params.background = DotDic()
@@ -76,7 +81,6 @@ def build(args):
 
 	assert np.abs(np.sum(init_gamma) - 1) < params.tol
 
-
 	# assert that each basis element integrates to one over omega
 	int_omega = params.basis.integrate(k=params.k, a=0, b=1).reshape(-1)
 	assert np.all(int_omega > 0)
@@ -107,87 +111,6 @@ def build(args):
 	params.method = args.method
 	params.optimizer = args.optimizer
 	match params.method:
-		case 'unbin_mle':
-
-			match args.optimizer:
-				case 'constrained_opt':
-
-					params.estimate = partial(
-						unbin_mle.constrained_opt_with_opt_lambda,
-						loss=partial(unbin_mle.loss_with_opt_lambda,
-									 int_control=int_control,
-									 tol=params.tol),
-						maxiter=params.maxiter,
-						tol=params.tol,
-						projection=projection_simplex,
-						init_gamma=init_gamma,
-						int_control=int_control
-					)
-
-				case 'density':
-					lambda_lowerbound = 0
-					lambda_upperbound = 0.5
-					gamma_lowerbound = 0
-
-					zero = np.array([0])
-					lambda_upperbound = np.array([lambda_upperbound])
-
-					n_params = params.background.init_gamma.reshape(-1).shape[0]
-
-					# Equality constraint
-					# force the basis to integrate to 1 over the omega domain
-					A_ = (
-						np.concatenate((int_omega, zero)).reshape(-1)).reshape(
-						1, -1)
-					b_ = np.array([1.0])
-
-					# If using projection_polyhedron
-					# then use the following inequality constraints
-					G = -1 * np.eye(n_params + 2, n_params + 1)
-					G = G.at[-1].set(np.zeros(n_params + 1, ).at[-1].set(1))
-					lower_bounds = np.zeros((n_params + 1,)) + gamma_lowerbound
-					lower_bounds = lower_bounds.at[-1].set(lambda_lowerbound)
-					h = np.concatenate((lower_bounds, lambda_upperbound))
-
-					projection = partial(projection_polyhedron,
-										 hyperparams_proj=(A_, b_, G, h),
-										 check_feasible=False)
-
-					params.estimate = partial(
-						unbin_mle.constrained_opt,
-						maxiter=params.maxiter,
-						tol=params.tol,
-						projection=projection,
-						init_lambda=params.background.init_lambda,
-						init_gamma=params.background.init_gamma
-					)
-
-				case 'normalized_dagostini':
-					params.estimate = partial(
-						unbin_mle.EM_opt,
-						init_gamma=init_gamma,
-						fixpoint=fixpoint,
-						update=partial(unbin_mle.normalized_dagostini,
-									   tol=params.tol,
-									   int_control=int_control),
-						int_control=int_control
-					)
-
-				case 'dagostini':
-					params.estimate = partial(
-						unbin_mle.EM_opt,
-						init_gamma=init_gamma,
-						fixpoint=fixpoint,
-						update=partial(unbin_mle.dagostini,
-									   tol=params.tol,
-									   int_control=int_control),
-						int_control=int_control,
-						int_omega=int_omega)
-				case _:
-					raise ValueError('Method not supported')
-
-			return partial(unbin_mle.efficient_test, params=params)
-
 		case 'bin_mle':
 			# high impact on jacobian computation for bin methods
 			params.from_ = args.from_
@@ -245,8 +168,7 @@ def build(args):
 									   int_control=int_control,
 									   tol=params.tol),
 						init_gamma=init_gamma,
-						int_control=int_control,
-						# int_omega=params.background.int_omega
+						int_control=int_control
 					)
 				case _:
 					raise ValueError('Optimizer not supported')

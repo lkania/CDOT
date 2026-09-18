@@ -6,12 +6,27 @@ from functools import partial
 
 @partial(jit, static_argnames=['tol'])
 def safe_log(x, tol):
+	"""Compute log(x) after flooring values at a numerical tolerance.
+	
+	Args:
+	    x: Numeric/JAX array of any shape.
+	    tol: Float scalar, positive floor applied before taking logarithms.
+	Returns:
+	    JAX array with the same shape as x."""
 	x = np.where(x <= tol, tol, x)
 	return np.log(x)
 
 
 @partial(jit, static_argnames=['tol'])
 def safe_ratio(num, den, tol):
+	"""Compute num/den elementwise with stable handling near zero and near equality.
+	
+	Args:
+	    num: Numeric/JAX scalar or array, broadcast-compatible with den.
+	    den: Numeric/JAX scalar or array, broadcast-compatible with num.
+	    tol: Float scalar, numerical threshold for zero/equality checks.
+	Returns:
+	    JAX array with the broadcast shape of num and den."""
 	# In the following, we implement this decision tree
 	# 	if num <= tol:
 	# 		return 0.0
@@ -43,15 +58,36 @@ def safe_ratio(num, den, tol):
 
 @jit
 def normalize(gamma, int_omega):
+	"""Normalize basis coefficients so their weighted integral over the domain equals one.
+	
+	Args:
+	    gamma: JAX array, shape (P,), coefficients.
+	    int_omega: JAX array, shape (P,), basis integrals over the full domain.
+	Returns:
+	    JAX array, shape (P,), normalized coefficients."""
 	dot = np.dot(gamma.reshape(-1), int_omega.reshape(-1))
 	return gamma / dot
 
 
 @partial(jit, static_argnames=['tol'])
 def threshold_non_neg(x, tol):
+	"""Set entries not exceeding tol to zero while retaining larger nonnegative entries.
+	
+	Args:
+	    x: Numeric/JAX array of any shape.
+	    tol: Float scalar, cutoff threshold.
+	Returns:
+	    JAX array with the same shape and dtype as x."""
 	return x * np.array(x > tol, dtype=x.dtype)
 
 
 @partial(jit, static_argnames=['tol'])
 def threshold(x, tol):
+	"""Set entries with absolute magnitude at most tol to zero.
+	
+	Args:
+	    x: Numeric/JAX array of any shape.
+	    tol: Float scalar, absolute-value cutoff.
+	Returns:
+	    JAX array with the same shape and dtype as x."""
 	return x * np.array(np.abs(x) > tol, dtype=x.dtype)

@@ -4,30 +4,14 @@
 
 # The following base image can be used if only CPU support is needed
 FROM python:3.11-slim-buster
-#  This image does not have jax, numpy and scipy. Thus, we proceed to install them.
+#  This image does not have jax, numpy, and scipy. Thus, we proceed to install them.
 RUN pip install jax==0.4.23
 RUN pip install jaxlib==0.4.23
 RUN pip install scipy==1.11.4
 RUN pip install numpy==1.26.2
 
-# If you have a Nvidia GPU, please comment everything above this comment
-# and uncomment the following command
-# The following base image contains: jax (with GPU support), numpy and scipy
-# Nvidia documents will be located at /workspace
-# FROM nvcr.io/nvdlfwea/jax/jax:23.05-py3
-
-# If you are using a NVIDIA base image
-# please remember to login into their server first
-# Run the following command in your terminal
-# docker login nvcr.io
-# It will ask you for a username and a password.
-# The username is $oauthtoken
-# The password is your API KEY (see: https://ngc.nvidia.com/setup/api-key )
-
 # We install additional packages required for this particular project
-# Do indicate which version you need so that the script is determistic. 
-# If you do not specify the version, pip will try to install the lastest available
-# version that is compatible with your other packages
+# We specify which version is needed to make the script deterministic. 
 RUN pip install jaxopt==0.8.1
 RUN pip install pandas==2.1.1
 RUN pip install tqdm==4.65.0
@@ -46,8 +30,8 @@ COPY src /program/src
 COPY experiments /program/experiments
 
 # If you want to exclude any files inside the above directories
-# You should add the exeptions to .dockerignore
+# You should add the exceptions to .dockerignore
 
-# We set the working directory to program
-# So that bash starts at /program when, we loggin into the container
+# We set the working directory to the program
+# So that bash starts at /program when we log in to the container
 WORKDIR /program

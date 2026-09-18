@@ -4,6 +4,13 @@ start_time = time.time()
 
 
 def runtime(string):
+	"""Print elapsed wall-clock time since the simulation script started.
+	
+	Args:
+	    string (str): Scalar label for the timing message.
+	Returns:
+	    None: Prints elapsed time in hours.
+	"""
 	print(
 		"-- {0}: {1} hours --".format(
 			string,
@@ -120,6 +127,16 @@ def __stat(signal_region_start,
 		   signal_region_stop,
 		   background,
 		   signal):
+	"""Report signal leakage and background mass in the control region.
+	
+	Args:
+	    signal_region_start (float): Lower signal-region boundary; a scalar.
+	    signal_region_stop (float): Upper signal-region boundary; a scalar.
+	    background (array): Background masses with shape (n_background,).
+	    signal (array): Signal masses with shape (n_signal,).
+	Returns:
+	    None: Prints the three diagnostic proportions.
+	"""
 	signal_region_start = np.array([signal_region_start])
 	signal_region_stop = np.array([signal_region_stop])
 	signal_on_signal_region = bin.counts(
@@ -143,6 +160,14 @@ def __stat(signal_region_start,
 # the original dataset. That is, nothing is filtered.
 ##################################################
 def check_no_filtering(args, params):
+	"""Verify that the zero cutoff leaves all signal/background events unchanged.
+	
+	Args:
+	    args (Namespace/DotDic): Scalar configuration with classifiers and zero_cut.
+	    params (DotDic): Scalar data container with 1-D mass/score arrays and filter helper.
+	Returns:
+	    None: Raises an assertion if any event is removed or altered.
+	"""
 	for classifier in args.classifiers:
 		d1 = (params.background.X, params.background.c[classifier])
 		d2 = (params.signal.X, params.signal.c[classifier])
@@ -208,6 +233,19 @@ def generate_dataset(cutoff,
 					 lambda_,
 					 key,
 					 trans):
+	"""Generate, threshold, and transform one simulated mixture dataset.
+	
+	Args:
+	    cutoff (float): Classifier threshold; a scalar.
+	    classifier (str): Classifier-score name; a scalar string.
+	    params (DotDic): Scalar sampling configuration object.
+	    sample_size (int): Number of generated events; a scalar.
+	    lambda_ (float): Signal fraction; a scalar.
+	    key (JAX PRNG key): One random-number-generator key.
+	    trans (callable): Function mapping a 1-D mass array to a same-length 1-D array.
+	Returns:
+	    tuple: Transformed masses (sample_size,), integer mask (sample_size,), and scalar selected count.
+	"""
 	X, mask = params.subsample_and_mask(n=sample_size,
 										classifier=classifier,
 										lambda_=lambda_,
@@ -468,6 +506,19 @@ for k in args.ks:
 ###################################################
 def empirical_power(args, path, params, classifier, selected, quantiles,
 					lambdas):
+	"""Run simulations over signal fractions and filtering quantiles for one classifier.
+	
+	Args:
+	    args (Namespace/DotDic): Scalar simulation configuration with alpha and fold settings.
+	    path (str): Relative storage path; a scalar string.
+	    params (DotDic): Scalar data/sampling configuration object.
+	    classifier (str): Classifier name; a scalar string.
+	    selected (mapping): Tests indexed by classifier then quantile.
+	    quantiles (sequence): Filter quantiles with length (Q,).
+	    lambdas (sequence): Signal fractions with length (L,).
+	Returns:
+	    DotDic: Nested results indexed by lambda and quantile; each includes a binary test array of shape (folds,).
+	"""
 	results = DotDic()
 	for lambda_ in lambdas:
 
@@ -495,6 +546,16 @@ def empirical_power(args, path, params, classifier, selected, quantiles,
 
 
 def power_analysis(args, params, selected, plot_string):
+	"""Run power simulations for all classifiers and save diagnostic/power plots.
+	
+	Args:
+	    args (Namespace/DotDic): Scalar simulation/plot configuration object.
+	    params (DotDic): Scalar data container with classifier names and samplers.
+	    selected (mapping): Configured tests indexed by classifier and quantile.
+	    plot_string (str): Scalar suffix used in the output path.
+	Returns:
+	    None: Runs simulations and writes figures to disk.
+	"""
 	print("\n{0} power analysis\n".format(args.data_id))
 
 	plot_path = '{0}/{1}'.format(args.data_id, plot_string)

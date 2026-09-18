@@ -12,7 +12,13 @@ from src import normalize
 # - https://en.wikipedia.org/wiki/Poisson_distribution#Confidence_interval
 # - https://stackoverflow.com/questions/14813530/poisson-confidence-interval-with-numpy
 def __garwood_poisson_ci(n_events, alpha):
-	# n_events = n_events.reshape(-1)
+	"""Compute exact Garwood confidence limits for Poisson event counts.
+	
+	Args:
+	    n_events: Numeric array of nonnegative counts, any shape.
+	    alpha: Float scalar in (0,1), two-sided error probability.
+	Returns:
+	    Tuple (lower, upper) of arrays with the same shape as n_events."""
 	assert np.sum(n_events < 0) == 0, "negative value found in n_events"
 
 	L = np.where((n_events == 0),
@@ -28,6 +34,13 @@ def __garwood_poisson_ci(n_events, alpha):
 def __pooled_garwood_poisson_ci(n_events, alpha):
 	# A confidence interval based on pooled data proceeds as follows
 	# We will compute the CI using the sum of the observed events
+	"""Compute a Garwood interval after pooling replicate Poisson counts along axis 0.
+	
+	Args:
+	    n_events: Numeric array, shape (R, ...) with R replicate count vectors.
+	    alpha: Float scalar in (0,1), error probability.
+	Returns:
+	    Tuple (lower, mean, upper), each a 1-D array over the pooled trailing entries."""
 	n_observations = n_events.shape[0]
 	sum_ = np.sum(n_events, axis=0)
 	L, U = __garwood_poisson_ci(n_events=sum_, alpha=alpha)
@@ -37,15 +50,20 @@ def __pooled_garwood_poisson_ci(n_events, alpha):
 
 
 def garwood_poisson_ci(n_events, alpha, pool=False):
-	# if n_events.ndim == 1 or n_events.shape[0] == 1:
-	# return _exact_poisson_ci(n_events=n_events, alpha=alpha)
-
+	"""Summarize Poisson counts with pooled or replicate-wise Garwood confidence intervals.
+	
+	Args:
+	    n_events: Numeric array, shape (R, ...) for R replicates (or compatible count array).
+	    alpha: Float scalar in (0,1), error probability.
+	    pool: Boolean scalar; if True, pool counts over axis 0 before interval construction.
+	Returns:
+	    Tuple (lower, mean, upper) of 1-D arrays for each reported component."""
 	if pool:
 		# A confidence interval based on pooled data proceeds as follows
 		# We compute the CI using the sum of the observed events
 		Lq, mq, Uq = __pooled_garwood_poisson_ci(n_events=n_events, alpha=alpha)
 	else:
-		# However, we do not want this, since we are interested
+		# If we are interested
 		# not on pooling the data but on a confidence set of
 		# confidence sets. Therefore, we will compute a Gaarwood CI for each
 		# study and then proceed to aggreagate them
@@ -65,6 +83,15 @@ def garwood_poisson_ci(n_events, alpha, pool=False):
 
 
 def _scipy_cp(n_successes, n_trials, alpha, alternative='two-sided'):
+	"""Compute Clopper-Pearson binomial intervals using SciPy's exact routine.
+	
+	Args:
+	    n_successes: 1-D iterable/array, shape (Q,), success counts.
+	    n_trials: Integer scalar, number of Bernoulli trials for each count.
+	    alpha: Float scalar in (0,1), error probability.
+	    alternative: String scalar specifying the interval alternative.
+	Returns:
+	    JAX array, shape (Q,2), lower and upper confidence limits."""
 	confidence_level = 1 - alpha
 	return np.array(list(map(
 		lambda k: _binom_exact_conf_int(
@@ -78,6 +105,14 @@ def _scipy_cp(n_successes, n_trials, alpha, alternative='two-sided'):
 def _statsmodels_cp(n_successes, n_trials, alpha):
 	# Clopper-Pearson interval based on Beta distribution
 	# See https://tedboy.github.io/statsmodels_doc/generated/statsmodels.stats.proportion.proportion_confint.html
+	"""Compute Clopper-Pearson binomial intervals with statsmodels.
+	
+	Args:
+	    n_successes: Numeric array, shape (Q,), success counts.
+	    n_trials: Integer scalar or shape-(Q,) array, corresponding trial counts.
+	    alpha: Float scalar in (0,1), error probability.
+	Returns:
+	    Array, shape (Q,2), lower and upper confidence limits."""
 	return np.stack(proportion_confint(
 		count=n_successes,
 		nobs=n_trials,
@@ -88,6 +123,14 @@ def _statsmodels_cp(n_successes, n_trials, alpha):
 def _clopper_pearson_binomial_ci(n_successes,
 								 n_trials,
 								 alpha):
+	"""Validate inputs and compute exact Clopper-Pearson binomial intervals.
+	
+	Args:
+	    n_successes: Numeric array, shape (Q,), nonnegative success counts.
+	    n_trials: Integer scalar, number of trials, at least one.
+	    alpha: Float scalar in (0,1), error probability.
+	Returns:
+	    Array, shape (Q,2), exact confidence limits."""
 	n_successes = np.array(n_successes)
 	# check that n_successes and n_trials
 	# contain no negative values
@@ -102,6 +145,13 @@ def _clopper_pearson_binomial_ci(n_successes,
 
 # See: Clopper and Pearson (1934)
 def clopper_pearson_binomial_ci(values, alpha):
+	"""Compute an exact confidence interval for the mean of binary simulation outcomes.
+	
+	Args:
+	    values: 1-D array-like, shape (R,), binary 0/1 outcomes across simulations.
+	    alpha: Float scalar in (0,1), error probability.
+	Returns:
+	    Tuple (lower, mean, upper) of scalar confidence summary values."""
 	values_ = np.array(values, dtype=np.int32)
 	cp = _clopper_pearson_binomial_ci(
 		n_successes=[np.sum(values_)],
@@ -115,6 +165,16 @@ def clopper_pearson_binomial_ci(values, alpha):
 
 
 def normal_approximation_poisson_ratio_ci(X, Y, alpha, tol, pool=True):
+	"""Construct normal-approximation intervals for ratios of paired Poisson counts.
+	
+	Args:
+	    X: Numeric array, shape (R, Q) or compatible, numerator counts.
+	    Y: Numeric array with the same shape as X, denominator counts.
+	    alpha: Float scalar in (0,1), error probability.
+	    tol: Float scalar, numerical tolerance for safe ratios.
+	    pool: Boolean scalar; if True, pool replicates over axis 0.
+	Returns:
+	    Tuple (lower, mean, upper) of 1-D arrays, shape (Q,)."""
 	assert X.shape == Y.shape
 
 	if pool:
@@ -137,6 +197,15 @@ def normal_approximation_poisson_ratio_ci(X, Y, alpha, tol, pool=True):
 
 
 def __pooled_normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
+	"""Pool replicate Poisson counts and compute a normal-approximation ratio interval.
+	
+	Args:
+	    X: Numeric array, shape (R,Q), numerator counts.
+	    Y: Numeric array, shape (R,Q), denominator counts.
+	    alpha: Float scalar in (0,1), error probability.
+	    tol: Float scalar, safe-ratio tolerance.
+	Returns:
+	    Tuple (lower, mean, upper), each shape (Q,)."""
 	Xsum = np.sum(X, axis=0).reshape(-1)
 	Ysum = np.sum(Y, axis=0).reshape(-1)
 	return __normal_approximation_poisson_ratio_ci(X=Xsum,
@@ -145,6 +214,15 @@ def __pooled_normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
 
 
 def __normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
+	"""Compute elementwise normal-approximation intervals for Poisson count ratios.
+	
+	Args:
+	    X: Numeric scalar or array of any shape, numerator counts.
+	    Y: Numeric scalar or array with the same shape as X, denominator counts.
+	    alpha: Float scalar in (0,1), error probability.
+	    tol: Float scalar, safe-ratio tolerance.
+	Returns:
+	    Tuple (lower, mean, upper) of arrays matching the broadcast shape of X and Y."""
 	mean = normalize.safe_ratio(num=X, den=Y, tol=tol)
 	# same as (Xbar/Ybar)^2 * (1 / Xbar + 1 / Ybar) * (1/n)
 	# or equivalently Xsum / np.square(Ysum) + np.square(Xsum) / np.power(Ysum, 3)
@@ -159,6 +237,13 @@ def __normal_approximation_poisson_ratio_ci(X, Y, alpha, tol):
 # Note: we use the mean rather than refitting to all data
 def boostrap_pivotal_ci(values, alpha):
 	# values = np.array(values)
+	"""Compute pivotal bootstrap confidence intervals from replicate estimates.
+	
+	Args:
+	    values: Numeric array, shape (R, Q) or (R,), with R bootstrap replicates.
+	    alpha: Float scalar in (0,1), error probability.
+	Returns:
+	    Tuple (lower, midpoint, upper) over the trailing estimate dimension(s)."""
 	mean = np.mean(values, axis=0)
 	lower = 2 * mean - np.quantile(values, q=1 - alpha / 2, axis=0)
 	upper = 2 * mean - np.quantile(values, q=alpha / 2, axis=0)
@@ -169,9 +254,15 @@ def boostrap_pivotal_ci(values, alpha):
 
 
 def bootstrap_percentile_ci(values, alpha):
+	"""Compute percentile bootstrap confidence intervals from replicate estimates.
+	
+	Args:
+	    values: Numeric array, shape (R, Q) or (R,), with R bootstrap replicates.
+	    alpha: Float scalar in (0,1), error probability.
+	Returns:
+	    Tuple (lower, midpoint, upper), each flattened to a 1-D array over estimates."""
 	lower = np.quantile(values, q=alpha / 2, axis=0).reshape(-1)
 	upper = np.quantile(values, q=1 - alpha / 2, axis=0).reshape(-1)
-	# midpoint = np.mean(values, axis=0)
 	midpoint = np.quantile(values, q=0.5, axis=0).reshape(-1)
 
 	assert not np.isnan(lower).any()

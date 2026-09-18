@@ -9,11 +9,24 @@ def fits(args,
 		 alpha,
 		 binning=None,
 		 eps=1e-2):
+	"""Plot fitted-versus-observed histograms for a collection of test results.
+	
+	Args:
+	    args (Namespace/DotDic): Scalar plotting configuration with cwd and tolerance.
+	    results (mapping): Length-m mapping from test names to scalar result objects.
+	    path (str): Relative output path; a scalar string.
+	    filename (str): Output filename stem; a scalar string.
+	    alpha (float): Interval tail probability; a scalar.
+	    binning (callable, optional): Bin constructor returning two arrays of shape (B,).
+	    eps (float): Scalar plotting margin.
+	Returns:
+	    None: Saves the multi-panel fit figure.
+	"""
 	keys = results.keys()
 	n_cols = len(keys)
 	height_ratios = [2, 1]
 	n_rows = 2
-	# height = np.sum(np.array(height_ratios)) / n_rows
+
 	fig, axs = plot.plt.subplots(nrows=n_rows,
 								 ncols=n_cols,
 								 figsize=(10 * n_cols,
@@ -56,6 +69,20 @@ def filtering(args,
 	##################################################
 	# Plot datasets with classifier filter
 	##################################################
+	"""Plot background fits across signal fractions and classifier-filter quantiles.
+	
+	Args:
+	    args (Namespace/DotDic): Scalar plotting configuration with cwd and tolerance.
+	    lambdas (sequence): Signal fractions with shape/length (L,).
+	    quantiles (sequence): Filter quantiles with shape/length (Q,).
+	    results (mapping): Nested results indexed by lambda then quantile.
+	    path (str): Relative output path; a scalar string.
+	    alpha (float): Interval tail probability; a scalar.
+	    filename (str): Output filename stem; a scalar string.
+	    aggregate (int, optional): Scalar fold index to show; None aggregates folds.
+	Returns:
+	    None: Saves the filtering diagnostic figure.
+	"""
 	n_cols = len(quantiles)
 	height_ratios = [2, 1]  # [2, 1, 1.5]
 	height_ratios = np.array([height_ratios] * len(lambdas)).reshape(-1)
@@ -130,6 +157,18 @@ def filtering(args,
 
 
 def power(ax, results, lambdas, quantiles, alpha, eps=1e-2):
+	"""Plot empirical rejection probabilities with Clopper-Pearson intervals.
+	
+	Args:
+	    ax (matplotlib.axes.Axes): Scalar target axes object.
+	    results (mapping): Nested results indexed by lambda then quantile.
+	    lambdas (sequence): Signal fractions with shape/length (L,).
+	    quantiles (sequence): Filter quantiles with shape/length (Q,).
+	    alpha (float): Test level and interval tail probability; a scalar.
+	    eps (float): Scalar vertical-axis margin.
+	Returns:
+	    None: Draws the power/type-I-error curves on ax.
+	"""
 	ax.set_title('Clopper-Pearson CI for I(Test=1) at alpha={0}'.format(alpha))
 	ax.set_xlabel('% of back. obs. rejected in validation')
 	ax.set_ylabel('Prob. rejecting $\lambda=0$')
@@ -164,6 +203,19 @@ def power_per_classifier(args,
 						 results,
 						 lambdas,
 						 quantiles):
+	"""Create side-by-side power curves for the configured classifiers.
+	
+	Args:
+	    args (Namespace/DotDic): Scalar plotting configuration with alpha and cwd.
+	    path (str): Relative output path; a scalar string.
+	    classifiers (sequence): Classifier names with length (C,).
+	    labels (sequence): Display labels with length (C,).
+	    results (mapping): Results indexed by classifier, lambda, and quantile.
+	    lambdas (sequence): Signal fractions with length (L,).
+	    quantiles (sequence): Filter quantiles with length (Q,).
+	Returns:
+	    None: Saves the classifier-comparison power figure.
+	"""
 	fig, axs = plot.plt.subplots(nrows=1, ncols=2,
 								 figsize=(20, 5),
 								 sharex='none',
@@ -195,6 +247,17 @@ def power_per_classifier(args,
 
 
 def power_per_quantile(args, path, results, lambdas, quantiles):
+	"""Plot p-value CDFs for each filter quantile and both classifiers.
+	
+	Args:
+	    args (Namespace/DotDic): Scalar plotting configuration with alpha and cwd.
+	    path (str): Relative output path; a scalar string.
+	    results (mapping): Results indexed by classifier, lambda, and quantile.
+	    lambdas (sequence): Signal fractions with length (L,).
+	    quantiles (sequence): Filter quantiles with length (Q,).
+	Returns:
+	    None: Saves one two-panel CDF figure per quantile.
+	"""
 	plot_ = lambda classifier, quantile: plot.cdfs(
 		ax=ax,
 		df=[results[classifier][lambda_][quantile].stats for lambda_ in

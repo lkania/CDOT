@@ -15,6 +15,14 @@ from src import bin, normalize
 
 @jit
 def statistic(props, gamma, int_control):
+	"""Compute the censored-MLE signal-strength statistic from binned proportions.
+	
+	Args:
+	    props: JAX array, shape (B,), empirical proportions in the B control-region bins.
+	    gamma: JAX array, shape (P,), background basis coefficients.
+	    int_control: JAX array, shape (P,), basis integrals over the full control region.
+	Returns:
+	    Tuple of two scalar JAX arrays: the statistic and signal-strength estimate."""
 	Fn_over_control = np.sum(props)
 	Background_over_control = np.dot(gamma.reshape(-1), int_control.reshape(-1))
 
@@ -27,6 +35,16 @@ def statistic(props, gamma, int_control):
 
 @partial(jit, static_argnames=['tol'])
 def dagostini(gamma0, props, M, int_control, tol):
+	"""Perform one binned D'Agostini/EM update of the background coefficients.
+	
+	Args:
+	    gamma0: JAX array, shape (P,), current basis coefficients.
+	    props: JAX array, shape (B,), empirical control-bin proportions.
+	    M: JAX array, shape (B, P), basis integrals for each control bin.
+	    int_control: JAX array, shape (P,), basis integrals over the control region.
+	    tol: Float scalar, numerical tolerance used in safe division.
+	Returns:
+	    JAX array, shape (P,), updated coefficients."""
 	pred0 = (M @ gamma0.reshape(-1, 1)).reshape(-1)
 	props = props.reshape(-1)
 
@@ -43,6 +61,16 @@ def normalized_dagostini(gamma0,
 						 props,
 						 M, int_control,
 						 tol):
+	"""Apply one binned D'Agostini update and normalize the coefficients to sum to one.
+	
+	Args:
+	    gamma0: JAX array, shape (P,), current coefficients.
+	    props: JAX array, shape (B,), empirical control-bin proportions.
+	    M: JAX array, shape (B, P), basis integrals by bin.
+	    int_control: JAX array, shape (P,), control-region basis integrals.
+	    tol: Float scalar, numerical tolerance.
+	Returns:
+	    JAX array, shape (P,), normalized updated coefficients."""
 	gamma = dagostini(gamma0=gamma0,
 					  props=props,
 					  M=M,
@@ -53,7 +81,7 @@ def normalized_dagostini(gamma0,
 	return (gamma / np.sum(gamma)).reshape(-1)
 
 
-@partial(jit, static_argnames=['tol', 'update', 'fixpoint'])
+@partial(jit, static_argnames=['update', 'fixpoint'])
 def EM_opt(props,
 
 		   int_control,
@@ -62,6 +90,16 @@ def EM_opt(props,
 		   fixpoint,
 
 		   init_gamma):
+	"""Fit the binned background by fixed-point EM updates and estimate signal strength.
+	
+	Args:
+	    props: JAX array, shape (B,), empirical control-bin proportions.
+	    int_control: JAX array, shape (P,), control-region basis integrals.
+	    update: Callable mapping coefficients and props to an updated shape-(P,) coefficient vector.
+	    fixpoint: Callable/factory returning a JAXopt fixed-point solver.
+	    init_gamma: JAX array, shape (P,), initial coefficients.
+	Returns:
+	    Tuple (stat, aux): scalar statistic and dict containing shape-(P,) gamma_hat plus scalar lambda_hat/stat."""
 	sol = fixpoint(fixed_point_fun=update).run(
 		# we initialize gamma so that int_Omega B_gamma(x) = 1
 		# the fixed point method cannot be differentiated w.r.t
@@ -90,6 +128,16 @@ def EM_opt(props,
 
 @partial(jit, static_argnames=['tol'])
 def loss(gamma, props, M, int_control, tol):
+	"""Evaluate the negative censored multinomial log-likelihood for binned data.
+	
+	Args:
+	    gamma: JAX array, shape (P,), background basis coefficients.
+	    props: JAX array, shape (B,), empirical control-bin proportions.
+	    M: JAX array, shape (B, P), basis integrals by control bin.
+	    int_control: JAX array, shape (P,), control-region basis integrals.
+	    tol: Float scalar, lower numerical cutoff for logarithms.
+	Returns:
+	    Scalar JAX array containing the negative log-likelihood."""
 	props = props.reshape(-1)
 	gamma = gamma.reshape(-1)
 
@@ -120,6 +168,18 @@ def constrained_opt(props,
 					init_gamma,
 					loss,
 					projection):
+	"""Fit binned background coefficients with projected-gradient optimization.
+	
+	Args:
+	    props: JAX array, shape (B,), empirical control-bin proportions.
+	    int_control: JAX array, shape (P,), control-region basis integrals.
+	    tol: Float scalar, optimizer tolerance.
+	    maxiter: Integer scalar, maximum optimizer iterations.
+	    init_gamma: JAX array, shape (P,), initial coefficients.
+	    loss: Callable returning a scalar loss from shape-(P,) coefficients and props.
+	    projection: Callable used by JAXopt to project shape-(P,) coefficients onto constraints.
+	Returns:
+	    Tuple (lambda_hat, aux): scalar estimate and dict with shape-(P,) gamma_hat and scalar summaries."""
 	pg = ProjectedGradient(
 		fun=loss,
 		verbose=False,
@@ -148,6 +208,13 @@ def constrained_opt(props,
 
 @jit
 def multinomial_nll(gamma, data):
+	"""Evaluate the conditional multinomial negative log-likelihood in the control bins.
+	
+	Args:
+	    gamma: JAX array, shape (P,), background basis coefficients.
+	    data: Tuple (M, props, int_control) with shapes (B,P), (B,), and (P,), respectively.
+	Returns:
+	    Scalar JAX array containing the negative log-likelihood."""
 	M, props, int_control = data
 	background_over_control = np.dot(gamma.reshape(-1), int_control.reshape(-1))
 	background_over_bins = (M @ gamma.reshape(-1, 1)).reshape(-1)
@@ -157,6 +224,13 @@ def multinomial_nll(gamma, data):
 
 @jit
 def poisson_nll(gamma, data):
+	"""Evaluate a Poisson-style negative log-likelihood for binned control data.
+	
+	Args:
+	    gamma: JAX array, shape (P,), background basis coefficients.
+	    data: Tuple (M, props, int_control) with shapes (B,P), (B,), and (P,), respectively.
+	Returns:
+	    Scalar JAX array containing the negative log-likelihood."""
 	M, props, int_control = data
 	log_preds = np.log((M @ gamma.reshape(-1, 1)).reshape(-1))
 	int_over_control = np.dot(gamma.reshape(-1), int_control.reshape(-1))
@@ -164,11 +238,25 @@ def poisson_nll(gamma, data):
 
 
 def pvalue(zscore):
+	"""Convert a standard-normal z score to a one-sided upper-tail p-value.
+	
+	Args:
+	    zscore: Numeric scalar or JAX array of any shape, containing z score(s).
+	Returns:
+	    JAX array with the same shape as zscore, containing upper-tail probabilities."""
 	return 1 - cdf(zscore, loc=0, scale=1)
 
 
 @partial(jit, static_argnames=['params'])
 def delta_method_test(params, X, mask):
+	"""Run the binned signal test and estimate its variance by the discrete delta method.
+	
+	Args:
+	    params: DotDic/config object containing bin edges, the estimator callable, and numerical settings.
+	    X: JAX array, shape (N,), protected-variable observations.
+	    mask: JAX array, shape (N,), 0/1 indicators selecting observations used in the test.
+	Returns:
+	    Dict with scalar lambda_hat/stat and shape-(P,) gamma_hat."""
 	n = np.sum(mask)
 
 	X_masked = X * mask + (-1) * (1 - mask)

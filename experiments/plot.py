@@ -31,20 +31,6 @@ colors = ['red',
 		  'purple',
 		  'peru']
 
-# colors = [
-# 	'#1F77B4',  # dark blue  (prints dark gray)
-# 	'#D62728',  # brick red  (dark-mid gray)
-# 	'#2CA02C',  # green      (mid gray)
-# 	'#9467BD',  # purple     (mid-light gray)
-# 	'#8C564B',  # brown      (mid-light, different hue but same family)
-# 	'#E377C2',  # pink       (light gray)
-# 	'#7F7F7F',  # neutral gray (reference without being black)
-# 	'#BCBD22',  # olive      (light-mid gray)
-# 	'#17BECF',  # cyan       (light gray but still visible)
-# 	'#FF7F0E',  # orange     (mid-light, prints distinctly)
-# 	'#AEC7E8',  # pale blue  (very light gray)
-# ]
-
 linetypes = [
 	'-',  # solid
 	(0, (6, 3)),  # medium dash
@@ -86,23 +72,14 @@ uniform_bin = lambda X, lower, upper, n_bins: bin.full_uniform_bin(
 
 # See: https://stackoverflow.com/questions/51717199/how-to-adjust-space-between-every-second-row-of-subplots-in-matplotlib
 def tight_pairs(n_cols, fig, n_rows):
-	"""
-	Stitch vertical pairs together.
-
-	Input:
-	- n_cols: number of columns in the figure
-	- fig: figure to be modified. If None, the current figure is used.
-
-	Assumptions:
-	- fig.axes should be ordered top to bottom (ascending row number).
-	  So make sure the subplots have been added in this order.
-	- The upper-half's first subplot (column 0) should always be present
-
-	Effect:
-	- The spacing between vertical pairs is reduced to zero by moving all lower-half subplots up.
-
+	"""Remove vertical spacing within paired rows of subplots.
+	
+	Args:
+	    n_cols (int): Number of subplot columns; a scalar.
+	    fig (matplotlib.figure.Figure): Scalar figure object whose axes are adjusted.
+	    n_rows (int): Number of rows per repeated subplot group; a scalar.
 	Returns:
-	- Modified fig
+	    matplotlib.figure.Figure: The modified input figure.
 	"""
 
 	for ax in fig.axes:
@@ -133,6 +110,27 @@ def series_with_uncertainty(ax, x, mean,
 							elinewidth=1,
 							capsize=3,
 							set_xticks=True):
+	"""Plot a 1-D series with optional lower/upper error bars.
+	
+	Args:
+	    ax (matplotlib.axes.Axes): Scalar target axes object.
+	    x (array-like): X coordinates with shape (m,).
+	    mean (array-like): Central values with shape (m,).
+	    lower (array-like, optional): Lower bounds with shape (m,).
+	    upper (array-like, optional): Upper bounds with shape (m,).
+	    label (str): Scalar legend label.
+	    color (str): Scalar Matplotlib color specification.
+	    linetype (str/tuple): Scalar Matplotlib line-style specification.
+	    fmt (str): Scalar Matplotlib error-bar format string.
+	    marker (str, optional): Scalar marker specification.
+	    markevery (int/slice/sequence, optional): Scalar or 1-D marker-placement specification.
+	    markersize (float): Scalar marker size.
+	    elinewidth (float): Scalar error-bar line width.
+	    capsize (float): Scalar error-bar cap size.
+	    set_xticks (bool): Scalar flag for setting ticks to x.
+	Returns:
+	    None: Adds the series to ax in place.
+	"""
 	if set_xticks:
 		ax.set_xticks(x)
 
@@ -174,6 +172,26 @@ def binary_series_with_uncertainty(ax,
 								   elinewidth=1,
 								   capsize=3,
 								   set_xticks=True):
+	"""Plot binomial means with Clopper-Pearson confidence intervals.
+	
+	Args:
+	    ax (matplotlib.axes.Axes): Scalar target axes object.
+	    x (array-like): X coordinates with shape (m,).
+	    values (sequence): Length-m sequence of 1-D binary sample arrays.
+	    alpha (float): Confidence-level tail probability; a scalar.
+	    label (str): Scalar legend label.
+	    color (str): Scalar Matplotlib color specification.
+	    linetype (str/tuple): Scalar Matplotlib line-style specification.
+	    marker (str, optional): Scalar marker specification.
+	    markevery (int/slice/sequence, optional): Scalar or 1-D marker-placement specification.
+	    fmt (str): Scalar Matplotlib error-bar format string.
+	    markersize (float): Scalar marker size.
+	    elinewidth (float): Scalar error-bar line width.
+	    capsize (float): Scalar error-bar cap size.
+	    set_xticks (bool): Scalar flag for setting ticks to x.
+	Returns:
+	    None: Adds the confidence-interval series to ax in place.
+	"""
 	means = []
 	lowers = []
 	uppers = []
@@ -212,6 +230,22 @@ def hist_with_uncertainty(ax,
 						  color='black',
 						  markersize=2,
 						  label=''):
+	"""Plot binned central values and optional uncertainty intervals at bin centers.
+	
+	Args:
+	    ax (matplotlib.axes.Axes): Scalar target axes object.
+	    from_ (array): Lower bin edges with shape (B,).
+	    to_ (array): Upper bin edges with shape (B,).
+	    mean (array-like): Central bin values with shape (B,).
+	    lower (array-like, optional): Lower bounds with shape (B,).
+	    upper (array-like, optional): Upper bounds with shape (B,).
+	    jitter (float): Scalar horizontal offset for bin centers.
+	    color (str): Scalar Matplotlib color specification.
+	    markersize (float): Scalar marker size.
+	    label (str): Scalar legend label.
+	Returns:
+	    None: Adds the binned series to ax in place.
+	"""
 	bin_centers = jitter + (from_ + to_) / 2
 	series_with_uncertainty(ax=ax,
 							x=bin_centers,
@@ -237,6 +271,22 @@ def hists(ax,
 		  ax2=None,
 		  ax3=None,
 		  eps=1e-2):
+	"""Plot observed and predicted binned counts, optionally with their ratio panel.
+	
+	Args:
+	    ax (matplotlib.axes.Axes): Scalar axes for count plots.
+	    info (DotDic): Scalar result object containing fold runs and prediction helpers.
+	    alpha (float): Bootstrap interval tail probability; a scalar.
+	    tol (float): Numerical tolerance; a scalar.
+	    lambda_ (float): Signal fraction shown in the label; a scalar.
+	    binning (callable, optional): Function returning lower/upper bin arrays of shape (B,).
+	    aggregate (int, optional): Scalar fold index to plot instead of aggregating all folds.
+	    ax2 (matplotlib.axes.Axes, optional): Scalar axes for the observed/predicted ratio.
+	    ax3 (matplotlib.axes.Axes, optional): Scalar auxiliary axes object; currently unused.
+	    eps (float): Scalar plotting margin around [0, 1].
+	Returns:
+	    None: Draws plots on the supplied axes.
+	"""
 	methods = info.runs
 
 	ax.set_xlim([0 - eps, 1 + eps])
@@ -258,14 +308,9 @@ def hists(ax,
 	upper = methods[0].test.args.upper
 
 	if aggregate is not None:
-		# try:
-		# Do not aggregate the simulations
-		# Instead, just plot the results for the first simulation
 		predictions = [
 			info.runs[aggregate].predict_counts(from_=from_, to_=to_)]
 		methods = [info.runs[aggregate]]
-	# except IndexError as e:
-	# 	assert False,"Idx is {}".format(aggregate)
 	else:
 		predictions = info.predict_counts(from_=from_, to_=to_)
 
@@ -335,7 +380,6 @@ def hists(ax,
 		ax2.axhline(y=1,
 					color='black',
 					linestyle='-')
-		# ax2.set_ylim(bottom=2)
 
 		# individual confidence intervals for observed / predicted ratio
 		ratio_lower, ratio_mid, ratio_upper = binom.bootstrap_percentile_ci(
@@ -355,43 +399,23 @@ def hists(ax,
 			label='Ratio')
 
 		ax2.set_ylim([0, 1.5])
-
-		# ax2.set_ylim([np.quantile(pred_lower, alpha),
-		# 			  np.quantile(pred_upper, 1 - alpha)])
-
-		# ax2.set_ylim([1 - 0.2, 1 + 0.2])
 		ax2.legend()
-
-	###################################################################
-	# Plot estimates histogram
-	###################################################################
-	# if ax3 is not None:
-	# 	ax3.set_xlabel('P-value')
-	# 	ax3.set_ylabel('Counts')
-	# 	# ax3.set_yscale('log')
-	#
-	# 	threshold_ = info.test.threshold
-	# 	data_below_threshold = np.mean(np.array(info.stats <= threshold_,
-	# 											dtype=np.int32))
-	# 	ax3.axvline(x=threshold_,
-	# 				color='red',
-	# 				linestyle='--',
-	# 				label='% data below threshold={0:.2f}'.format(
-	# 					round(data_below_threshold, 2)
-	# 				))
-	#
-	# 	ax3.hist(info.stats,
-	# 			 alpha=1,
-	# 			 bins=int(info.stats.shape[0] / 10),
-	# 			 density=False,
-	# 			 histtype='step',
-	# 			 color='black')
-	# 	ax3.legend()
 
 	ax.legend()
 
 
 def cdfs(ax, df, labels, alpha, eps=1e-2):
+	"""Plot empirical CDFs of p-value samples against the uniform CDF.
+	
+	Args:
+	    ax (matplotlib.axes.Axes): Scalar target axes object.
+	    df (sequence): Length-m sequence of 1-D p-value arrays.
+	    labels (sequence): Length-m sequence of scalar legend strings.
+	    alpha (float): Test level; a scalar (kept for a common plotting interface).
+	    eps (float): Scalar axis margin around [0, 1].
+	Returns:
+	    None: Draws the CDFs on ax.
+	"""
 	ax.set_ylim([0 - eps, 1 + eps])
 	ax.set_xlim([0 - eps, 1 + eps])
 	ax.axline([0, 0], [1, 1], color='black', label='Uniform CDF')
@@ -415,6 +439,16 @@ def cdfs(ax, df, labels, alpha, eps=1e-2):
 
 
 def save_fig(cwd, path, fig, name):
+	"""Save a Matplotlib figure as a PDF in the experiment results directory.
+	
+	Args:
+	    cwd (str): Project working directory; a scalar string.
+	    path (str): Relative results path; a scalar string.
+	    fig (matplotlib.figure.Figure): Scalar figure object to save.
+	    name (str): Output filename stem; a scalar string.
+	Returns:
+	    None: Saves and closes the figure.
+	"""
 	base_path = storage.get_path(cwd=cwd, path=path)
 	filename = base_path + '{0}.pdf'.format(name)
 	fig.savefig(fname=filename, bbox_inches='tight')

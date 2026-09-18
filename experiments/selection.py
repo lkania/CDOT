@@ -5,6 +5,14 @@ from src.dotdic import DotDic
 
 
 def l2_to_uniform(args, pvalues):
+	"""Compute an L2 criterion comparing the empirical p-value CDF with Uniform(0,1).
+	
+	Args:
+	    args (Namespace/DotDic): Scalar configuration with folds equal to the p-value count.
+	    pvalues (array): P-values with shape (args.folds,).
+	Returns:
+	    float: Scalar L2 criterion up to the constant Uniform-CDF term.
+	"""
 	inc = (np.arange(args.folds) + 1) / args.folds
 	###################################################
 	# select K that minimizes the L_2 distance
@@ -34,10 +42,29 @@ def l2_to_uniform(args, pvalues):
 
 
 def target_alpha_level(pvalues, alpha):
+	"""Measure calibration error at the target lower-tail probability alpha.
+	
+	Args:
+	    pvalues (array): One-dimensional p-value sample with shape (n,).
+	    alpha (float): Target test level in [0, 1]; a scalar.
+	Returns:
+	    float: Scalar absolute difference between the empirical alpha-quantile and alpha.
+	"""
 	return np.abs(np.quantile(pvalues, q=alpha) - alpha)
 
 
 def select(args, path, params, tests, measure):
+	"""Run candidate tests under the null and select the smallest calibration measure.
+	
+	Args:
+	    args (Namespace/DotDic): Scalar simulation configuration object.
+	    path (str): Relative validation-output path; a scalar string.
+	    params (DotDic): Scalar data/sampling configuration object.
+	    tests (sequence): Length-m sequence of configured scalar test objects.
+	    measure (callable): Function mapping a 1-D statistic array to a scalar score.
+	Returns:
+	    DotDic: Results keyed by test name plus test_star containing the selected test object.
+	"""
 	path = '{0}/storage'.format(path)
 	results = DotDic()
 	for test in tests:

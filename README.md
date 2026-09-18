@@ -12,7 +12,8 @@ to perform a preliminary signal-enrichment step and then to carry out a bump
 hunt on the signal-rich sample. For this procedure to work, we need a classifier
 constrained to be decorrelated with one or more protected variables used for the
 signal-detection step. We do this by considering an optimal transport map of the
-classifier output that makes it independent of the protected variable(s) for the
+classifier output that makes it independent of the protected variable (s) for
+the
 background. We then fit a semi-parametric mixture model to the distribution of
 the protected variable after making cuts on the transformed classifier to detect
 the presence of a signal. We compare and contrast this decorrelation method with
@@ -45,6 +46,8 @@ We note the following folders and files contained in this his repository.
     - [Detection of exotic high-mass resonance experiment (3b - 4b)](#detection-of-exotic-high-mass-resonance-experiment-3b---4b)
     - [Convert Rdata output to txt files](#convert-rdata-output-to-txt-files)
 - [Evaluating the performance of test procedures based on correlated and decorrelated classifiers](#evaluating-the-performance-of-test-procedures-based-on-correlated-and-decorrelated-classifiers)
+    - [Option 1: Docker](#option-1-docker)
+    - [Option 2: Conda/Python environment](#option-2-condapython-environment)
     - [Detection of high-p_T W-bosons experiments (WTagging)](#detection-of-high-p_t-w-bosons-experiments-wtagging-1)
     - [Detection of exotic high-mass resonance experiment (3b)](#detection-of-exotic-high-mass-resonance-experiment-3b)
     - [Detection of exotic high-mass resonance experiment (4b)](#detection-of-exotic-high-mass-resonance-experiment-4b)
@@ -170,19 +173,68 @@ Rscript ./cdot/convert.R
 
 ## Evaluating the performance of test procedures based on correlated and decorrelated classifiers
 
-You need Docker to run the commands in this section.
-See https://docs.docker.com/desktop/ for
-instructions on how to install Docker with a graphical interface.
+The power experiments in this section can be run in either of two ways: using
+Docker or directly with Python in a Conda
+environment.
+Both options run the same main script, `./experiments/power.py`, and write
+results
+to the same `./results/` directory.
+
+### Option 1: Docker
+
+Install Docker before running the experiments. See
+https://docs.docker.com/desktop/ for instructions on how to install Docker with
+a graphical interface. The script `rundocker.sh` builds the image specified by
+`Dockerfile`, mounts the `data` and `results` directories, and then runs
+`./experiments/power.py` inside the container.
+
+### Option 2: Conda/Python environment
+
+As an alternative to Docker, the experiments can be run directly with Python.
+Install Anaconda or Miniconda, see https://www.anaconda.com/download for
+instructions. Then, from the root directory of this)
+repository
+create a Conda environment with Python 3.11:
+
+```bash
+conda create -n cdot -c conda-forge \
+  python=3.11 \
+  jax=0.4.23 \
+  jaxlib=0.4.23 \
+  scipy=1.11.4 \
+  numpy=1.26.2 \
+  jaxopt=0.8.1 \
+  pandas=2.1.1 \
+  tqdm=4.65.0 \
+  matplotlib=3.8.0 \
+  seaborn=0.13.0 \
+  statsmodels=0.14.0 \
+  cloudpickle=3.0.0 \
+  -y
+```
+
+Run the commands below from the root directory of the repository,
+where the `data`, `experiments`, `src`, and `results` directories are located.
+The argument `--cwd .` tells the experiment script to read data from `./data/`
+and save output under `./results/`.
 
 ### Detection of high-P_T W-bosons experiments (WTagging)
 
-Run the following command.
+Using Docker, run:
 
-```
+```bash
 ./rundocker.sh --data_id WTagging --cwd .
 ```
 
-After the script finishes, the following figures are available.
+Alternatively, using the Conda/Python environment, run:
+
+```bash
+conda activate cdot
+python ./experiments/power.py --data_id WTagging --cwd .
+```
+
+Both commands run the same WTagging power experiment and produce the following
+figures.
 
 | Figure number (click link to open)                           | Description                                                                                       | Location                                                 |
 |--------------------------------------------------------------|---------------------------------------------------------------------------------------------------|----------------------------------------------------------|
@@ -196,13 +248,21 @@ After the script finishes, the following figures are available.
 
 ### Detection of exotic high-mass resonance experiment (3b)
 
-Run the following command.
+Using Docker, run:
 
-```
+```bash
 ./rundocker.sh --data_id 3b --cwd .
 ```
 
-After the script finishes, the following figures are available.
+Alternatively, using the Conda/Python environment, run:
+
+```bash
+conda activate cdot
+python ./experiments/power.py --data_id 3b --cwd .
+```
+
+Both commands run the same 3b power experiment and produce the following
+figures.
 
 | Figure number (click link to open)                     | Description                                                                                       | Location                                           |
 |--------------------------------------------------------|---------------------------------------------------------------------------------------------------|----------------------------------------------------|
@@ -216,13 +276,21 @@ After the script finishes, the following figures are available.
 
 ### Detection of exotic high-mass resonance experiment (4b)
 
-Run the following command.
+Using Docker, run:
 
-```
+```bash
 ./rundocker.sh --data_id 4b --cwd .
 ```
 
-After the script finishes, the following figures are available.
+Alternatively, using the Conda/Python environment, run:
+
+```bash
+conda activate cdot
+python ./experiments/power.py --data_id 4b --cwd .
+```
+
+Both commands run the same 4b power experiment and produce the following
+figures.
 
 | Figure number (click link to open)                     | Description                                                                                       | Location                                           |
 |--------------------------------------------------------|---------------------------------------------------------------------------------------------------|----------------------------------------------------|
