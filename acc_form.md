@@ -40,7 +40,7 @@ the findings.
 If box above is checked and if no simulated/synthetic data files are provided by the authors, please skip directly to the Code section. Otherwise, continue.
 -->
 
-- [x] I certify that the author(s) of the manuscript have legitimate access to
+- [x] I certify that the author (s) of the manuscript have legitimate access to
   and permission to use the data used in this manuscript.
 
 <!-- If data are simulated using random number generation, please be sure to set the random number seed in the code you provide -->
@@ -74,8 +74,8 @@ events
 for background and signal events.
 These include the invariant mass variable (`mass` for W-tagging, `m4j` for
 3b/4b) and
-a variable for whether an event is a background or a signal event
-(`label` for W-tagging -- `0`: signal, `1`: background, `Class` for 3b/4b).
+a variable for whether an event is a background or a signal event (`label` for
+W-tagging -- `0`: signal, `1`: background, `Class` for 3b/4b).
 Further, the W-tagging data include jet-substructure variables
 and the 3b/4b data include kinematic variables for the jets.
 
@@ -89,9 +89,9 @@ Otherwise, see the *Non-publicly available data* section, below.
 
 ### Publicly available data
 
-- [ ] Data are available online at:
+- [x] Data are available online at: https://github.com/lkania/cdot
 
-- [x] Data are available as part of the paper’s supplementary material.
+- [ ] Data are available as part of the paper’s supplementary material.
 
 - [ ] Data are publicly available by request, following the process described
   here:
@@ -116,7 +116,7 @@ All data is publicly available.
 
 ## Description
 
-### File format(s)
+### File format (s)
 
 <!--
 Check all that apply
@@ -134,8 +134,8 @@ Check all that apply
 A data dictionary provides information that allows users to understand the meaning, format, and use of the data.
 -->
 
-- [ ] Provided by authors in the following file(s):
-- [x] Data file(s) is(are) self-describing (e.g., netCDF files)
+- [ ] Provided by authors in the following file (s):
+- [x] Data file (s) is (are) self-describing (e.g., netCDF files)
 - [ ] Available at the following URL:
 
 ### Additional Information (optional)
@@ -158,7 +158,7 @@ classifier-based signal detection procedures with and without decorrelation.
 
 ## Description
 
-### Code format(s)
+### Code format (s)
 
 <!--
 Check all that apply
@@ -278,8 +278,9 @@ The materials provided should provide a straightforward way for reviewers and re
 The provided workflow reproduces:
 
 - [x] Any numbers provided in text in the paper
-- [x] The computational method(s) presented in the paper (i.e., code is provided
-  that implements the method(s))
+- [x] The computational method (s) presented in the paper (i.e., code is
+  provided
+  that implements the method (s))
 - [ ] All tables and figures in the paper
 - [x] Selected tables and figures in the paper, as explained and justified
   below: All figures related to the simulated are reproduced by the workflow.
@@ -305,14 +306,14 @@ Check all that apply, and in the case of a Git repository include unique identif
 Indicate where the materials (generally including the code, unless in a separate location and indicated in the previous section) are available. We strongly encourage authors to place their materials (but not large datasets) in a Git repository hosted on a site such as GitHub, GitLab, or BitBucket. If the repository is private during the review process, please indicate the location where it will be available publicly upon publication, and also include the materials as a zip file (e.g., obtained directly from the Git hosting site) as supplementary materials.
 -->
 
-### Format(s)
+### Format (s)
 
 <!--
 Check all that apply
 -->
 
 - [ ] Single master code file
-- [ ] Wrapper (shell) script(s)
+- [ ] Wrapper (shell) script (s)
 - [ ] Self-contained R Markdown file, Jupyter notebook, or other literate
   programming approach
 - [x] Text file (e.g., a readme-style file) that documents workflow
